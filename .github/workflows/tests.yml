@@ -1,0 +1,47 @@
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+    tests:
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                php: ['8.4', '8.5', '8.6']
+
+            fail-fast: false
+
+        name: PHP ${{ matrix.php }} tests
+        steps:
+            - uses: actions/checkout@v6
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: ${{ matrix.php }}
+                  coverage: none
+
+            - run: composer install --no-progress --prefer-dist
+            - run: composer tester
+            - if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: output-${{ matrix.php }}
+                  path: tests/**/output
+
+
+    code_coverage:
+        name: Code Coverage
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: 8.5
+                  coverage: none
+
+            - run: composer install --no-progress --prefer-dist
+            - run: composer tester -- -p phpdbg --coverage ./coverage.xml --coverage-src ./src
+              continue-on-error: true
+            - uses: coverallsapp/github-action@v2
+              with:
+                  file: coverage.xml
+                  format: clover
