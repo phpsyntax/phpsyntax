@@ -1,2 +1,6 @@
 /vendor
 /composer.lock
+/grammar/vendor
+/grammar/composer.lock
+/temp
+/tests/temp

@@ -1,0 +1,31 @@
+presets:
+	- nette
+
+groups:
+	- modernization
+	- deprecations
+
+rules:
+	groupImport: {minImports: 2}
+	overrideAttributeRequired: keep
+
+types: phpstan
+
+paths:
+	- tests
+
+excludePaths:
+	- fixtures
+	- corpus
+	- dump
+
+fileExtensions:
+	- php
+	- phpt
+
+overrides:
+	- paths: [src]
+	  groups: [optimizedCalls]
+	  nameResolution: certain
+	  rules:
+	  	nameFallback: {optimizedFunction: qualified, optimizedConstant: qualified}
