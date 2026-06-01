@@ -1,0 +1,27 @@
+use:
+	- nette
+	- modernizations
+
+typeAnalysis: phpstan
+
+imports: {groupUse: required}
+
+paths:
+	- tests
+
+excludePaths:
+	- tests/**/output
+	- corpus
+	- dump
+
+fileExtensions:
+	- php
+	- phpt
+
+overrides:
+	-
+		paths: [src]
+		nameResolution: certain
+		use:
+			- compilerOptimizations
+			- deprecations
