@@ -1,0 +1,43 @@
+{
+	"name": "phpsyntax/phpsyntax",
+	"description": "🌳 PhpSyntax: a lossless concrete syntax tree (CST) for PHP. Every token, space and comment is in the tree and printing it gives the file back byte for byte, so a tool changes only what it touches. Comes with a mutation API for refactoring, formatters and code generation.",
+	"keywords": ["php", "parser", "lexer", "tokenizer", "syntax tree", "cst", "ast", "lossless", "printer", "refactoring", "code generation", "static analysis", "php-parser"],
+	"homepage": "https://phpsyntax.deegee.dev",
+	"license": "MIT",
+	"authors": [
+		{
+			"name": "David Grudl",
+			"homepage": "https://davidgrudl.com"
+		}
+	],
+	"require": {
+		"php": "8.4 - 8.6",
+		"ext-tokenizer": "*"
+	},
+	"require-dev": {
+		"nette/tester": "^2.6",
+		"tracy/tracy": "^2.12",
+		"phpstan/phpstan": "^2.2",
+		"phpstan/extension-installer": "^1.4",
+		"nette/phpstan-rules": "^1.0"
+	},
+	"autoload": {
+		"psr-4": {
+			"PhpSyntax\\": "src"
+		}
+	},
+	"scripts": {
+		"phpstan": "phpstan analyse",
+		"tester": "tester tests -s"
+	},
+	"config": {
+		"allow-plugins": {
+			"phpstan/extension-installer": true
+		}
+	},
+	"extra": {
+		"branch-alias": {
+			"dev-master": "1.0-dev"
+		}
+	}
+}
