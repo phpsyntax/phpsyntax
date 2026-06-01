@@ -5,6 +5,7 @@ use:
 typeAnalysis: phpstan
 
 paths:
+	- grammar
 	- tests
 
 excludePaths:
