@@ -1,0 +1,24 @@
+presets:
+	- nette
+
+rules:
+	group-import: {minImports: 2}
+
+paths:
+	- tests
+
+excludePaths:
+	- fixtures
+	- corpus
+	- dump
+
+fileExtensions:
+	- php
+	- phpt
+
+overrides:
+	- paths: [src]
+	  groups: [optimized-calls]
+	  nameResolution: certain
+	  rules:
+	  	name-fallback: {optimizedFunctions: qualified, optimizedConstants: qualified}
