@@ -5,6 +5,7 @@ rules:
 	group-import: {minImports: 2}
 
 paths:
+	- src
 	- tests
 
 excludePaths:
