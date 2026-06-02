@@ -12,6 +12,7 @@ rules:
 types: phpstan
 
 paths:
+	- src
 	- tests
 
 excludePaths:
