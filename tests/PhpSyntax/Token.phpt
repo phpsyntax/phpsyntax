@@ -6,6 +6,24 @@ use Tester\Assert;
 require __DIR__ . '/../bootstrap.php';
 
 
+test('a token is made from its text by the lexer', function () {
+	$cases = [
+		';' => ord(';'), '$a' => Token::Variable, 'as' => Token::As, '?->' => Token::NullsafeObjectOperator,
+		"'a b'" => Token::ConstantEncapsedString, '(int)' => Token::IntCast, '0x1F' => Token::Integer,
+	];
+	foreach ($cases as $text => $kind) {
+		$token = Token::fromText($text);
+		Assert::same($kind, $token->id, $text);
+		Assert::same($text, $token->text);
+		Assert::same(-1, $token->line);
+	}
+
+	foreach (['', 'a b', '$a;', ' ;', '// c', "'open", '<?php'] as $text) {
+		Assert::exception(fn() => Token::fromText($text), InvalidArgumentException::class, PhpSyntax\Helpers::formatCode($text) . ' is not a single token.');
+	}
+});
+
+
 test('a trivia is made from its text', function () {
 	$cases = [
 		' ' => Trivia::Whitespace, "\t  " => Trivia::Whitespace, "\n" => Trivia::LineEnding, "\r\n" => Trivia::LineEnding, "\r" => Trivia::LineEnding,
