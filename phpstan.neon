@@ -2,7 +2,13 @@ parameters:
 	level: 8
 
 	paths:
+		- src
 		- tests
 
 	excludePaths:
 		- tests/temp/*
+
+	ignoreErrors:
+		-	# a token written over another at an index the list already has keeps it a list
+			message: '#^Property PhpSyntax\\TokenIndex::\$tokens \(list<PhpSyntax\\Token>\) does not accept non-empty-array<int, PhpSyntax\\Token>\.$#'
+			path: src/TokenIndex.php
