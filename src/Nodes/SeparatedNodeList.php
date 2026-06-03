@@ -8,7 +8,7 @@
 namespace PhpSyntax\Nodes;
 
 use PhpSyntax\{Helpers, Node, Token, Trivia};
-use function count, ord;
+use function count;
 
 
 /**
@@ -259,7 +259,7 @@ final class SeparatedNodeList extends NodeList
 			}
 		}
 
-		$separator = new Token(ord(','), ',');
+		$separator = Token::fromText(',');
 		$eol = self::findLineEnding($neighbor);
 		$separator->setTrailingTrivia([$eol ?? Trivia::fromText(' ')]);
 		return $separator;

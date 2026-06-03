@@ -13,7 +13,8 @@ namespace PhpSyntax;
  * the lexer writes, and the text is written by `setText()`, which tells the index; `line` and `pos` say where
  * the token stood in the source it was read from, -1 for a token made otherwise. The language does not guard the
  * properties inherited from `PhpToken`, so writing them directly is not supported, and the parent is no part of
- * the API but for `is()`: the inherited `tokenize()` gives the raw tokens of PHP.
+ * the API but for `is()`: the inherited `tokenize()` gives the raw tokens of PHP, `Lexer::tokenize()` those of the
+ * library.
  */
 final class Token extends \PhpToken implements \Stringable
 {
@@ -40,6 +41,17 @@ final class Token extends \PhpToken implements \Stringable
 	 * @var list<Trivia>
 	 */
 	public private(set) array $trailingTrivia = [];
+
+
+	/**
+	 * The token the lexer reads the text as, written without an open tag and without trivia; a text read as anything
+	 * but one token is refused. It runs the lexer, so the kind is the one PHP gives the text by itself.
+	 */
+	public static function fromText(string $text): static
+	{
+		return Lexer::readToken($text)
+			?? throw new \InvalidArgumentException(Helpers::formatCode($text) . ' is not a single token.');
+	}
 
 
 	/**
