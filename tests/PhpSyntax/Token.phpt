@@ -1,0 +1,85 @@
+<?php declare(strict_types=1);
+
+use PhpSyntax\{Token, Trivia};
+use Tester\Assert;
+
+require __DIR__ . '/../bootstrap.php';
+
+
+test('a trivia is made from its text', function () {
+	$cases = [
+		' ' => Trivia::Whitespace, "\t  " => Trivia::Whitespace, "\n" => Trivia::LineEnding, "\r\n" => Trivia::LineEnding, "\r" => Trivia::LineEnding,
+		'// c' => Trivia::Comment, '# c' => Trivia::Comment, '/* c */' => Trivia::Comment, '/**/' => Trivia::Comment, "/* a\n b */" => Trivia::Comment,
+		'/** d */' => Trivia::DocComment, "<?php\n" => Trivia::OpenTag, '<?php ' => Trivia::OpenTag, "<?php\r\n" => Trivia::OpenTag, '<?' => Trivia::OpenTag,
+		'<?PHP ' => Trivia::OpenTag, "<?Php\n" => Trivia::OpenTag,
+	];
+	foreach ($cases as $text => $kind) {
+		$trivia = Trivia::fromText((string) $text);
+		Assert::same($kind, $trivia->id, (string) $text);
+		Assert::same((string) $text, $trivia->text);
+	}
+
+	foreach (['', "\n\n", " \n", '#[A]', "// c\n", '/* open', '/* a */ b', '// a ?> b', '<?php', '<?=', 'x'] as $text) {
+		Assert::exception(fn() => Trivia::fromText($text), InvalidArgumentException::class, PhpSyntax\Helpers::formatCode($text) . ' is not whitespace, a line ending, a comment or an open tag.');
+	}
+});
+
+
+test('token from the lexer carries its original position', function () {
+	$token = new Token(Token::Variable, '$a', line: 1, pos: 6);
+	Assert::same(Token::Variable, $token->id);
+	Assert::same('$a', $token->text);
+	Assert::same(6, $token->pos);
+	Assert::same(1, $token->line);
+	Assert::same([], $token->leadingTrivia);
+	Assert::same([], $token->trailingTrivia);
+});
+
+
+test('synthetic token has no original position', function () {
+	$token = new Token(ord(';'), ';');
+	Assert::same(-1, $token->pos);
+	Assert::same(-1, $token->line);
+});
+
+
+test('string form is leading trivia, text and trailing trivia', function () {
+	$token = new Token(Token::Return, 'return');
+	$token->setLeadingTrivia([
+		new Trivia(Trivia::LineEnding, "\n"),
+		new Trivia(Trivia::Whitespace, "\t"),
+	]);
+	$token->setTrailingTrivia([
+		new Trivia(Trivia::Whitespace, ' '),
+		new Trivia(Trivia::Comment, '// done'),
+	]);
+	Assert::same("\n\treturn // done", (string) $token);
+});
+
+
+test('trivia is a token PHP ignores', function () {
+	$trivia = new Trivia(Trivia::Comment, '/* c */');
+	Assert::same(Trivia::Comment, $trivia->id);
+	Assert::same('/* c */', $trivia->text);
+	Assert::same(-1, $trivia->line);
+	Assert::same(-1, $trivia->pos);
+	Assert::false($trivia->inInterpolation);
+	Assert::true($trivia->is(Trivia::Comment));
+	Assert::true($trivia->isIgnorable());
+	Assert::same('T_COMMENT', $trivia->getTokenName());
+	Assert::same('T_WHITESPACE', new Trivia(Trivia::LineEnding, "\n")->getTokenName());
+	Assert::true(new Trivia(Trivia::LineEnding, "\n")->isIgnorable());
+});
+
+
+test('a trivia with another text is a copy standing where the original stood', function () {
+	$trivia = new Trivia(Trivia::Comment, '// a  ', 3, 10);
+	$trivia->inInterpolation = true;
+	$trimmed = $trivia->withText('// a');
+	Assert::notSame($trivia, $trimmed);
+	Assert::same('// a  ', $trivia->text);
+	Assert::same(Trivia::Comment, $trimmed->id);
+	Assert::same('// a', $trimmed->text);
+	Assert::true($trimmed->inInterpolation);
+	Assert::same([3, 10], [$trimmed->line, $trimmed->pos]);
+});
