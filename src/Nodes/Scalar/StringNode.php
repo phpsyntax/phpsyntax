@@ -1,0 +1,82 @@
+<?php declare(strict_types=1);
+
+/**
+ * This file is part of the PhpSyntax, a lossless syntax tree for PHP (https://phpsyntax.deegee.dev)
+ * Copyright (c) 2026 David Grudl (https://davidgrudl.com)
+ */
+
+namespace PhpSyntax\Nodes\Scalar;
+
+use PhpSyntax\{Helpers, Token};
+use PhpSyntax\Nodes\ScalarNode;
+
+
+/**
+ * String literal without interpolation, quotes included.
+ */
+final class StringNode extends ScalarNode
+{
+	public const Slots = ['token'];
+
+	public Token $token { set => $this->prepareSlot(__PROPERTY__, $value); }
+
+	/** The delimiter the literal is written with: `'` or `"`, a `b` or `B` prefix left out. */
+	public string $quote {
+		get => $this->token->text[-1];
+	}
+
+	/** The value of the literal with its escape sequences resolved. */
+	public string $value {
+		get {
+			$quote = $this->quote;
+			$text = substr($this->token->text, strpos($this->token->text, $quote) + 1, -1);
+			return $quote === '"'
+				? Helpers::unescapeString($text, quote: '"')
+				: str_replace(['\\\\', "\\'"], ['\\', "'"], $text);
+		}
+	}
+
+
+	/** @internal */
+	public function __construct(Token $token)
+	{
+		$this->token = $token;
+	}
+
+
+	/** A literal standing for the value, escaped as the delimiter needs it. */
+	public static function fromValue(string $value, string $quote = "'"): self
+	{
+		if ($quote !== '"' && $quote !== "'") {
+			throw new \InvalidArgumentException('A string is written with `\'` or `"`, not ' . Helpers::formatCode($quote) . '.');
+		}
+
+		return new self(new Token(Token::ConstantEncapsedString, $quote . self::writeValue($value, $quote) . $quote));
+	}
+
+
+	/**
+	 * Writes the literal: the value escaped as the delimiter needs it, in the delimiter given or in the one
+	 * it has. The two go together, because the delimiter decides how the value is written.
+	 */
+	public function setValue(string $value, ?string $quote = null): static
+	{
+		$quote ??= $this->quote;
+		if ($quote !== '"' && $quote !== "'") {
+			throw new \InvalidArgumentException('A string is written with `\'` or `"`, not ' . Helpers::formatCode($quote) . '.');
+		}
+
+		$prefix = substr($this->token->text, 0, strpos($this->token->text, $this->quote) ?: 0);
+		$this->token->setText($prefix . $quote . self::writeValue($value, $quote) . $quote);
+		return $this;
+	}
+
+
+	/** The value as the given delimiter writes it, escapes and all. */
+	private static function writeValue(string $value, string $quote): string
+	{
+		return $quote === '"'
+			? Helpers::escapeString($value, quote: '"')
+			: str_replace(['\\', "'"], ['\\\\', "\\'"], $value);
+	}
+}
