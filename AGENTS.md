@@ -14,6 +14,7 @@ One namespace, one PSR-4 root: `PhpSyntax` (`src/`) holds the lexer, the parser,
 - `composer phpstan`: PHPStan level 8, no baseline; `ignoreErrors` only with a reason.
 - `composer verify-examples`: runs the scripts of `examples/` and compares their output with what the readme of each chapter quotes, and checks that the PHP blocks of `readme.md` parse.
 - `composer compile-grammar`: regenerates `src/ParserData.php` and `src/TokenData.php` from `grammar/php.y`. Commit the output once the code style of `dresscode.neon` has run over it: what is committed is the formatted form, so a bare rebuild differs from it and that difference is no defect.
+- Round-trip over an external corpus: `PHPSYNTAX_CORPUS=/path/to/php/code composer tester`.
 
 ## Conventions
 
