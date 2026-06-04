@@ -3,7 +3,9 @@
 /**
  * Ported from Latte grammar/rebuildParsers.php (https://latte.nette.org), itself a port of nikic/php-parser grammar/rebuildParsers.php.
  *
- * Generates src/ParserData.php and src/TokenData.php from grammar/php.y.
+ * Generates src/ParserData.php and src/TokenData.php from grammar/php.y, and through nodes-generator.php
+ * src/LayoutData.php and the Slots constant, the slot properties and the constructor of each node class not marked
+ * manual from grammar/nodes.php.
  * Options: --debug (keeps y.output and the preprocessed grammar), --strip-actions (removes all actions from php.y).
  */
 
@@ -51,6 +53,13 @@ $code = removeTrailingWhitespace($code);
 $code = optimize($code);
 file_put_contents("$srcDir/ParserData.php", $code);
 unlink($tmpResultFile);
+
+echo "Building node classes.\n";
+require __DIR__ . '/nodes-generator.php';
+buildNodes(require __DIR__ . '/nodes.php', "$srcDir/Nodes");
+
+echo "Building layout data.\n";
+file_put_contents("$srcDir/LayoutData.php", renderLayoutData(require __DIR__ . '/nodes.php'));
 
 if (!$optionDebug) {
 	unlink($tmpGrammarFile);
