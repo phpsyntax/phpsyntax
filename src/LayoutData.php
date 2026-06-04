@@ -63,6 +63,45 @@ final class LayoutData
 			'statements' => LayoutRole::Anchor,
 			'endOfFile' => LayoutRole::Anchor,
 		],
+		Nodes\Scalar\IntegerNode::class => [
+			'token' => LayoutRole::Content,
+		],
+		Nodes\Scalar\FloatNode::class => [
+			'token' => LayoutRole::Content,
+		],
+		Nodes\Scalar\BooleanNode::class => [
+			'token' => LayoutRole::Content,
+		],
+		Nodes\Scalar\NullNode::class => [
+			'token' => LayoutRole::Content,
+		],
+		Nodes\Scalar\StringNode::class => [
+			'token' => LayoutRole::Content,
+		],
+		Nodes\Scalar\UnquotedStringNode::class => [
+			'token' => LayoutRole::Content,
+		],
+		Nodes\Scalar\MagicConstantNode::class => [
+			'token' => LayoutRole::Content,
+		],
+		Nodes\Scalar\InterpolatedStringNode::class => [
+			'openQuote' => LayoutRole::Anchor,
+			'parts' => LayoutRole::Content,
+			'closeQuote' => LayoutRole::Closes,
+		],
+		Nodes\Scalar\HeredocNode::class => [
+			'openDelimiter' => LayoutRole::Anchor,
+			'parts' => LayoutRole::Content,
+			'closeDelimiter' => LayoutRole::Closes,
+		],
+		Nodes\Scalar\InterpolatedStringPartNode::class => [
+			'token' => LayoutRole::Content,
+		],
+		Nodes\Scalar\InterpolationNode::class => [
+			'openBrace' => LayoutRole::Anchor,
+			'expression' => LayoutRole::Content,
+			'closeBrace' => LayoutRole::Closes,
+		],
 		Nodes\Type\NamedTypeNode::class => [
 			'name' => LayoutRole::Content,
 		],
