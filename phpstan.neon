@@ -6,4 +6,5 @@ parameters:
 		- tests
 
 	excludePaths:
+		- tests/corpus/*
 		- tests/temp/*
