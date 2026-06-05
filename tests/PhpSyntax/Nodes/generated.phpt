@@ -5,8 +5,9 @@
  */
 
 use PhpSyntax\Nodes\Expression\{TernaryNode, VariableNode};
+use PhpSyntax\Nodes\{PlainNodeList, SkippedArrayItemNode};
 use PhpSyntax\Nodes\Scalar\IntegerNode;
-use PhpSyntax\Nodes\SkippedArrayItemNode;
+use PhpSyntax\Nodes\Statement\BlockNode;
 use PhpSyntax\Token;
 use Tester\Assert;
 
@@ -78,9 +79,37 @@ test('replaceChild checks the slot type', function () {
 });
 
 
+test('list slots are replaced by lists only', function () {
+	$block = new BlockNode(token('{'), $stmts = new PlainNodeList, token('}'));
+	Assert::same($block, $stmts->parent);
+	$block->replaceChild($stmts, $other = new PlainNodeList);
+	Assert::same($other, $block->statements);
+	Assert::exception(fn() => $block->replaceChild($other, token('x')), InvalidArgumentException::class, '%a% cannot be placed in the slot `statements` %a%');
+});
+
+
 test('node without slots', function () {
 	$item = new SkippedArrayItemNode;
 	Assert::same([], $item->getChildren());
 	Assert::same('', (string) $item);
 	Assert::exception(fn() => $item->replaceChild(token('x'), token('y')), InvalidArgumentException::class);
+});
+
+
+test('a node is attributed exactly when it has the slot of attributes', function () {
+	$mismatched = [];
+	$root = dirname(__DIR__, 3) . '/src/Nodes';
+	foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)) as $file) {
+		$class = 'PhpSyntax\Nodes\\' . strtr(substr($file->getPathname(), strlen($root) + 1, -4), '/', '\\');
+		if (!class_exists($class) || !is_subclass_of($class, PhpSyntax\Node::class)) {
+			continue;
+		}
+
+		$slotted = in_array('attributes', $class::Slots ?? [], true);
+		if ($slotted !== is_subclass_of($class, PhpSyntax\Nodes\AttributeAwareNode::class)) {
+			$mismatched[] = $class;
+		}
+	}
+
+	Assert::same([], $mismatched);
 });
