@@ -18,6 +18,22 @@ enum NameForm
 
 
 /**
+ * Which side an operator leans to, where an operand of the same precedence may stand without parentheses.
+ */
+enum Associativity
+{
+	/** `$a - $b - $c` is `($a - $b) - $c` */
+	case Left;
+
+	/** `$a ?? $b ?? $c` is `$a ?? ($b ?? $c)` */
+	case Right;
+
+	/** `$a < $b < $c` is no code */
+	case None;
+}
+
+
+/**
  * What a slot is to the indentation of the lines its node spreads over, relative to the line the node
  * begins on; the level each role stands for is left to whatever lays the code out.
  */
