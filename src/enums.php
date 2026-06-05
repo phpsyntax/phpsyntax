@@ -18,6 +18,29 @@ enum NameForm
 
 
 /**
+ * Which of the three tables of names PHP keeps a symbol in.
+ */
+enum SymbolKind
+{
+	/** a class, an interface, a trait, an enum and a namespace, which PHP does not tell apart */
+	case ClassLike;
+	case Function;
+	case Constant;
+
+
+	/** What the `function` or `const` of a `use` statement or of one of its items stands for; without one it is `ClassLike`. */
+	public static function fromKeyword(?Token $keyword): self
+	{
+		return match ($keyword?->id) {
+			Token::Function => self::Function,
+			Token::Const => self::Constant,
+			default => self::ClassLike,
+		};
+	}
+}
+
+
+/**
  * Which side an operator leans to, where an operand of the same precedence may stand without parentheses.
  */
 enum Associativity
