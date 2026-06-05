@@ -11,7 +11,8 @@ use PhpSyntax\{Node, Token};
 
 
 /**
- * Expression, which stands for a value.
+ * Expression, which stands for a value; a destructuring stands where a target is written and is a DestructuringNode,
+ * not one of these.
  * @method Token getFirstToken()
  * @method Token getLastToken()
  */
