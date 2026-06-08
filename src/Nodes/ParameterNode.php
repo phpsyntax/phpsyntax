@@ -1,0 +1,75 @@
+<?php declare(strict_types=1);
+
+/**
+ * This file is part of the PhpSyntax, a lossless syntax tree for PHP (https://phpsyntax.deegee.dev)
+ * Copyright (c) 2026 David Grudl (https://davidgrudl.com)
+ */
+
+namespace PhpSyntax\Nodes;
+
+use PhpSyntax\{Node, Token};
+use PhpSyntax\Nodes\Expression\VariableNode;
+use PhpSyntax\Nodes\Member\PropertyHookNode;
+
+
+/**
+ * Parameter of a function, method, closure, arrow function or hook; with modifiers it promotes a property.
+ * @method Token getFirstToken()
+ * @method Token getLastToken()
+ */
+final class ParameterNode extends Node implements AttributeAwareNode
+{
+	public const Slots = ['attributes', 'modifiers', 'type', 'ampersand', 'ellipsis', 'variable', 'equals', 'default', 'openBrace', 'hooks', 'closeBrace'];
+
+	/** @var PlainNodeList<AttributeGroupNode> */
+	public PlainNodeList $attributes { set => $this->prepareSlot(__PROPERTY__, $value); }
+	public ModifiersNode $modifiers { set => $this->prepareSlot(__PROPERTY__, $value); }
+	public ?TypeNode $type = null { set => $this->prepareSlot(__PROPERTY__, $value); }
+	public ?Token $ampersand = null { set => $this->prepareSlot(__PROPERTY__, $value); }
+	public ?Token $ellipsis = null { set => $this->prepareSlot(__PROPERTY__, $value); }
+	public VariableNode $variable { set => $this->prepareSlot(__PROPERTY__, $value); }
+	public ?Token $equals = null { set => $this->prepareSlot(__PROPERTY__, $value); }
+	public ?ExpressionNode $default = null { set => $this->prepareSlot(__PROPERTY__, $value); }
+	public ?Token $openBrace = null { set => $this->prepareSlot(__PROPERTY__, $value); }
+
+	/** @var ?PlainNodeList<PropertyHookNode> */
+	public ?PlainNodeList $hooks = null { set => $this->prepareSlot(__PROPERTY__, $value); }
+	public ?Token $closeBrace = null { set => $this->prepareSlot(__PROPERTY__, $value); }
+
+	/** Whether the parameter declares a property of the class, which its modifiers make it do. */
+	public bool $promoted {
+		get => !$this->modifiers->isEmpty();
+	}
+
+
+	/**
+	 * @internal
+	 * @param PlainNodeList<AttributeGroupNode> $attributes
+	 * @param ?PlainNodeList<PropertyHookNode> $hooks
+	 */
+	public function __construct(
+		PlainNodeList $attributes,
+		ModifiersNode $modifiers,
+		?TypeNode $type,
+		?Token $ampersand,
+		?Token $ellipsis,
+		VariableNode $variable,
+		?Token $equals,
+		?ExpressionNode $default,
+		?Token $openBrace,
+		?PlainNodeList $hooks,
+		?Token $closeBrace,
+	) {
+		$this->attributes = $attributes;
+		$this->modifiers = $modifiers;
+		$type === null || $this->type = $type;
+		$ampersand === null || $this->ampersand = $ampersand;
+		$ellipsis === null || $this->ellipsis = $ellipsis;
+		$this->variable = $variable;
+		$equals === null || $this->equals = $equals;
+		$default === null || $this->default = $default;
+		$openBrace === null || $this->openBrace = $openBrace;
+		$hooks === null || $this->hooks = $hooks;
+		$closeBrace === null || $this->closeBrace = $closeBrace;
+	}
+}
