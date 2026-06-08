@@ -51,6 +51,22 @@ return [
 			'question' => 'Token',
 		],
 	],
+	'ParameterNode' => [
+		'slots' => [
+			'attributes' => 'PlainNodeList<AttributeGroupNode>',
+			'modifiers' => 'ModifiersNode',
+			'type' => '?TypeNode',
+			'ampersand' => '?Token',
+			'ellipsis' => '?Token',
+			'variable' => 'Expression\VariableNode',
+			'equals' => '?Token',
+			'default' => '?ExpressionNode',
+			'openBrace' => '?Token',
+			'hooks' => '?PlainNodeList<Member\PropertyHookNode>',
+			'closeBrace' => '?Token',
+		],
+		'layout' => ['type' => 'Anchor', 'ampersand' => 'Anchor', 'ellipsis' => 'Anchor', 'variable' => 'Anchor'],
+	],
 	'AttributeGroupNode' => [
 		'slots' => [
 			'openBracket' => 'Token',
@@ -109,6 +125,20 @@ return [
 			'result' => 'ExpressionNode',
 		],
 		'layout' => ['values' => 'Anchor'],
+	],
+	'ClosureUseListNode' => [
+		'slots' => [
+			'useKeyword' => 'Token',
+			'openParen' => 'Token',
+			'items' => 'SeparatedNodeList<ClosureUseNode>',
+			'closeParen' => 'Token',
+		],
+	],
+	'ClosureUseNode' => [
+		'slots' => [
+			'ampersand' => '?Token',
+			'variable' => 'Expression\VariableNode',
+		],
 	],
 	'ElseifNode' => [
 		'slots' => [
@@ -436,6 +466,36 @@ return [
 			'closeBrace' => 'Token',
 		],
 	],
+	'Expression\ClosureNode' => [
+		'slots' => [
+			'attributes' => 'PlainNodeList<AttributeGroupNode>',
+			'staticKeyword' => '?Token',
+			'functionKeyword' => 'Token',
+			'ampersand' => '?Token',
+			'openParen' => 'Token',
+			'parameters' => 'SeparatedNodeList<ParameterNode>',
+			'closeParen' => 'Token',
+			'uses' => '?ClosureUseListNode',
+			'colon' => '?Token',
+			'returnType' => '?TypeNode',
+			'body' => 'Statement\BlockNode',
+		],
+	],
+	'Expression\ArrowFunctionNode' => [
+		'slots' => [
+			'attributes' => 'PlainNodeList<AttributeGroupNode>',
+			'staticKeyword' => '?Token',
+			'fnKeyword' => 'Token',
+			'ampersand' => '?Token',
+			'openParen' => 'Token',
+			'parameters' => 'SeparatedNodeList<ParameterNode>',
+			'closeParen' => 'Token',
+			'colon' => '?Token',
+			'returnType' => '?TypeNode',
+			'doubleArrow' => 'Token',
+			'expression' => 'ExpressionNode',
+		],
+	],
 	'Expression\ShellExecNode' => [
 		'slots' => [
 			'openBacktick' => 'Token',
@@ -754,5 +814,38 @@ return [
 			'name' => 'IdentifierNode',
 			'colon' => 'Token',
 		],
+	],
+	'Statement\FunctionNode' => [
+		'slots' => [
+			'attributes' => 'PlainNodeList<AttributeGroupNode>',
+			'functionKeyword' => 'Token',
+			'ampersand' => '?Token',
+			'name' => 'IdentifierNode',
+			'openParen' => 'Token',
+			'parameters' => 'SeparatedNodeList<ParameterNode>',
+			'closeParen' => 'Token',
+			'colon' => '?Token',
+			'returnType' => '?TypeNode',
+			'body' => 'Statement\BlockNode',
+		],
+	],
+
+	// ---------- members ----------
+
+	'Member\PropertyHookNode' => [
+		'slots' => [
+			'attributes' => 'PlainNodeList<AttributeGroupNode>',
+			'modifiers' => 'ModifiersNode',
+			'ampersand' => '?Token',
+			'name' => 'IdentifierNode',
+			'openParen' => '?Token',
+			'parameters' => '?SeparatedNodeList<ParameterNode>',
+			'closeParen' => '?Token',
+			'body' => '?Statement\BlockNode',
+			'doubleArrow' => '?Token',
+			'expression' => '?ExpressionNode',
+			'semicolon' => '?Token',
+		],
+		'layout' => ['ampersand' => 'Anchor', 'name' => 'Anchor'],
 	],
 ];
