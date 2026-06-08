@@ -102,6 +102,22 @@ return [
 		],
 		'layout' => ['statements' => 'Anchor', 'endOfFile' => 'Anchor'],
 	],
+	'AnonymousClassNode' => [
+		'slots' => [
+			'attributes' => 'NodeList<AttributeGroupNode>',
+			'modifiers' => 'ModifiersNode',
+			'classKeyword' => 'Token',
+			'arguments' => '?ArgumentListNode',
+			'extendsKeyword' => '?Token',
+			'extends' => '?NameNode',
+			'implementsKeyword' => '?Token',
+			'implements' => '?SeparatedNodeList<NameNode>',
+			'openBrace' => 'Token',
+			'members' => 'NodeList<MemberNode>',
+			'closeBrace' => 'Token',
+		],
+		'layout' => ['extendsKeyword' => 'Content', 'implementsKeyword' => 'Content'],
+	],
 
 	// ---------- items of lists ----------
 
@@ -290,6 +306,13 @@ return [
 			'name' => 'IdentifierNode|ExpressionNode',
 			'closeBrace' => '?Token',
 			'arguments' => 'ArgumentListNode',
+		],
+	],
+	'Expression\NewNode' => [
+		'slots' => [
+			'newKeyword' => 'Token',
+			'class' => 'NameNode|ExpressionNode|AnonymousClassNode',
+			'arguments' => '?ArgumentListNode',
 		],
 	],
 	'Expression\ArrayNode' => [
@@ -828,9 +851,83 @@ return [
 			'body' => 'Statement\BlockNode',
 		],
 	],
+	'Statement\ClassNode' => [
+		'slots' => [
+			'attributes' => 'NodeList<AttributeGroupNode>',
+			'modifiers' => 'ModifiersNode',
+			'classKeyword' => 'Token',
+			'name' => 'IdentifierNode',
+			'extendsKeyword' => '?Token',
+			'extends' => '?NameNode',
+			'implementsKeyword' => '?Token',
+			'implements' => '?SeparatedNodeList<NameNode>',
+			'openBrace' => 'Token',
+			'members' => 'NodeList<MemberNode>',
+			'closeBrace' => 'Token',
+		],
+		'layout' => ['extendsKeyword' => 'Content', 'implementsKeyword' => 'Content'],
+	],
+	'Statement\InterfaceNode' => [
+		'slots' => [
+			'attributes' => 'NodeList<AttributeGroupNode>',
+			'interfaceKeyword' => 'Token',
+			'name' => 'IdentifierNode',
+			'extendsKeyword' => '?Token',
+			'extends' => '?SeparatedNodeList<NameNode>',
+			'openBrace' => 'Token',
+			'members' => 'NodeList<MemberNode>',
+			'closeBrace' => 'Token',
+		],
+		'layout' => ['extendsKeyword' => 'Content'],
+	],
+	'Statement\TraitNode' => [
+		'slots' => [
+			'attributes' => 'NodeList<AttributeGroupNode>',
+			'traitKeyword' => 'Token',
+			'name' => 'IdentifierNode',
+			'openBrace' => 'Token',
+			'members' => 'NodeList<MemberNode>',
+			'closeBrace' => 'Token',
+		],
+	],
+	'Statement\EnumNode' => [
+		'slots' => [
+			'attributes' => 'NodeList<AttributeGroupNode>',
+			'enumKeyword' => 'Token',
+			'name' => 'IdentifierNode',
+			'colon' => '?Token',
+			'scalarType' => '?TypeNode',
+			'implementsKeyword' => '?Token',
+			'implements' => '?SeparatedNodeList<NameNode>',
+			'openBrace' => 'Token',
+			'members' => 'NodeList<MemberNode>',
+			'closeBrace' => 'Token',
+		],
+		'layout' => ['implementsKeyword' => 'Content'],
+	],
 
 	// ---------- members ----------
 
+	'Member\PropertyNode' => [
+		'slots' => [
+			'attributes' => 'NodeList<AttributeGroupNode>',
+			'modifiers' => 'ModifiersNode',
+			'type' => '?TypeNode',
+			'items' => 'SeparatedNodeList<Member\PropertyItemNode>',
+			'semicolon' => '?Token',
+			'openBrace' => '?Token',
+			'hooks' => '?NodeList<Member\PropertyHookNode>',
+			'closeBrace' => '?Token',
+		],
+		'layout' => ['type' => 'Anchor'],
+	],
+	'Member\PropertyItemNode' => [
+		'slots' => [
+			'name' => 'Token',
+			'equals' => '?Token',
+			'default' => '?ExpressionNode',
+		],
+	],
 	'Member\PropertyHookNode' => [
 		'slots' => [
 			'attributes' => 'NodeList<AttributeGroupNode>',
@@ -846,5 +943,75 @@ return [
 			'semicolon' => '?Token',
 		],
 		'layout' => ['ampersand' => 'Anchor', 'name' => 'Anchor'],
+	],
+	'Member\ClassConstNode' => [
+		'slots' => [
+			'attributes' => 'NodeList<AttributeGroupNode>',
+			'modifiers' => 'ModifiersNode',
+			'constKeyword' => 'Token',
+			'type' => '?TypeNode',
+			'items' => 'SeparatedNodeList<ConstItemNode>',
+			'semicolon' => 'Token',
+		],
+		'layout' => ['type' => 'Anchor'],
+	],
+	'Member\MethodNode' => [
+		'slots' => [
+			'attributes' => 'NodeList<AttributeGroupNode>',
+			'modifiers' => 'ModifiersNode',
+			'functionKeyword' => 'Token',
+			'ampersand' => '?Token',
+			'name' => 'IdentifierNode',
+			'openParen' => 'Token',
+			'parameters' => 'SeparatedNodeList<ParameterNode>',
+			'closeParen' => 'Token',
+			'colon' => '?Token',
+			'returnType' => '?TypeNode',
+			'body' => '?Statement\BlockNode',
+			'semicolon' => '?Token',
+		],
+	],
+	'Member\TraitUseNode' => [
+		'slots' => [
+			'useKeyword' => 'Token',
+			'traits' => 'SeparatedNodeList<NameNode>',
+			'semicolon' => '?Token',
+			'openBrace' => '?Token',
+			'adaptations' => '?NodeList<Member\TraitAdaptationNode>',
+			'closeBrace' => '?Token',
+		],
+	],
+	'Member\TraitPrecedenceNode' => [
+		'slots' => [
+			'trait' => 'NameNode',
+			'doubleColon' => 'Token',
+			'method' => 'IdentifierNode',
+			'insteadofKeyword' => 'Token',
+			'traits' => 'SeparatedNodeList<NameNode>',
+			'semicolon' => 'Token',
+		],
+		'layout' => ['insteadofKeyword' => 'Content'],
+	],
+	'Member\TraitAliasNode' => [
+		'slots' => [
+			'trait' => '?NameNode',
+			'doubleColon' => '?Token',
+			'method' => 'IdentifierNode',
+			'asKeyword' => 'Token',
+			'modifier' => '?Token',
+			'alias' => '?IdentifierNode',
+			'semicolon' => 'Token',
+		],
+		'layout' => ['asKeyword' => 'Content'],
+	],
+	'Member\EnumCaseNode' => [
+		'slots' => [
+			'attributes' => 'NodeList<AttributeGroupNode>',
+			'caseKeyword' => 'Token',
+			'name' => 'IdentifierNode',
+			'equals' => '?Token',
+			'value' => '?ExpressionNode',
+			'semicolon' => 'Token',
+		],
 	],
 ];
