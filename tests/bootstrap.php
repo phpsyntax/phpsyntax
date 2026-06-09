@@ -5,6 +5,8 @@ if (@!include __DIR__ . '/../vendor/autoload.php') {
 	exit(1);
 }
 
+require __DIR__ . '/Dumper.php';
+
 Tester\Environment::setup();
 Tester\Environment::setupFunctions();
 

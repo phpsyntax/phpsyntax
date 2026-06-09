@@ -12,7 +12,7 @@ test('trivia carry the line and the offset they start at in the original file', 
 	$lines = [];
 	foreach ($tokens as $token) {
 		foreach ([...$token->leadingTrivia, ...$token->trailingTrivia] as $trivia) {
-			$lines[] = array_search($trivia->id, new ReflectionClass($trivia)->getConstants(), true) . ':' . json_encode($trivia->text, JSON_UNESCAPED_SLASHES) . "@$trivia->line:$trivia->pos";
+			$lines[] = Dumper::findKindName($trivia) . ':' . json_encode($trivia->text, JSON_UNESCAPED_SLASHES) . "@$trivia->line:$trivia->pos";
 			Assert::same($trivia->text, substr($code, $trivia->pos, strlen($trivia->text)));
 		}
 	}
