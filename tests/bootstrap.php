@@ -16,3 +16,22 @@ function loadExpected(string $file, int $offset): string
 {
 	return ltrim((string) file_get_contents($file, offset: $offset), "\r\n");
 }
+
+
+/**
+ * Returns the PHP a test runs code with: the binary of the process, or under the CGI the CLI binary beside it,
+ * the test skipped without one.
+ */
+function getPhpCliBinary(): string
+{
+	if (PHP_SAPI === 'cli') {
+		return PHP_BINARY;
+	}
+
+	$path = dirname(PHP_BINARY) . '/php' . (PHP_OS_FAMILY === 'Windows' ? '.exe' : '');
+	if (!is_file($path)) {
+		Tester\Environment::skip('No CLI binary of PHP beside ' . PHP_BINARY . '.');
+	}
+
+	return $path;
+}

@@ -10,6 +10,14 @@ parameters:
 		- tests/temp/*
 
 	ignoreErrors:
+		-	# rule numbers come from the generated Action tables, so they always index the generated rule tables
+			message: '#^Offset .* might not exist on non-empty-list<int>\.$#'
+			path: src/Parser.php
+
 		-	# a token written over another at an index the list already has keeps it a list
 			message: '#^Property PhpSyntax\\TokenIndex::\$tokens \(list<PhpSyntax\\Token>\) does not accept non-empty-array<int, PhpSyntax\\Token>\.$#'
 			path: src/TokenIndex.php
+
+		-	# an action builds the list from the item the production has, while the slot is typed by every kind that may stand in it
+			message: '#^Parameter \#\d+ \$\w+ of class .+ constructor expects PhpSyntax\\Nodes\\(Separated|Plain)NodeList<.+>, PhpSyntax\\Nodes\\(Separated|Plain)NodeList<.+> given\.$#'
+			path: src/ParserData.php
