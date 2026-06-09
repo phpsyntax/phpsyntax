@@ -14,14 +14,12 @@ require __DIR__ . '/../bootstrap.php';
 function dump(array $tokens): array
 {
 	$escape = fn(string $s) => strtr($s, ["\n" => '\n', "\r" => '\r', "\t" => '\t']);
-	static $names;
-	$names ??= array_flip(array_filter(new ReflectionClass(Token::class)->getConstants(), 'is_int'));
-	$trivia = fn(Trivia $t) => array_search($t->id, new ReflectionClass($t)->getConstants(), true) . ($t->inInterpolation ? '*' : '') . ':' . $escape($t->text);
+	$trivia = fn(Trivia $t) => Dumper::findKindName($t) . ($t->inInterpolation ? '*' : '') . ':' . $escape($t->text);
 	$lines = [];
 	foreach ($tokens as $token) {
 		$lines[] = sprintf(
 			'%s %s [%s] [%s]',
-			$names[$token->id] ?? "'$token->text'",
+			Dumper::findKindName($token) ?? "'$token->text'",
 			$escape($token->text),
 			implode(', ', array_map($trivia, $token->leadingTrivia)),
 			implode(', ', array_map($trivia, $token->trailingTrivia)),
