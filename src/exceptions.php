@@ -9,8 +9,8 @@ namespace PhpSyntax;
 
 
 /**
- * The source code is not valid PHP; where in the source is told apart from where the exception was raised,
- * which is what `getLine()` and `getFile()` say.
+ * The lexer or the grammar refuses the source code; what only the compiler of PHP refuses parses. Where in the
+ * source is told apart from where the exception was raised, which is what `getLine()` and `getFile()` say.
  */
 final class ParseException extends \Exception
 {
