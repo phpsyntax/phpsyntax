@@ -26,4 +26,36 @@ final class Printer
 
 		return $code;
 	}
+
+
+	/**
+	 * Prints the node as it is written, without the trivia on its outer edges, which `Node::$text` reads.
+	 */
+	public static function printText(Node $node): string
+	{
+		$text = '';
+		$previous = null;
+		foreach ($node->getTokens() as $token) {
+			if ($previous !== null) { // what stands between two tokens, so the edges never come up
+				$text .= self::printTrivia($previous->trailingTrivia) . self::printTrivia($token->leadingTrivia);
+			}
+
+			$text .= $token->text;
+			$previous = $token;
+		}
+
+		return $text;
+	}
+
+
+	/** @param  list<Trivia>  $trivia */
+	private static function printTrivia(array $trivia): string
+	{
+		$text = '';
+		foreach ($trivia as $item) {
+			$text .= $item->text;
+		}
+
+		return $text;
+	}
 }

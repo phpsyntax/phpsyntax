@@ -24,6 +24,13 @@ abstract class Node implements \Stringable
 	public protected(set) ?Node $parent = null;
 
 	/**
+	 * The node as it is written, without the trivia on its outer edges, which printing it writes too.
+	 */
+	public string $text {
+		get => Printer::printText($this);
+	}
+
+	/**
 	 * The trivia before the node, which are the leading trivia of its first token.
 	 * @var list<Trivia>
 	 */
@@ -145,6 +152,31 @@ abstract class Node implements \Stringable
 	}
 
 
+	/**
+	 * The tokens of the whole subtree in source order; empty for a node without tokens, such as an empty list.
+	 * @return list<Token>
+	 */
+	public function getTokens(): array
+	{
+		$tokens = [];
+		$stack = [$this];
+		while ($stack) {
+			$node = array_pop($stack);
+			if ($node instanceof Token) {
+				$tokens[] = $node;
+				continue;
+			}
+
+			$children = $node->getChildren();
+			for ($i = count($children) - 1; $i >= 0; $i--) {
+				$stack[] = $children[$i];
+			}
+		}
+
+		return $tokens;
+	}
+
+
 	/** Null only for a node without tokens. */
 	public function getFirstToken(): ?Token
 	{
@@ -169,6 +201,135 @@ abstract class Node implements \Stringable
 		}
 
 		return null;
+	}
+
+
+	/** Current line of the first token; null for a detached subtree or a node without tokens. */
+	public function getStartLine(): ?int
+	{
+		return $this->getFirstToken()?->getCurrentLine();
+	}
+
+
+	/** Current line where the last token ends; null as for `getStartLine()`. */
+	public function getEndLine(): ?int
+	{
+		$token = $this->getLastToken();
+		$line = $token?->getCurrentLine();
+		return $line === null ? null : $line + TokenIndex::countLineEndings($token->text);
+	}
+
+
+	/**
+	 * Whether a line ends inside the text of the node, the trivia on its outer edges left out; unlike the lines,
+	 * it needs no file.
+	 */
+	public function isMultiLine(): bool
+	{
+		$tokens = $this->getTokens();
+		$last = count($tokens) - 1;
+		foreach ($tokens as $i => $token) {
+			if (preg_match('~[\r\n]~', $i === $last ? rtrim($token->text, "\r\n") : $token->text)) {
+				return true;
+			}
+
+			foreach ($i === $last ? [] : [...$token->trailingTrivia, ...$tokens[$i + 1]->leadingTrivia] as $trivia) {
+				if (preg_match('~[\r\n]~', $trivia->text)) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+
+	/**
+	 * The innermost node of the class above this one, its parent first.
+	 * @template T of object
+	 * @param  class-string<T>  $class
+	 * @return (T&Node)|null
+	 */
+	public function findAncestor(string $class): ?self
+	{
+		for ($node = $this->parent; $node; $node = $node->parent) {
+			if ($node instanceof $class) {
+				return $node;
+			}
+		}
+
+		return null;
+	}
+
+
+	/**
+	 * The first descendant of the class the predicate accepts, in pre-order; null when there is none.
+	 * @template T of object
+	 * @param  class-string<T>  $class  a node class or an interface node classes implement
+	 * @param  ?callable(T&Node): bool  $predicate
+	 * @return (T&Node)|null
+	 */
+	public function findFirst(string $class, ?callable $predicate = null): ?self
+	{
+		return $this->collectDescendants($class, $predicate, firstOnly: true)[0] ?? null;
+	}
+
+
+	/**
+	 * Descendant nodes of the class the predicate accepts, in pre-order, as a snapshot safe to iterate
+	 * while mutating the tree.
+	 * @template T of object
+	 * @param  class-string<T>  $class  a node class or an interface node classes implement
+	 * @param  ?callable(T&Node): bool  $predicate
+	 * @return list<T&Node>
+	 */
+	public function find(string $class, ?callable $predicate = null): array
+	{
+		return $this->collectDescendants($class, $predicate, firstOnly: false);
+	}
+
+
+	/**
+	 * @template T of object
+	 * @param  class-string<T>  $class
+	 * @param  ?callable(T&Node): bool  $predicate
+	 * @return list<T&Node>
+	 */
+	private function collectDescendants(string $class, ?callable $predicate, bool $firstOnly): array
+	{
+		self::checkFilter($class);
+		$result = [];
+		$stack = array_reverse($this->getChildren());
+		while ($stack) {
+			$node = array_pop($stack);
+			if ($node instanceof Token) {
+				continue;
+			}
+
+			if ($node instanceof $class && ($predicate === null || $predicate($node))) {
+				$result[] = $node;
+				if ($firstOnly) {
+					break;
+				}
+			}
+
+			$children = $node->getChildren();
+			for ($i = count($children) - 1; $i >= 0; $i--) {
+				$stack[] = $children[$i];
+			}
+		}
+
+		/** @var list<T&Node> $result */
+		return $result;
+	}
+
+
+	/** The class the descendants are looked up by must be one a node can be. */
+	private static function checkFilter(string $class): void
+	{
+		if (!is_a($class, self::class, allow_string: true) && !interface_exists($class)) {
+			throw new \InvalidArgumentException('The class must be a node class or an interface, ' . Helpers::formatCode($class) . ' given.');
+		}
 	}
 
 
