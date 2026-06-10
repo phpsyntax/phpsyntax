@@ -1,8 +1,9 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\Nodes\{FileNode, PlainNodeList, StatementNode};
+use PhpSyntax\{Builder, Parser, Printer, Token, Trivia};
+use PhpSyntax\Nodes\{ArgumentNode, FileNode, PlainNodeList, SeparatedNodeList, StatementNode};
+use PhpSyntax\Nodes\Expression\ArrayNode;
 use PhpSyntax\Nodes\Statement\ExpressionStatementNode;
-use PhpSyntax\{Parser, Printer, Token, Trivia};
 use Tester\Assert;
 
 require __DIR__ . '/../bootstrap.php';
@@ -152,6 +153,35 @@ test('detached subtree has no positions', function () {
 });
 
 
+test('a subtree entering the file with a hole a write left in it is refused', function () {
+	$parser = new Parser;
+	$builder = new Builder;
+	$file = $parser->parse("<?php\nf(1);\n");
+	$file->getIndex();
+
+	// the argument is taken out of the fragment, which is then inserted: it would stand in the order twice
+	$fragment = $builder->statement('g($a);');
+	$target = $file->findFirst(ArgumentNode::class);
+	$source = $fragment->findFirst(ArgumentNode::class);
+	Assert::type(ArgumentNode::class, $target);
+	Assert::type(ArgumentNode::class, $source);
+	$target->value = $source->value;
+	$file->statements->append($fragment);
+	Assert::exception(
+		fn() => $file->endOfFile->getCurrentLine(),
+		LogicException::class,
+		'%a% stands in the file twice: %a%',
+	);
+
+	// the same insertion of a whole fragment is right and says so
+	$file = $parser->parse("<?php\nf(1);\n");
+	$file->getIndex();
+	$file->statements->append($builder->statement('g($a);'));
+	Assert::same("<?php\nf(1);\ng(\$a);\n", (string) $file);
+	Assert::same(4, $file->endOfFile->getCurrentLine());
+});
+
+
 test('offsets and columns stay right when the queries reach only part of the file', function () {
 	$file = (new Parser)->parse("<?php\n\$a = f(1);\n\$b = g(2, 'é');\n\$c = h(3);\n");
 	$tokens = $file->getIndex()->getTokens();
@@ -171,4 +201,49 @@ test('offsets and columns stay right when the queries reach only part of the fil
 	$verify();
 	$tokens[1]->setTrailingTrivia([new Trivia(Trivia::LineEnding, "\n")]); // `=` now ends a line
 	$verify();
+});
+
+
+test('writes of one batch land where the tree has them, whatever else was released', function () {
+	$parser = new Parser;
+	$builder = new Builder;
+	$file = $parser->parse("<?php\n\$a;\nf(\$x);\nreturn;\n");
+	$file->getLastToken()->getCurrentLine(); // builds the index before the writes
+
+	// a slot replaced by longer code, then an empty slot elsewhere filled by as many tokens as were released,
+	// both waiting for the next query
+	$statement = $file->find(ExpressionStatementNode::class)[1];
+	$statement->expression = $builder->expression('g($a, $b)');
+	$return = $file->find(PhpSyntax\Nodes\Statement\ReturnNode::class)[0];
+	$return->expression = $builder->expression('h($z)')->setEdgeTrivia([new Trivia(Trivia::Whitespace, ' ')]);
+
+	$describe = fn(Token $token) => [$token->text, $token->getCurrentLine(), $token->getCurrentColumn(), $token->getCurrentOffset()];
+	$fresh = $parser->parse(Printer::print($file));
+	Assert::same(array_map($describe, $fresh->getIndex()->getTokens()), array_map($describe, $file->getIndex()->getTokens()));
+	Assert::same("<?php\n\$a;\ng(\$a, \$b);\nreturn h(\$z);\n", Printer::print($file));
+
+	// an item taken out and put back at the end, followed by a separator as long as the one released with it:
+	// the token before the released separator leaves as well, so the separator has no place there
+	$file = $parser->parse('<?php [$t, $r];');
+	$file->getLastToken()->getCurrentLine();
+	$list = $file->find(ArrayNode::class)[0]->items;
+	$t = $list[0];
+	$list->removeItem($t);
+	$list->append($t, new Token(ord(','), ','));
+	$list->setTrailingSeparator(new Token(ord(','), ','));
+	$fresh = $parser->parse(Printer::print($file));
+	Assert::same(array_map($describe, $fresh->getIndex()->getTokens()), array_map($describe, $file->getIndex()->getTokens()));
+	Assert::same('<?php [$r,$t,];', Printer::print($file));
+});
+
+
+test('a trailing separator taken away before the index caught up with its insertion', function () {
+	$file = (new Parser)->parse("<?php\nf(\$a);\n");
+	$list = $file->find(ArgumentNode::class)[0]->parent;
+	assert($list instanceof SeparatedNodeList);
+	$list->append((new Builder)->fragment(ArgumentNode::class, '$b'));
+	$list->setTrailingSeparator(new Token(ord(','), ','));
+	$list->setTrailingSeparator(null);
+	Assert::same("<?php\nf(\$a, \$b);\n", Printer::print($file));
+	Assert::same(2, $file->getLastToken()->getPrevious()?->getCurrentLine());
 });
