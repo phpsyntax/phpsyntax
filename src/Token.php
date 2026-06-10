@@ -96,6 +96,24 @@ final class Token extends \PhpToken implements \Stringable
 	}
 
 
+	/**
+	 * The innermost node of the class the token stands in, its parent first.
+	 * @template T of object
+	 * @param  class-string<T>  $class
+	 * @return (T&Node)|null
+	 */
+	public function findAncestor(string $class): ?Node
+	{
+		for ($node = $this->parent; $node; $node = $node->parent) {
+			if ($node instanceof $class) {
+				return $node;
+			}
+		}
+
+		return null;
+	}
+
+
 	/** A token is its own first and last token, so `Node|Token` is handled by one call. */
 	public function getFirstToken(): static
 	{
