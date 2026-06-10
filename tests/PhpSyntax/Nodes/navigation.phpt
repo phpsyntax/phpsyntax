@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{Builder, Node, Parser};
+use PhpSyntax\{Builder, Node, Parser, Trivia};
 use PhpSyntax\Nodes\{AnonymousFunctionNode, ClassLikeNode, ExpressionNode, FunctionLikeNode};
 use PhpSyntax\Nodes\Expression\{BinaryOpNode, ClosureNode, VariableNode};
 use PhpSyntax\Nodes\Member\{MethodNode, PropertyHookNode, PropertyNode};
@@ -100,6 +100,19 @@ test('the enclosing function and class are ancestors of an interface', function 
 	Assert::same('A', $class('v4')->name->text);
 	Assert::null($class('v10')->name);
 	Assert::count(1, $class('v10')->members);
+});
+
+
+test('doc comment in leading trivia or in the trailing trivia of the previous token', function () {
+	$file = (new Parser)->parse("<?php\n/** a */\n// x\n\$a; /** b */ \$b; \$c;");
+	[$a, $b, $c] = $file->statements->getItems();
+	$doc = $a->getDocComment();
+	Assert::type(PhpSyntax\Trivia::class, $doc);
+	Assert::same('/** a */', $doc->text);
+	Assert::same(Trivia::DocComment, $doc->id);
+	Assert::same('/** b */', $b->getDocComment()?->text);
+	Assert::null($c->getDocComment());
+	Assert::null((new PhpSyntax\Nodes\PlainNodeList)->getDocComment());
 });
 
 
