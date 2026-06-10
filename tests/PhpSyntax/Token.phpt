@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{Token, Trivia};
+use PhpSyntax\{Parser, Token, Trivia};
 use Tester\Assert;
 
 require __DIR__ . '/../bootstrap.php';
@@ -40,6 +40,16 @@ test('a trivia is made from its text', function () {
 	foreach (['', "\n\n", " \n", '#[A]', "// c\n", '/* open', '/* a */ b', '// a ?> b', '<?php', '<?=', 'x'] as $text) {
 		Assert::exception(fn() => Trivia::fromText($text), InvalidArgumentException::class, PhpSyntax\Helpers::formatCode($text) . ' is not whitespace, a line ending, a comment or an open tag.');
 	}
+});
+
+
+test('a token finds the ancestor from its parent up', function () {
+	$file = (new Parser)->parse('<?php class A { public function m() { $a; } }');
+	$token = ($file->findFirst(PhpSyntax\Nodes\Expression\VariableNode::class) ?? throw new LogicException)->getFirstToken();
+	Assert::type(PhpSyntax\Nodes\Expression\VariableNode::class, $token->findAncestor(PhpSyntax\Nodes\Expression\VariableNode::class));
+	Assert::type(PhpSyntax\Nodes\Member\MethodNode::class, $token->findAncestor(PhpSyntax\Nodes\FunctionLikeNode::class));
+	Assert::null($token->findAncestor(PhpSyntax\Nodes\Statement\FunctionNode::class));
+	Assert::null(new Token(Token::Variable, '$a')->findAncestor(PhpSyntax\Node::class));
 });
 
 
@@ -100,4 +110,17 @@ test('a trivia with another text is a copy standing where the original stood', f
 	Assert::same('// a', $trimmed->text);
 	Assert::true($trimmed->inInterpolation);
 	Assert::same([3, 10], [$trimmed->line, $trimmed->pos]);
+});
+
+
+test('a copy of a token does not keep the file of the original alive', function () {
+	$file = (new Parser)->parse('<?php $a; $b;');
+	$token = $file->getTokens()[2];
+	Assert::same(1, $token->currentLine); // numbers the tokens
+	$copy = clone $token;
+	$weak = WeakReference::create($file);
+	unset($file, $token);
+	gc_collect_cycles();
+	Assert::null($weak->get());
+	Assert::same('$b', $copy->text);
 });
