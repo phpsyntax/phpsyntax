@@ -57,6 +57,19 @@ enum Associativity
 
 
 /**
+ * What a callback of `Traverser::traverse()` tells the walk.
+ */
+enum TraverseAction
+{
+	/** keeps the walk out of the children of the node */
+	case SkipChildren;
+
+	/** ends the walk; the nodes already entered are left as it unwinds */
+	case Stop;
+}
+
+
+/**
  * What a slot is to the indentation of the lines its node spreads over, relative to the line the node
  * begins on; the level each role stands for is left to whatever lays the code out.
  */

@@ -2,6 +2,7 @@
 
 use PhpSyntax\{Node, ParseException, Parser, Printer, Token};
 use PhpSyntax\Nodes\FileNode;
+use PhpSyntax\Nodes\Member\PropertyNode;
 use PhpSyntax\Nodes\Statement\HaltCompilerNode;
 use Tester\Assert;
 
@@ -69,7 +70,8 @@ test('modifiers written without a space after them stay so', function () {
 	parse('<?php class A { public static$a; var$b; public readonly?int $c; public private(set)?int $d; }');
 	parse('<?php class A { function __construct(public$a, private readonly?int $b) {} }');
 	parse('<?php class A { public int $p { final get=>1; } } final readonly class B {}');
-	parse("<?php class A {\n\tprivate\nstatic\$a; }");
+	$property = parse("<?php class A {\n\tprivate\nstatic\$a; }")->findFirst(PropertyNode::class);
+	Assert::same(['private', 'static'], array_map(fn(Token $token) => $token->text, $property?->modifiers->getTokens() ?? []));
 });
 
 
