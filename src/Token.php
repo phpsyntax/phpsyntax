@@ -246,6 +246,39 @@ final class Token extends \PhpToken implements \Stringable
 
 
 	/**
+	 * Whether a comment sits anywhere between the text of this token and the text of the given one:
+	 * in the trailing trivia here, the leading trivia there, or around any token between them. The tokens stand
+	 * in one file, this one first; the same token twice is an empty interval.
+	 */
+	public function hasCommentUpTo(self $end): bool
+	{
+		if ($end !== $this && !$this->isBefore($end)) {
+			throw new \InvalidArgumentException('Token ' . Helpers::formatCode($end->text) . ' stands before token ' . Helpers::formatCode($this->text) . ', which is where the interval starts.');
+		}
+
+		for ($token = $this; $token !== null; $token = $token->getNext()) {
+			foreach ($token === $this ? [] : $token->leadingTrivia as $trivia) {
+				if ($trivia->isComment()) {
+					return true;
+				}
+			}
+
+			if ($token === $end) {
+				return false;
+			}
+
+			foreach ($token->trailingTrivia as $trivia) {
+				if ($trivia->isComment()) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+
+	/**
 	 * Copy without a parent and without the index that numbered the original, which would keep its whole file
 	 * alive; the trivia are immutable, so the copy shares them.
 	 */
