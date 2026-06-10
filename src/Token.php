@@ -228,14 +228,55 @@ final class Token extends \PhpToken implements \Stringable
 	 */
 	public function getComments(): array
 	{
-		$comments = [];
-		foreach ([...$this->leadingTrivia, ...$this->trailingTrivia] as $trivia) {
+		return [...$this->getLeadingComments(), ...$this->getTrailingComments()];
+	}
+
+
+	/** Whether a comment sits in the leading trivia of the token, before its text. */
+	public function hasLeadingComment(): bool
+	{
+		// dresscode:ignore arrayFunctionForForeach -- a loop is faster than array_any() on this hot path
+		foreach ($this->leadingTrivia as $trivia) {
 			if ($trivia->isComment()) {
-				$comments[] = $trivia;
+				return true;
 			}
 		}
 
-		return $comments;
+		return false;
+	}
+
+
+	/** Whether a comment sits in the trailing trivia of the token, after its text up to the end of its line. */
+	public function hasTrailingComment(): bool
+	{
+		// dresscode:ignore arrayFunctionForForeach -- a loop is faster than array_any() on this hot path
+		foreach ($this->trailingTrivia as $trivia) {
+			if ($trivia->isComment()) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+
+	/**
+	 * The comments among the leading trivia of the token.
+	 * @return list<Trivia>
+	 */
+	public function getLeadingComments(): array
+	{
+		return array_values(array_filter($this->leadingTrivia, fn(Trivia $trivia) => $trivia->isComment()));
+	}
+
+
+	/**
+	 * The comments among the trailing trivia of the token.
+	 * @return list<Trivia>
+	 */
+	public function getTrailingComments(): array
+	{
+		return array_values(array_filter($this->trailingTrivia, fn(Trivia $trivia) => $trivia->isComment()));
 	}
 
 

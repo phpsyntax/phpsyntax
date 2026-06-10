@@ -391,6 +391,40 @@ abstract class Node implements \Stringable
 	}
 
 
+	/** Whether a comment sits on the leading edge of the node, among the trivia before its first token. */
+	public function hasLeadingComment(): bool
+	{
+		return $this->getFirstToken()?->hasLeadingComment() ?? false;
+	}
+
+
+	/** Whether a comment sits on the trailing edge of the node, among the trivia after its last token. */
+	public function hasTrailingComment(): bool
+	{
+		return $this->getLastToken()?->hasTrailingComment() ?? false;
+	}
+
+
+	/**
+	 * The comments on the leading edge of the node, before its first token.
+	 * @return list<Trivia>
+	 */
+	public function getLeadingComments(): array
+	{
+		return $this->getFirstToken()?->getLeadingComments() ?? [];
+	}
+
+
+	/**
+	 * The comments on the trailing edge of the node, after its last token up to the end of its line.
+	 * @return list<Trivia>
+	 */
+	public function getTrailingComments(): array
+	{
+		return $this->getLastToken()?->getTrailingComments() ?? [];
+	}
+
+
 	/**
 	 * The trivia between the first and the last token of the node, in source order; the edges are left out.
 	 * @return \Generator<Trivia>
