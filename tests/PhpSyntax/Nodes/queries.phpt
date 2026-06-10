@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{Builder, Parser};
+use PhpSyntax\{Builder, Parser, Trivia};
 use PhpSyntax\Nodes\Statement\{ExpressionStatementNode, InlineHtmlNode};
 use Tester\Assert;
 
@@ -109,6 +109,34 @@ test('getInnerComments() sees the comments hasInnerComment() counts', function (
 		[...$first->getComments(), ...$last->getComments()],
 	));
 	Assert::same([], parseStatement("f(1);\n")->getInnerComments());
+});
+
+
+test('a comment is before a node, inside it or after it, and so of a token', function () {
+	$texts = fn(array $comments) => array_map(fn(Trivia $trivia) => $trivia->text, $comments);
+	$statement = parseStatement("/* a */ f(/* b */ 1); // c\n");
+	Assert::true($statement->hasLeadingComment());
+	Assert::true($statement->hasInnerComment());
+	Assert::true($statement->hasTrailingComment());
+	Assert::same(['/* a */'], $texts($statement->getLeadingComments()));
+	Assert::same(['/* b */'], $texts($statement->getInnerComments()));
+	Assert::same(['// c'], $texts($statement->getTrailingComments()));
+
+	$call = $statement->expression;
+	Assert::true($call->hasLeadingComment()); // the comment before the statement is the leading trivia of `f`, which the call starts with too
+	Assert::same([], $call->getTrailingComments()); // the call ends at `)`, before the semicolon carrying it
+
+	$plain = parseStatement("f(1);\n");
+	Assert::false($plain->hasLeadingComment());
+	Assert::false($plain->hasTrailingComment());
+	Assert::same([], $plain->getLeadingComments());
+
+	$tokens = $statement->getTokens();
+	Assert::same([true, false, false, false, false], array_map(fn(PhpSyntax\Token $t) => $t->hasLeadingComment(), $tokens));
+	Assert::same([false, true, false, false, true], array_map(fn(PhpSyntax\Token $t) => $t->hasTrailingComment(), $tokens));
+	Assert::same(['/* a */'], $texts($tokens[0]->getLeadingComments()));
+	Assert::same(['/* b */'], $texts($tokens[1]->getTrailingComments()));
+	Assert::same(['// c'], $texts($tokens[4]->getTrailingComments()));
 });
 
 
