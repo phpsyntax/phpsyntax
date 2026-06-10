@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{Builder, Node, Parser};
+use PhpSyntax\{Builder, Node, Parser, Trivia};
 use PhpSyntax\Nodes\{AnonymousFunctionNode, ClassLikeNode, ExpressionNode, FunctionLikeNode};
 use PhpSyntax\Nodes\Expression\{BinaryOpNode, ClosureNode, VariableNode};
 use PhpSyntax\Nodes\Member\{MethodNode, PropertyHookNode, PropertyNode};
@@ -118,6 +118,19 @@ test('every function-like declaration tells whether it returns a reference', fun
 		[true, false, true, true, false, true, false, true],
 		array_map(fn(FunctionLikeNode $function) => $function->ampersand !== null, $functions),
 	);
+});
+
+
+test('doc comment in leading trivia or in the trailing trivia of the previous token', function () {
+	$file = (new Parser)->parse("<?php\n/** a */\n// x\n\$a; /** b */ \$b; \$c;");
+	[$a, $b, $c] = $file->statements->getItems();
+	$doc = $a->getDocComment();
+	Assert::type(PhpSyntax\Trivia::class, $doc);
+	Assert::same('/** a */', $doc->text);
+	Assert::same(Trivia::DocComment, $doc->id);
+	Assert::same('/** b */', $b->getDocComment()?->text);
+	Assert::null($c->getDocComment());
+	Assert::null((new PhpSyntax\Nodes\PlainNodeList)->getDocComment());
 });
 
 

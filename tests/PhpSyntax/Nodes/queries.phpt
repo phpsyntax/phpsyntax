@@ -51,6 +51,21 @@ test('the trivia on the edges of a node are read where setEdgeTrivia() writes th
 });
 
 
+test('hasInnerComment() sees comments inside the node, not on its edges', function () {
+	Assert::false(parseStatement("/* a */ f(1); // b\n")->hasInnerComment());
+	Assert::true(parseStatement("f(/* a */ 1);\n")->hasInnerComment());
+	Assert::true(parseStatement("f(\n\t1, // a\n);\n")->hasInnerComment());
+	Assert::true(parseStatement("f(1) /* a */;\n")->hasInnerComment());
+	Assert::false(parseStatement("f(1)\n\t;\n")->hasInnerComment());
+
+	// the node walks its own tokens, so a subtree taken out of the tree answers as it did inside it
+	$detached = clone parseStatement("f(/* a */ 1);\n");
+	Assert::true($detached->hasInnerComment());
+	Assert::same(['/* a */'], array_map(fn($trivia) => $trivia->text, $detached->getInnerComments()));
+	Assert::true((new Builder)->expression('f(/* a */ 1)')->hasInnerComment());
+});
+
+
 test('find() takes a class and a predicate, findFirst() stops at the first match', function () {
 	$file = (new Parser)->parse('<?php f(1, 2); g(3);');
 	$calls = $file->find(PhpSyntax\Nodes\Expression\FunctionCallNode::class);
@@ -81,6 +96,60 @@ test('find() takes a class and a predicate, findFirst() stops at the first match
 		PhpSyntax\Nodes\Statement\InterfaceNode::class,
 		$classes->findFirst(PhpSyntax\Nodes\ClassLikeNode::class, fn($node) => !$node instanceof PhpSyntax\Nodes\Statement\ClassNode),
 	);
+});
+
+
+test('getInnerComments() sees the comments hasInnerComment() counts', function () {
+	$statement = parseStatement("/* a */ f(/* b */ 1); // c\n");
+	Assert::same(['/* b */'], array_map(fn(PhpSyntax\Trivia $t) => $t->text, $statement->getInnerComments()));
+	$first = $statement->getFirstToken();
+	$last = $statement->getLastToken();
+	Assert::same(['/* a */', '// c'], array_map(
+		fn(PhpSyntax\Trivia $t) => $t->text,
+		[...$first->getComments(), ...$last->getComments()],
+	));
+	Assert::same([], parseStatement("f(1);\n")->getInnerComments());
+});
+
+
+test('hasComment() sees a comment on either side of the token and nothing else', function () {
+	$tokens = parseStatement("/* a */ f( 1 ); // c\n")->getTokens();
+	Assert::same([true, false, false, false, true], array_map(fn(PhpSyntax\Token $t) => $t->hasComment(), $tokens));
+	Assert::true(parseStatement("/** d */\nf();\n")->getFirstToken()->hasComment());
+});
+
+
+test('hasCommentUpTo() looks between two tokens of one file in their order and refuses any other interval', function () {
+	$file = (new Parser)->parse('<?php a(); /* x */ b(); c();');
+	[$a, , , , $b, , , , $c] = $file->getTokens();
+	Assert::true($a->hasCommentUpTo($b));
+	Assert::false($b->hasCommentUpTo($c));
+	Assert::false($b->hasCommentUpTo($b));
+	Assert::exception(fn() => $c->hasCommentUpTo($a), InvalidArgumentException::class, 'Token `a` stands before token `c`, which is where the interval starts.');
+	Assert::exception(fn() => $a->hasCommentUpTo((new Parser)->parse('<?php d();')->getTokens()[0]), InvalidArgumentException::class, 'Token `d` stands in another file than token `a`.');
+	Assert::exception(fn() => (clone $a)->hasCommentUpTo($b), LogicException::class, 'A token without a file has no order.');
+});
+
+
+test('what a trivia says about a comment', function () {
+	$file = (new Parser)->parse("<?php\n// a\n# b\n/* c */\n/**\n * d\n * e\n */\nf();\n");
+	$comments = [];
+	foreach ($file->getIndex()->getTokens() as $token) {
+		$comments = [...$comments, ...$token->getComments()];
+	}
+
+	[$line, $hash, $block, $doc] = $comments;
+	Assert::true($line->isLineComment());
+	Assert::true($hash->isLineComment());
+	Assert::false($block->isLineComment());
+	Assert::false($doc->isLineComment());
+	Assert::false($line->isMultiLineComment());
+	Assert::true($doc->isMultiLineComment());
+	Assert::same(['a', 'b', 'c', "d\ne"], array_map(fn(PhpSyntax\Trivia $t) => $t->getCommentText(), $comments));
+
+	// the tokenizer counts the spaces before the line break as part of a // comment; the text of it has none
+	$spaced = (new Parser)->parse("<?php\nf(); // a  \n")->getIndex()->getTokens();
+	Assert::same('a', $spaced[3]->getComments()[0]->getCommentText());
 });
 
 
