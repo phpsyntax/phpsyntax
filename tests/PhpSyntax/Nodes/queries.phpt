@@ -1,7 +1,7 @@
 <?php declare(strict_types=1);
 
+use PhpSyntax\{Builder, Parser};
 use PhpSyntax\Nodes\Statement\{ExpressionStatementNode, InlineHtmlNode};
-use PhpSyntax\Parser;
 use Tester\Assert;
 
 require __DIR__ . '/../../bootstrap.php';
@@ -13,6 +13,42 @@ function parseStatement(string $code): ExpressionStatementNode
 	assert($stmt instanceof ExpressionStatementNode);
 	return $stmt;
 }
+
+
+test('$text is the node without the trivia on its edges, getTokens() the tokens under it', function () {
+	$file = (new Parser)->parse("<?php\n\n// note\n\$a = f( 1, /* x */ 2 ); // tail\n");
+	$stmt = $file->statements[0];
+	Assert::same('$a = f( 1, /* x */ 2 );', $stmt->text);
+	Assert::same("<?php\n\n// note\n\$a = f( 1, /* x */ 2 ); // tail\n", (string) $file);
+	// the file is a node with edges too, and the open tag is the leading trivia of its first token
+	Assert::same("\$a = f( 1, /* x */ 2 ); // tail\n", $file->text);
+	Assert::same(['$a', '=', 'f', '(', '1', ',', '2', ')', ';', ''], array_map(fn($token) => $token->text, $file->getTokens()));
+
+	$empty = (new PhpSyntax\Nodes\PlainNodeList);
+	Assert::same('', $empty->text);
+	Assert::same([], $empty->getTokens());
+
+	// a heredoc keeps the text of its body, whitespace and all
+	$heredoc = (new Builder)->expression("<<<EOT\n\tx\n\tEOT");
+	Assert::same("<<<EOT\n\tx\n\tEOT", $heredoc->text);
+});
+
+
+test('the trivia on the edges of a node are read where setEdgeTrivia() writes them', function () {
+	$file = (new Parser)->parse("<?php\n\n// note\n\$a = 1; // tail\n");
+	$stmt = $file->statements[0];
+	Assert::same(["<?php\n", "\n", '// note', "\n"], array_map(fn($trivia) => $trivia->text, $stmt->leadingTrivia));
+	Assert::same([' ', '// tail', "\n"], array_map(fn($trivia) => $trivia->text, $stmt->trailingTrivia));
+	Assert::same($stmt->getFirstToken()->leadingTrivia, $stmt->leadingTrivia);
+
+	$stmt->setEdgeTrivia([], []);
+	Assert::same([], $stmt->leadingTrivia);
+	Assert::same([], $stmt->trailingTrivia);
+
+	$empty = (new PhpSyntax\Nodes\PlainNodeList);
+	Assert::same([], $empty->leadingTrivia);
+	Assert::same([], $empty->trailingTrivia);
+});
 
 
 test('find() takes a class and a predicate, findFirst() stops at the first match', function () {
@@ -127,6 +163,29 @@ test('isThis() and isOfThis() tell $this and its properties', function () {
 	$call = parseStatement("\$this->a()->b();\n")->expression;
 	assert($call instanceof PhpSyntax\Nodes\Expression\MethodCallNode);
 	Assert::false($call->isOfThis());
+});
+
+
+test('the plain and the combined assignment are told apart by the class', function () {
+	$expression = fn(string $code) => parseStatement($code)->expression;
+
+	Assert::type(PhpSyntax\Nodes\Expression\AssignmentNode::class, $expression("\$a = 1;\n"));
+	Assert::type(PhpSyntax\Nodes\Expression\AssignmentByReferenceNode::class, $expression("\$a = &\$b;\n"));
+	foreach (['+=', '-=', '*=', '/=', '.=', '%=', '&=', '|=', '^=', '<<=', '>>=', '**=', '??='] as $operator) {
+		$combined = $expression("\$a $operator 1;\n");
+		Assert::type(PhpSyntax\Nodes\Expression\CombinedAssignmentNode::class, $combined, $operator);
+		Assert::same($operator, $combined->operator->text);
+	}
+
+	// the plain one takes a destructuring on the left, which is why its slot is wider; the grammar
+	// takes a variable alone on the left of the combined one
+	$destructuring = $expression("[\$a, \$b] = \$x;\n");
+	assert($destructuring instanceof PhpSyntax\Nodes\Expression\AssignmentNode);
+	Assert::type(PhpSyntax\Nodes\DestructuringNode::class, $destructuring->target);
+	Assert::exception(
+		fn() => (new Builder)->expression('[$a, $b] += 1'),
+		PhpSyntax\ParseException::class,
+	);
 });
 
 

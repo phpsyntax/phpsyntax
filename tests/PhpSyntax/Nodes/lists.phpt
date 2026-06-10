@@ -1,7 +1,8 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{Node, Token};
-use PhpSyntax\Nodes\{FileNode, ModifiersNode, NodeList, PlainNodeList, SeparatedNodeList, StatementNode};
+use PhpSyntax\{Builder, Node, Parser, Token};
+use PhpSyntax\Nodes\{FileNode, MemberNode, ModifiersNode, NodeList, PlainNodeList, SeparatedNodeList, StatementNode};
+use PhpSyntax\Nodes\Statement\{BlockNode, ClassNode, NamespaceNode};
 use Tester\Assert;
 
 require __DIR__ . '/../../bootstrap.php';
@@ -83,6 +84,42 @@ test('a list is read as a collection and written by its methods alone', function
 });
 
 
+test('a statement inserted into a file stands where its neighbor stands', function () {
+	$parser = new Parser;
+	$builder = new Builder;
+
+	// the blank line before the class belongs to the class and stays there
+	$file = $parser->parse("<?php\nnamespace App;\n\nuse App\\Money;\n\nclass X\n{\n}\n");
+	$namespace = $file->find(NamespaceNode::class)[0];
+	$namespace->statements->insert(1, $builder->statement('use App\Currency;'));
+	Assert::same("<?php\nnamespace App;\n\nuse App\\Money;\nuse App\\Currency;\n\nclass X\n{\n}\n", (string) $file);
+
+	// a member takes the indentation of the one above it
+	$file = $parser->parse("<?php\nclass A\n{\n\tpublic function a() {}\n}\n");
+	$file->find(ClassNode::class)[0]->members->append($builder->fragment(MemberNode::class, 'public function b() {}'));
+	Assert::same("<?php\nclass A\n{\n\tpublic function a() {}\n\tpublic function b() {}\n}\n", (string) $file);
+
+	// in a list written on one line the neighbor ends with a space, so the new item does too
+	$file = $parser->parse('<?php function f() { a(); b(); }');
+	$file->find(BlockNode::class)[0]->statements->append($builder->statement('c();'));
+	Assert::same('<?php function f() { a(); b(); c(); }', (string) $file);
+
+	// what already ends its line inside its own text is given no line ending on top of it
+	$file = $parser->parse("<?php\n\$a = 1;\n");
+	$closing = $builder->statement('?' . '>');
+	$closing->getLastToken()->setText("?>\n"); // a close tag keeps the line ending PHP swallows after it
+	$file->statements->append($closing);
+	Assert::same("<?php\n\$a = 1;\n?>\n", (string) $file);
+
+	// an item that carries trivia of its own is taken as it is
+	$file = $parser->parse("<?php\n\$a = 1;\n");
+	$copy = clone $file->statements[0];
+	$copy->setEdgeTrivia(leading: []); // the open tag came with the copy
+	$file->statements->append($copy);
+	Assert::same("<?php\n\$a = 1;\n\$a = 1;\n", (string) $file);
+});
+
+
 test('SeparatedNodeList: separators between items and an optional trailing one', function () {
 	$list = new SeparatedNodeList;
 	Assert::true($list->isEmpty());
@@ -124,6 +161,34 @@ test('ModifiersNode', function () {
 	$modifiers->removeToken($public);
 	Assert::same([$static], $modifiers->getTokens());
 	Assert::null($public->parent);
+});
+
+
+test('a modifier appended or removed keeps the trivia of the declaration where they belong', function () {
+	$parser = new Parser;
+	$builder = new Builder;
+	$change = function (string $code, callable $edit) use ($parser): string {
+		$file = $parser->parse($code);
+		$all = $file->find(ModifiersNode::class);
+		$edit($all[count($all) - 1]); // those of the method where the class has some too
+		return (string) $file;
+	};
+	$final = fn() => new Token(Token::Final, 'final');
+
+	// the first modifier opens the declaration, the open tag and the doc comment go before it
+	Assert::same("<?php\n\n/** doc */\nfinal class B {}\n", $change("<?php\n\n/** doc */\nclass B {}\n", fn($m) => $m->append($final())));
+	Assert::same("<?php\nclass A\n{\n\tfinal function g() {}\n}\n", $change("<?php\nclass A\n{\n\tfunction g() {}\n}\n", fn($m) => $m->append($final())));
+	Assert::same("<?php\nreadonly final class B {}\n", $change("<?php\nreadonly class B {}\n", fn($m) => $m->append($final())));
+
+	// the one after a removed modifier takes its place in the lines
+	$remove = fn(int $kind) => fn(ModifiersNode $m) => $m->removeToken($m->findToken($kind) ?? throw new LogicException);
+	Assert::same("<?php\n\n/** doc */\nclass E {}\n", $change("<?php\n\n/** doc */\nreadonly class E {}\n", $remove(Token::Readonly)));
+	Assert::same("<?php\nclass A\n{\n\t/** doc */\n\tstatic function f() {}\n}\n", $change("<?php\nclass A\n{\n\t/** doc */\n\tpublic static function f() {}\n}\n", $remove(Token::Public)));
+	Assert::same("<?php\nclass A\n{\n\tpublic function f() {}\n}\n", $change("<?php\nclass A\n{\n\tpublic static function f() {}\n}\n", $remove(Token::Static)));
+
+	// a comment after the removed modifier stays
+	Assert::same("<?php\nclass A\n{\n\tpublic /* x */ function f() {}\n}\n", $change("<?php\nclass A\n{\n\tpublic static /* x */ function f() {}\n}\n", $remove(Token::Static)));
+	Assert::same("<?php\nclass A\n{\n\t/* x */ static function f() {}\n}\n", $change("<?php\nclass A\n{\n\tpublic /* x */ static function f() {}\n}\n", $remove(Token::Public)));
 });
 
 
