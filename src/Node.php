@@ -31,7 +31,7 @@ abstract class Node implements \Stringable
 	}
 
 	/**
-	 * The trivia before the node, which are the leading trivia of its first token.
+	 * The trivia before the node, which are the leading trivia of its first token; `setEdgeTrivia()` writes them.
 	 * @var list<Trivia>
 	 */
 	public array $leadingTrivia {
@@ -39,7 +39,7 @@ abstract class Node implements \Stringable
 	}
 
 	/**
-	 * The trivia after the node, which are the trailing trivia of its last token.
+	 * The trivia after the node, which are the trailing trivia of its last token; `setEdgeTrivia()` writes them.
 	 * @var list<Trivia>
 	 */
 	public array $trailingTrivia {
@@ -330,6 +330,26 @@ abstract class Node implements \Stringable
 		if (!is_a($class, self::class, allow_string: true) && !interface_exists($class)) {
 			throw new \InvalidArgumentException('The class must be a node class or an interface, ' . Helpers::formatCode($class) . ' given.');
 		}
+	}
+
+
+	/**
+	 * Writes the trivia on the outer edges of the node: before its first token and after its last one.
+	 * A `null` leaves that edge alone, `[]` clears it, and a node without tokens takes neither.
+	 * @param  ?list<Trivia>  $leading
+	 * @param  ?list<Trivia>  $trailing
+	 */
+	public function setEdgeTrivia(?array $leading = null, ?array $trailing = null): static
+	{
+		if ($leading !== null && ($first = $this->getFirstToken())) {
+			$first->setLeadingTrivia($leading);
+		}
+
+		if ($trailing !== null && ($last = $this->getLastToken())) {
+			$last->setTrailingTrivia($trailing);
+		}
+
+		return $this;
 	}
 
 
