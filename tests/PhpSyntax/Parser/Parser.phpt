@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{Node, ParseException, Parser, Printer, Token};
+use PhpSyntax\{Builder, Node, ParseException, Parser, Printer, Token};
 use PhpSyntax\Nodes\FileNode;
 use PhpSyntax\Nodes\Member\PropertyNode;
 use PhpSyntax\Nodes\Statement\HaltCompilerNode;
@@ -77,9 +77,12 @@ test('modifiers written without a space after them stay so', function () {
 
 test('the parser keeps nothing of what it parsed', function () {
 	$parser = new Parser;
+	$builder = new Builder;
 	$file = WeakReference::create($parser->parse('<?php $a = f(1);'));
+	$fragment = WeakReference::create($builder->expression('$a + 1'));
 	gc_collect_cycles();
 	Assert::null($file->get());
+	Assert::null($fragment->get());
 });
 
 

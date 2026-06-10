@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{Node, Parser};
+use PhpSyntax\{Builder, Node, Parser};
 use PhpSyntax\Nodes\{AnonymousFunctionNode, ClassLikeNode, ExpressionNode, FunctionLikeNode};
 use PhpSyntax\Nodes\Expression\{BinaryOpNode, ClosureNode, VariableNode};
 use PhpSyntax\Nodes\Member\{MethodNode, PropertyHookNode, PropertyNode};
@@ -21,6 +21,18 @@ test('first and last tokens, lines', function () {
 	$heredoc = (new Parser)->parse("<?php\n\$a = <<<EOT\nx\nEOT;\n")->statements[0];
 	Assert::same([2, 4], [$heredoc->getStartLine(), $heredoc->getEndLine()]);
 	Assert::null((new PhpSyntax\Nodes\PlainNodeList)->getFirstToken());
+});
+
+
+test('a node is multi-line where a line ends inside its text, which needs no file', function () {
+	$parser = new Parser;
+	$builder = new Builder;
+	Assert::false($builder->statement("f(1, 2);\n")->isMultiLine()); // the edges do not count
+	Assert::true($builder->statement("f(\n\t1,\n);")->isMultiLine());
+	Assert::true($builder->expression("f(1 /* a\n b */)")->isMultiLine()); // a comment inside
+	Assert::true($builder->expression("<<<EOT\nx\nEOT")->isMultiLine()); // inside a token
+	Assert::false($parser->parse("<?php \$a ?>\n")->statements[0]->isMultiLine()); // the line ending a close tag keeps is its end
+	Assert::false((new PhpSyntax\Nodes\PlainNodeList)->isMultiLine());
 });
 
 
