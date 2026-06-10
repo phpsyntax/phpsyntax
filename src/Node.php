@@ -356,6 +356,26 @@ abstract class Node implements \Stringable
 	}
 
 
+	/**
+	 * Writes the trivia on the outer edges of the node: before its first token and after its last one.
+	 * A `null` leaves that edge alone, `[]` clears it, and a node without tokens takes neither.
+	 * @param  ?list<Trivia>  $leading
+	 * @param  ?list<Trivia>  $trailing
+	 */
+	public function setEdgeTrivia(?array $leading = null, ?array $trailing = null): static
+	{
+		if ($leading !== null && ($first = $this->getFirstToken())) {
+			$first->setLeadingTrivia($leading);
+		}
+
+		if ($trailing !== null && ($last = $this->getLastToken())) {
+			$last->setTrailingTrivia($trailing);
+		}
+
+		return $this;
+	}
+
+
 	public function __toString(): string
 	{
 		return Printer::print($this);

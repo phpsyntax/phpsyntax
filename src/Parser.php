@@ -8,11 +8,12 @@
 namespace PhpSyntax;
 
 use PhpSyntax\Lexer\Lexer;
-use PhpSyntax\Nodes\{ArrayItemNode, EmptyArrayItemNode, ExpressionNode, FileNode, NameNode, NodeList, SeparatedNodeList, StatementNode};
+use PhpSyntax\Nodes\{ArgumentNode, ArrayItemNode, AttributeGroupNode, CatchNode, ClosureUseNode, ConstItemNode, ElseIfNode, EmptyArrayItemNode, ExpressionNode, FileNode, MatchArmNode, MemberNode, NameNode, NodeList, ParameterNode, SeparatedNodeList, StatementNode, StaticVariableNode, TypeNode, UseItemNode};
 use PhpSyntax\Nodes\Expression\{ArrayNode, ConstantFetchNode, ListNode, VariableNode};
+use PhpSyntax\Nodes\Member\PropertyHookNode;
 use PhpSyntax\Nodes\Scalar\{BooleanNode, IntegerNode, NullNode, UnquotedStringNode};
 use PhpSyntax\Nodes\Statement\{HaltCompilerNode, NamespaceNode};
-use function count, ord;
+use function count, ord, strlen;
 
 
 /**
@@ -24,6 +25,27 @@ final class Parser
 	use ParserData;
 
 	private const SymbolNone = -1;
+
+	/** @var array<class-string, array{string, string}>  the code a fragment of the kind is parsed in */
+	private const Wrappers = [
+		ExpressionNode::class => ['<?php ', "\n;"],
+		StatementNode::class => ['<?php ', ''],
+		TypeNode::class => ['<?php function f(): ', "\n{}"],
+		NameNode::class => ['<?php ', "\n::class;"],
+		MemberNode::class => ['<?php class C { ', "\n}"],
+		ParameterNode::class => ['<?php function f(', "\n) {}"],
+		ArgumentNode::class => ['<?php f(', "\n);"],
+		ArrayItemNode::class => ['<?php [', "\n];"],
+		UseItemNode::class => ['<?php use ', "\n;"],
+		MatchArmNode::class => ['<?php match (0) { ', "\n};"],
+		AttributeGroupNode::class => ['<?php ', "\nfunction f() {}"],
+		CatchNode::class => ['<?php try {} ', "\n"],
+		ElseIfNode::class => ['<?php if (0) {} ', "\n"],
+		ClosureUseNode::class => ['<?php function () use (', "\n) {};"],
+		StaticVariableNode::class => ['<?php static ', "\n;"],
+		ConstItemNode::class => ['<?php const ', "\n;"],
+		PropertyHookNode::class => ['<?php class C { public $p { ', "\n} }"],
+	];
 
 	/** @var array<string, string>  how an error names an expected token, the way PHP names it; a keyword is named by itself */
 	private const TokenNames = [
@@ -112,6 +134,9 @@ final class Parser
 	/** the source of the file being parsed, which an error reports its place in */
 	private string $code = '';
 
+	/** offset in the code where the wrapper of a fragment being parsed continues, null outside a fragment */
+	private ?int $fragmentEnd = null;
+
 	/** @var list<Token> */
 	private array $tokens = [];
 	private int $position = 0;
@@ -133,6 +158,104 @@ final class Parser
 	public function parse(string $code): FileNode
 	{
 		return $this->parseFile($code, withPositions: true);
+	}
+
+
+	/**
+	 * Parses a fragment into a detached node of the class, without original positions and with empty trivia
+	 * on its edges; it is parsed inside the code such a node stands in, which the wrappers hold.
+	 * @template T of Node
+	 * @param  class-string<T>  $class
+	 * @return T
+	 * @throws ParseException
+	 */
+	public function parseFragment(string $class, string $code): Node
+	{
+		[$prefix, $suffix] = self::findWrapper($class)
+			?? throw new \InvalidArgumentException("There is no code a node of '$class' could be parsed in.");
+		$this->fragmentEnd = strlen($prefix . $code);
+		try {
+			$node = $this->parseFile($prefix . $code . $suffix, withPositions: false)->findFirst($class);
+		} catch (ParseException $e) {
+			throw self::moveIntoFragment($e, $code, strlen($prefix));
+		} finally {
+			$this->fragmentEnd = null;
+		}
+
+		return $node !== null && $this->isWholeFragment($node, $prefix, $suffix)
+			? $this->detach($node)
+			: throw new ParseException('The code is not a single ' . self::describe($class) . '.');
+	}
+
+
+	/** @throws ParseException */
+	public function parseExpression(string $code): ExpressionNode
+	{
+		return $this->parseFragment(ExpressionNode::class, $code);
+	}
+
+
+	/** @throws ParseException */
+	public function parseStatement(string $code): StatementNode
+	{
+		return $this->parseFragment(StatementNode::class, $code);
+	}
+
+
+	/** @throws ParseException */
+	public function parseType(string $code): TypeNode
+	{
+		return $this->parseFragment(TypeNode::class, $code);
+	}
+
+
+	/** @throws ParseException */
+	public function parseName(string $code): NameNode
+	{
+		return $this->parseFragment(NameNode::class, $code);
+	}
+
+
+	/**
+	 * The code a node of the class stands in, split where the fragment goes; the class may be any of the
+	 * kinds the wrappers name, or one deriving from it.
+	 * @param  class-string  $class
+	 * @return ?array{string, string}
+	 */
+	private static function findWrapper(string $class): ?array
+	{
+		return array_find(self::Wrappers, fn(array $wrapper, string $kind) => is_a($class, $kind, allow_string: true));
+	}
+
+
+	/**
+	 * Whether the node covers the whole fragment and not just its beginning, as it does for `$a, $b` given
+	 * as one parameter: it has to reach from the first token after the prefix to the last before the suffix.
+	 */
+	private function isWholeFragment(Node $node, string $prefix, string $suffix): bool
+	{
+		$tokens = $this->tokens; // of the file just parsed, the end of file token last
+		$before = count($this->lexer->tokenize($prefix, withPositions: false)) - 1;
+		$after = count($this->lexer->tokenize('<?php ' . $suffix, withPositions: false)) - 1;
+		return $node->getFirstToken() === ($tokens[$before] ?? null)
+			&& $node->getLastToken() === ($tokens[count($tokens) - 2 - $after] ?? null);
+	}
+
+
+	/** The error of the wrapped code with its position counted in the fragment, the end of the fragment where it lies beyond. */
+	private static function moveIntoFragment(ParseException $e, string $code, int $prefixLength): ParseException
+	{
+		return $e->sourceOffset === null
+			? new ParseException($e->getMessage())
+			: new ParseException($e->getMessage(), sourceOffset: max(0, min($e->sourceOffset - $prefixLength, strlen($code))), code: $code);
+	}
+
+
+	/** The kind of node in words, the way the class names it: ArrayItemNode is an array item. */
+	private static function describe(string $class): string
+	{
+		$name = substr($class, (int) strrpos($class, '\\') + 1, -strlen('Node'));
+		return strtolower((string) preg_replace('~(?<!^)[A-Z]~', ' $0', $name));
 	}
 
 
@@ -159,6 +282,20 @@ final class Parser
 
 		/** @var NodeList<StatementNode> $stmts */
 		return new FileNode($this->nestNamespaces($stmts), $eof);
+	}
+
+
+	/**
+	 * Takes the node out of the helper tree it was parsed in and clears the trivia on its edges.
+	 * @template T of Node
+	 * @param  T  $node
+	 * @return T
+	 */
+	private function detach(Node $node): Node
+	{
+		$node->attachTo(null);
+		$node->setEdgeTrivia([], []);
+		return $node;
 	}
 
 
@@ -416,15 +553,41 @@ final class Parser
 
 	private function createUnexpectedTokenException(int $state, Token $token): ParseException
 	{
-		$message = $token->kind === TokenKind::EndOfFile
-			? 'Unexpected end of file'
-			: "Unexpected '$token->text'";
+		$offset = $token->originalOffset ?? $this->measureOffset($token);
+		$message = match (true) {
+			$this->fragmentEnd !== null && $offset >= $this->fragmentEnd => 'Unexpected end of the fragment',
+			$token->kind === TokenKind::EndOfFile => 'Unexpected end of file',
+			default => "Unexpected '$token->text'",
+		};
 		if ($expected = $this->getExpectedTokens($state)) {
 			$last = array_pop($expected);
 			$message .= ', expecting ' . ($expected ? implode(', ', $expected) . ' or ' : '') . $last;
 		}
 
-		return new ParseException($message, $token->originalLine, $token->originalOffset, $this->code);
+		return new ParseException($message, $token->originalLine, $offset, $this->code);
+	}
+
+
+	/** Offset of the token in the code, for a token that was given none. */
+	private function measureOffset(Token $token): int
+	{
+		$offset = 0;
+		foreach ($this->tokens as $item) {
+			foreach ($item->leadingTrivia as $trivia) {
+				$offset += strlen($trivia->text);
+			}
+
+			if ($item === $token) {
+				break;
+			}
+
+			$offset += strlen($item->text);
+			foreach ($item->trailingTrivia as $trivia) {
+				$offset += strlen($trivia->text);
+			}
+		}
+
+		return $offset;
 	}
 
 

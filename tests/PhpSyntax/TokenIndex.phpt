@@ -1,7 +1,7 @@
 <?php declare(strict_types=1);
 
 use PhpSyntax\{Node, Parser, Token, TokenKind, Trivia, TriviaKind};
-use PhpSyntax\Nodes\{FileNode, NodeList, StatementNode};
+use PhpSyntax\Nodes\{ArgumentNode, FileNode, NodeList, StatementNode};
 use PhpSyntax\Nodes\Statement\ExpressionStatementNode;
 use Tester\Assert;
 
@@ -157,4 +157,32 @@ test('detached subtree has no positions', function () {
 	Assert::null($stmt->semicolon->getNext());
 	Assert::null($stmt->getFile());
 	Assert::exception(fn() => $file->getIndex()->getIndex($stmt->semicolon), InvalidArgumentException::class, 'The token does not belong to the indexed tree.');
+});
+
+
+test('a subtree entering the file with a hole a write left in it is refused', function () {
+	$parser = new Parser;
+	$file = $parser->parse("<?php\nf(1);\n");
+	$file->getIndex();
+
+	// the argument is taken out of the fragment, which is then inserted: it would stand in the order twice
+	$fragment = $parser->parseStatement('g($a);');
+	$target = $file->findFirst(ArgumentNode::class);
+	$source = $fragment->findFirst(ArgumentNode::class);
+	Assert::type(ArgumentNode::class, $target);
+	Assert::type(ArgumentNode::class, $source);
+	$target->value = $source->value;
+	$file->statements->append($fragment);
+	Assert::exception(
+		fn() => $file->endOfFile->getLine(),
+		LogicException::class,
+		'%a% stands in the file twice: %a%',
+	);
+
+	// the same insertion of a whole fragment is right and says so
+	$file = $parser->parse("<?php\nf(1);\n");
+	$file->getIndex();
+	$file->statements->append($parser->parseStatement('g($a);'));
+	Assert::same("<?php\nf(1);\ng(\$a);\n", (string) $file);
+	Assert::same(4, $file->endOfFile->getLine());
 });
