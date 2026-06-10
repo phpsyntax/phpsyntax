@@ -219,6 +219,34 @@ final class Token implements \Stringable
 
 
 	/**
+	 * Whether a comment sits anywhere between the text of this token and the text of the given one:
+	 * in the trailing trivia here, the leading trivia there, or around any token between them.
+	 */
+	public function hasCommentUpTo(self $end): bool
+	{
+		for ($token = $this; $token !== null; $token = $token->getNext()) {
+			foreach ($token === $this ? [] : $token->leadingTrivia as $trivia) {
+				if ($trivia->isComment()) {
+					return true;
+				}
+			}
+
+			if ($token === $end) {
+				return false;
+			}
+
+			foreach ($token->trailingTrivia as $trivia) {
+				if ($trivia->isComment()) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+
+	/**
 	 * Puts the token under the node, or takes it out of the tree with null.
 	 * @internal only the tree and the parser write the parent
 	 */

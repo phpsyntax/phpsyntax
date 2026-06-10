@@ -268,6 +268,30 @@ abstract class Node implements \Stringable
 
 
 	/**
+	 * Doc comment before the node: the last one in the leading trivia of the first token, or in the trailing
+	 * trivia of the previous token, where a doc comment stands between two declarations on one line.
+	 */
+	public function getDocComment(): ?Trivia
+	{
+		$token = $this->getFirstToken();
+		if (!$token) {
+			return null;
+		}
+
+		$previous = $token->getPrevious();
+		foreach ([$token->leadingTrivia, $previous->trailingTrivia ?? []] as $trivias) {
+			for ($i = count($trivias) - 1; $i >= 0; $i--) {
+				if ($trivias[$i]->kind === TriviaKind::DocComment) {
+					return $trivias[$i];
+				}
+			}
+		}
+
+		return null;
+	}
+
+
+	/**
 	 * @template T of object
 	 * @param  class-string<T>  $class
 	 * @return (T&Node)|null
@@ -352,6 +376,68 @@ abstract class Node implements \Stringable
 	{
 		if (!is_a($class, self::class, allow_string: true) && !interface_exists($class)) {
 			throw new \InvalidArgumentException("The class must be a node class or an interface, '$class' given.");
+		}
+	}
+
+
+	/**
+	 * Whether a comment sits anywhere between the first and the last token of the node; the trivia
+	 * on its outer edges do not count.
+	 */
+	public function hasComment(): bool
+	{
+		foreach ($this->walkInnerTrivia() as $trivia) {
+			if ($trivia->isComment()) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+
+	/**
+	 * The comments inside the node, in source order; those on its outer edges are not among them,
+	 * the same way `hasComment()` does not count them.
+	 * @return list<Trivia>
+	 */
+	public function getComments(): array
+	{
+		$comments = [];
+		foreach ($this->walkInnerTrivia() as $trivia) {
+			if ($trivia->isComment()) {
+				$comments[] = $trivia;
+			}
+		}
+
+		return $comments;
+	}
+
+
+	/**
+	 * The trivia between the first and the last token of the node, in source order; the edges are left out.
+	 * @return \Generator<Trivia>
+	 */
+	private function walkInnerTrivia(): \Generator
+	{
+		$previous = null;
+		$stack = [$this];
+		while ($stack) {
+			$node = array_pop($stack);
+			if ($node instanceof Token) {
+				if ($previous !== null) { // what stands between two tokens, so the edges never come up
+					yield from $previous->trailingTrivia;
+					yield from $node->leadingTrivia;
+				}
+
+				$previous = $node;
+				continue;
+			}
+
+			$children = $node->getChildren();
+			for ($i = count($children) - 1; $i >= 0; $i--) {
+				$stack[] = $children[$i];
+			}
 		}
 	}
 

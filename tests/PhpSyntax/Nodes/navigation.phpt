@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{Node, Parser};
+use PhpSyntax\{Node, Parser, TriviaKind};
 use PhpSyntax\Nodes\{ClassLikeNode, ExpressionNode};
 use PhpSyntax\Nodes\Expression\{BinaryOpNode, VariableNode};
 use PhpSyntax\Nodes\Member\{MethodNode, PropertyNode};
@@ -46,6 +46,19 @@ test('ancestors and descendants', function () {
 	Assert::same([$binary, $binary->left, $binary->right], $return->find(ExpressionNode::class));
 	Assert::same([$binary->left], $return->find(VariableNode::class));
 	Assert::same([], $binary->left->find(Node::class));
+});
+
+
+test('doc comment in leading trivia or in the trailing trivia of the previous token', function () {
+	$file = (new Parser)->parse("<?php\n/** a */\n// x\n\$a; /** b */ \$b; \$c;");
+	[$a, $b, $c] = $file->statements->getItems();
+	$doc = $a->getDocComment();
+	Assert::type(PhpSyntax\Trivia::class, $doc);
+	Assert::same('/** a */', $doc->text);
+	Assert::same(TriviaKind::DocComment, $doc->kind);
+	Assert::same('/** b */', $b->getDocComment()?->text);
+	Assert::null($c->getDocComment());
+	Assert::null((new PhpSyntax\Nodes\NodeList)->getDocComment());
 });
 
 
