@@ -12,7 +12,7 @@ use PhpSyntax\Nodes\{ClassLikeNode, ConstItemNode, FileNode, NameNode, PlainNode
 use PhpSyntax\Nodes\Expression\FunctionCallNode;
 use PhpSyntax\Nodes\Scalar\StringNode;
 use PhpSyntax\Nodes\Statement\{ClassNode, ConstNode, EnumNode, FunctionNode, InterfaceNode, NamespaceNode, TraitNode, UseNode};
-use function count, in_array, strlen;
+use function count, in_array, is_string, strlen;
 
 
 /**
@@ -75,6 +75,21 @@ final class NameResolver
 
 
 	/**
+	 * Fully qualified name of the symbol the name stands for where it stands, its `$symbolKind` choosing among
+	 * `resolveClass()`, `resolveFunction()` and `resolveConstant()`; a detached name is read as a class.
+	 * @throws \InvalidArgumentException
+	 */
+	public function resolve(NameNode $name, Node|Token|null $at = null): string
+	{
+		return match ($name->symbolKind) {
+			SymbolKind::ClassLike => $this->resolveClass($name, $at),
+			SymbolKind::Function => $this->resolveFunction($name, $at),
+			SymbolKind::Constant => $this->resolveConstant($name, $at),
+		};
+	}
+
+
+	/**
 	 * Fully qualified class name without a leading backslash; `self`, `static` and `parent` stay as they are.
 	 * The name may stand outside the file, a clone of a part of it for instance, and `$at` then says where
 	 * in the file it is to be read. A name that refers to no symbol (`NameNode::isReference()`) is refused,
@@ -88,7 +103,7 @@ final class NameResolver
 			return $parts[0];
 		}
 
-		return $this->resolve($name, self::Classes, $at);
+		return $this->resolveIn($name, self::Classes, $at);
 	}
 
 
@@ -99,7 +114,7 @@ final class NameResolver
 	 */
 	public function resolveFunction(NameNode $name, Node|Token|null $at = null): string
 	{
-		return $this->resolve($name, self::Functions, $at);
+		return $this->resolveIn($name, self::Functions, $at);
 	}
 
 
@@ -110,7 +125,7 @@ final class NameResolver
 	 */
 	public function resolveConstant(NameNode $name, Node|Token|null $at = null): string
 	{
-		return $this->resolve($name, self::Constants, $at);
+		return $this->resolveIn($name, self::Constants, $at);
 	}
 
 
@@ -122,13 +137,43 @@ final class NameResolver
 	 */
 	public function isGlobalFunctionCall(Node $node, ?string $name = null): bool
 	{
-		if (!$node instanceof FunctionCallNode || !$node->name instanceof NameNode || $node->name->isKeyword()) {
-			return false;
+		$resolved = $node instanceof FunctionCallNode ? $this->resolveGlobalFunction($node) : null;
+		return $resolved !== null && ($name === null || strcasecmp($resolved, $name) === 0);
+	}
+
+
+	/**
+	 * Which of the global functions the call calls, as it is given among the names, the letter case aside; null where
+	 * it calls none of them. The call counts as global the way `isGlobalFunctionCall()` counts it. An item under a string
+	 * key is named by the key, so a map of the functions to what a tool does with them goes as it is
+	 * (`['count' => ..., 'strlen' => ...]`), and one under an integer key by its value.
+	 * @param  iterable<int, string>|iterable<string, mixed>  $names
+	 */
+	public function findGlobalFunction(FunctionCallNode $call, iterable $names): ?string
+	{
+		$resolved = $this->resolveGlobalFunction($call);
+		if ($resolved !== null) {
+			foreach ($names as $key => $value) {
+				$name = is_string($key) ? $key : $value;
+				if (strcasecmp($resolved, $name) === 0) {
+					return $name;
+				}
+			}
 		}
 
-		$resolved = $this->resolveFunction($node->name);
-		return !str_contains($resolved, '\\')
-			&& ($name === null || strcasecmp($resolved, $name) === 0);
+		return null;
+	}
+
+
+	/** The global function the call calls; null for a function of a namespace and a call not made by a name. */
+	private function resolveGlobalFunction(FunctionCallNode $call): ?string
+	{
+		if (!$call->name instanceof NameNode || $call->name->isKeyword()) {
+			return null;
+		}
+
+		$resolved = $this->resolveFunction($call->name);
+		return str_contains($resolved, '\\') ? null : $resolved;
 	}
 
 
@@ -139,11 +184,28 @@ final class NameResolver
 	 * symbols, else the global one: for certain in the global namespace, where the namespaced symbols are complete,
 	 * and for `true`, `false` and `null`, and uncertain elsewhere and where the file declares it only in code that
 	 * may not run, under a condition or in a function. Only an unqualified name falls back, and `self`, `static` and
-	 * `parent` name no symbol, so anything else is refused.
+	 * `parent` name no symbol, so anything else is refused. A `NameNode` brings its kind and its place, `$symbolKind` and
+	 * the node itself, a string needs both given.
 	 * @throws \InvalidArgumentException
 	 */
-	public function getUnqualifiedResolution(string $name, SymbolKind $kind, Node|Token $at): UnqualifiedResolution
+	public function getUnqualifiedResolution(
+		string|NameNode $name,
+		?SymbolKind $kind = null,
+		Node|Token|null $at = null,
+	): UnqualifiedResolution
 	{
+		if ($name instanceof NameNode) {
+			if ($kind !== null || $at !== null) {
+				throw new \InvalidArgumentException('A name given as a node brings its kind and its place, so `$kind` and `$at` stay null.');
+			}
+
+			$at = $name;
+			$kind = $name->symbolKind;
+			$name = $name->text;
+		} elseif ($kind === null || $at === null) {
+			throw new \InvalidArgumentException('A name given as a string needs `$kind` and `$at`.');
+		}
+
 		if (!preg_match('~^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*$~D', $name)) {
 			throw new \InvalidArgumentException(Helpers::formatCode($name) . ' is not an unqualified name.');
 		} elseif ($kind === SymbolKind::ClassLike && isset(self::SpecialClasses[strtolower($name)])) {
@@ -325,7 +387,7 @@ final class NameResolver
 	}
 
 
-	private function resolve(NameNode $name, string $table, Node|Token|null $at): string
+	private function resolveIn(NameNode $name, string $table, Node|Token|null $at): string
 	{
 		if (!$name->isReference()) {
 			throw new \InvalidArgumentException(Helpers::formatCode($name->text) . ' refers to no symbol: it declares one, names a builtin type, or is `self`, `static` or `parent`.');

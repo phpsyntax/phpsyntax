@@ -95,6 +95,18 @@ test('without symbols an unqualified name in a namespace is taken as global and 
 	);
 	Assert::exception(fn() => $resolver->getUnqualifiedResolution('', SymbolKind::Function, $app), InvalidArgumentException::class, "`''` is not an unqualified name.");
 	Assert::exception(fn() => $resolver->getUnqualifiedResolution('a b', SymbolKind::Function, $app), InvalidArgumentException::class, '`a b` is not an unqualified name.');
+
+	// a name given as a node brings its kind and its place
+	foreach ([...$calls, ...$fetches] as $node) {
+		$name = $node->name;
+		if ($name instanceof NameNode && $name->form === NameForm::Unqualified) {
+			Assert::same($resolver->getUnqualifiedResolution($name->text, $name->symbolKind, $name), $resolver->getUnqualifiedResolution($name));
+		}
+	}
+
+	$name = $fetches[0]->name;
+	Assert::exception(fn() => $resolver->getUnqualifiedResolution($name, SymbolKind::Constant), InvalidArgumentException::class, 'A name given as a node brings its kind and its place, so `$kind` and `$at` stay null.');
+	Assert::exception(fn() => $resolver->getUnqualifiedResolution('strlen', SymbolKind::Function), InvalidArgumentException::class, 'A name given as a string needs `$kind` and `$at`.');
 	Assert::exception(
 		fn() => $resolver->getUnqualifiedResolution('self', SymbolKind::ClassLike, $app),
 		InvalidArgumentException::class,
