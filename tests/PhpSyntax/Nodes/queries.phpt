@@ -1,7 +1,7 @@
 <?php declare(strict_types=1);
 
+use PhpSyntax\{AccessKind, Parser};
 use PhpSyntax\Nodes\Statement\{ExpressionStatementNode, InlineHtmlNode};
-use PhpSyntax\Parser;
 use Tester\Assert;
 
 require __DIR__ . '/../../bootstrap.php';
@@ -240,6 +240,215 @@ test('destructuring is a ListNode however it is written, an array literal is not
 	assert($value instanceof PhpSyntax\Nodes\Expression\AssignmentNode);
 	Assert::type(PhpSyntax\Nodes\Expression\ArrayNode::class, $value->expression);
 	Assert::type(PhpSyntax\Nodes\Expression\ArrayNode::class, parseStatement("[1, [2]];\n")->expression);
+});
+
+
+test('getAccessKind() tells which way the parent reaches in', function () {
+	$inner = function (string $code): PhpSyntax\Nodes\ExpressionNode {
+		$child = parseStatement($code)->expression->getChildren()[0];
+		assert($child instanceof PhpSyntax\Nodes\ExpressionNode);
+		return $child;
+	};
+	Assert::same(AccessKind::Member, $inner("(\$a)->b;\n")->getAccessKind());
+	Assert::same(AccessKind::Member, $inner("(\$a)?->b;\n")->getAccessKind());
+	Assert::same(AccessKind::Member, $inner("(\$a)->b();\n")->getAccessKind());
+	Assert::same(AccessKind::Member, $inner("(\$a)[0];\n")->getAccessKind());
+	Assert::same(AccessKind::Call, $inner("(\$a)();\n")->getAccessKind());
+	Assert::same(AccessKind::ClassName, $inner("(\$a)::B;\n")->getAccessKind());
+	Assert::same(AccessKind::ClassName, $inner("(\$a)::b();\n")->getAccessKind());
+	Assert::same(AccessKind::ClassName, $inner("(\$a)::\$b;\n")->getAccessKind());
+
+	// the other side of the same node is reached into by nothing
+	$fetch = parseStatement("\$a[\$b];\n")->expression;
+	assert($fetch instanceof PhpSyntax\Nodes\Expression\ArrayAccessNode);
+	Assert::null($fetch->index?->getAccessKind());
+	Assert::null($fetch->getAccessKind());
+});
+
+
+test('isDereferenced()', function () {
+	$fetch = parseStatement("(new A)->b;\n")->expression;
+	assert($fetch instanceof PhpSyntax\Nodes\Expression\PropertyFetchNode);
+	Assert::true($fetch->object->isDereferenced());
+	Assert::false($fetch->isDereferenced());
+	$call = parseStatement("f(\$a)[0];\n")->expression;
+	assert($call instanceof PhpSyntax\Nodes\Expression\ArrayAccessNode);
+	Assert::true($call->expression->isDereferenced());
+	Assert::false($call->index?->isDereferenced());
+	$invoke = parseStatement("(new A)();\n")->expression;
+	assert($invoke instanceof PhpSyntax\Nodes\Expression\FunctionCallNode);
+	$callee = $invoke->name;
+	assert($callee instanceof PhpSyntax\Nodes\ExpressionNode);
+	Assert::true($callee->isDereferenced());
+	Assert::false($invoke->isDereferenced());
+});
+
+
+test('whether parentheses may go', function () {
+	$redundant = function (string $code): bool {
+		$file = (new Parser)->parse("<?php $code");
+		$node = $file->findFirst(PhpSyntax\Nodes\Expression\ParenthesizedNode::class);
+		Assert::type(PhpSyntax\Nodes\Expression\ParenthesizedNode::class, $node);
+		return $node->isRedundant();
+	};
+
+	// what binds tighter than the place it stands in needs no parentheses
+	Assert::true($redundant('$x = ($a * $b) + 1;'));
+	Assert::true($redundant('$x = 1 + ($a * $b);'));
+	Assert::true($redundant('$x = ($a + $b) - 1;'));
+	Assert::true($redundant('f(($a and $b));'));
+	Assert::true($redundant('$x = ($a);'));
+	Assert::true($redundant('return ($a = 1);'));
+	Assert::true($redundant('$x = ($a)->b;'));
+
+	// and what does not, keeps them
+	Assert::false($redundant('$x = ($a + $b) * 2;'));
+	Assert::false($redundant('$x = 1 - ($a - $b);')); // the right side of a left-leaning operator
+	Assert::false($redundant('$x = ($a . "s") + 1;')); // PHP 8 binds the concatenation looser than the sum
+	Assert::false($redundant('$x = ($a = 1) + 2;'));
+	Assert::false($redundant('$x = (new A)->b;'));
+	Assert::false($redundant('$x = ("str")();'));
+	Assert::false($redundant('$x = (-$a) ** 2;'));
+	Assert::false($redundant('$x = -(-$a);')); // it would read as a decrement
+	Assert::false($redundant('$x = ($a ? 1 : 2) ? 3 : 4;'));
+	Assert::false($redundant('$x = [(yield $a) => 1];'));
+	Assert::false($redundant('$x = clone ($a ?: $b);'));
+	// a call takes the name or the member before it for its own, which calls another thing entirely
+	Assert::false($redundant('$x = ($a->b)();'));
+	Assert::false($redundant('$x = (A::B)();'));
+	Assert::true($redundant('$x = ($a->b)[0];'));
+
+	// an operator with no left operand captures nothing before itself, so where nothing follows
+	// the parentheses it stands bare however loosely it binds
+	Assert::true($redundant('$x = (fn() => 1);'));
+	Assert::true($redundant('$x = 1 + (fn() => 2);'));
+	Assert::true($redundant('$x = $a ? 1 : (fn() => 2);'));
+	Assert::true($redundant('$x = (print 1);'));
+	Assert::true($redundant('$x = (throw new E);'));
+	Assert::true($redundant('$x = (yield $a);'));
+	Assert::true($redundant('$x = -(fn() => 1);'));
+	// and everywhere else they are what bounds it
+	Assert::false($redundant('$x = (fn() => 1) + 2;'));
+	Assert::false($redundant('$x = (fn() => 1) ? 2 : 3;'));
+	Assert::false($redundant('$x = $a ? (fn() => 1) : 2;'));
+	Assert::false($redundant('$x = (print 1) . "s";'));
+	// what follows may stand further up than beside them
+	Assert::false($redundant('$x = $a + (yield $b) + 1;'));
+	Assert::true($redundant('$x = [$a + (yield $b), 1];'));
+	Assert::false($redundant('$x = [yield $a => (yield $b) => 1];')); // the => would become the inner yield's own
+	Assert::true($redundant('$x = [yield $a => (yield $b => $c) => 1];'));
+	Assert::false($redundant('$x = $a |> (fn($b) => $b);')); // a pipe takes an arrow function in parentheses only
+
+	// a prefix operator is the same, save that it takes only what binds tighter than itself
+	Assert::true($redundant('$x = (bool) (!$a);'));
+	Assert::true($redundant('$x = (bool) (!$a) && $b;'));
+	Assert::true($redundant('$x = (!$a) + 1;'));
+	Assert::true($redundant('$x = $a ** (-$b);'));
+	Assert::true($redundant('$x = (int) (-$a);'));
+	Assert::false($redundant('$x = (bool) (!$a) instanceof B;'));
+	Assert::false($redundant('$x = (!$a) instanceof B;'));
+	Assert::false($redundant('$x = (int) (-$a) ** 2;'));
+	// and so is whatever ends with such an operator, which takes what follows from inside
+	Assert::false($redundant('$x = (@include $a) !== false;'));
+	Assert::false($redundant('$x = ($a + yield $b) + 1;'));
+	Assert::false($redundant('$x = ($a ** !$b) instanceof C;'));
+	Assert::true($redundant('$x = ($a * !$b) * $c;')); // ! binds tighter than the product, so it takes nothing of it
+	Assert::true($redundant('$x = [($a + yield $b), 1];'));
+
+	// where a class is named, only a variable and what is read out of one stands there bare
+	Assert::true($redundant('$x = new ($a)();'));
+	Assert::true($redundant('$x = $a instanceof ($a->b);'));
+	Assert::true($redundant('$x = new ($a->b[0]::$c)();'));
+	Assert::true($redundant('$x = new (A::$b[0])();'));
+	// all the way down: new f()->b would instantiate f, and new A::B[0] is no code
+	Assert::false($redundant('$x = new (f()->b)();'));
+	Assert::false($redundant('$x = new (A::B[0])();'));
+	Assert::false($redundant('$x = new ("str")();'));
+	Assert::false($redundant('$x = $a instanceof (A::B);'));
+	// a pair of parentheses stands for whatever it holds, so a second pair around it adds nothing
+	Assert::true($redundant('$x = new (($a + $b))();'));
+	Assert::true($redundant('$x = (($a + $b))->c;'));
+
+	// :: takes the name of a class on its left, so a name in the parentheses stays in them
+	Assert::false($redundant('$x = (FOO)::class;')); // FOO::class would be the name FOO itself
+	Assert::false($redundant('$x = (FOO)::BAR;'));
+	Assert::false($redundant('$x = (FOO)::m();'));
+	Assert::false($redundant('$x = (FOO)::$p;'));
+	Assert::false($redundant('$x = (true)::class;'));
+	// anything else on the left of :: is an expression either way, and -> and [] take one anyway
+	Assert::true($redundant('$x = (A::B)::class;'));
+	Assert::true($redundant('$x = (FOO)->x;'));
+	Assert::true($redundant('$x = (FOO)[0];'));
+
+	// a place bounded by a keyword, a bracket or a comma takes whatever is written in it
+	Assert::true($redundant('f(($a and $b));'));
+	Assert::true($redundant('foreach (($a ?: $b) as $v) {}'));
+	Assert::true($redundant('class A { public $p = (1 + 2); }'));
+	Assert::true($redundant('$x = match ($v) { ($a and $b) => 1 };'));
+	Assert::false($redundant('$x = match ($v) { (yield $a) => 1 };')); // the arm would take the => for its own
+});
+
+
+test('isWritable() tells a place assigned to from a value read', function () {
+	$target = function (string $code): PhpSyntax\Nodes\ExpressionNode {
+		$assign = parseStatement("$code = 1;\n")->expression;
+		assert($assign instanceof PhpSyntax\Nodes\Expression\AssignmentNode);
+		assert($assign->target instanceof PhpSyntax\Nodes\ExpressionNode);
+		return $assign->target;
+	};
+	Assert::true($target('$a')->isWritable());
+	Assert::true($target('$a[0]')->isWritable());
+	Assert::true($target('$a->b')->isWritable());
+	Assert::true($target('A::$b')->isWritable());
+
+	// a destructuring is no expression and the question never reaches it; see the ListNode test above
+
+	// ?-> reads and never writes, and the rest are values
+	$expr = fn(string $code) => (new Parser)->parseExpression($code);
+	Assert::false($expr('$a?->b')->isWritable());
+	// a ?-> anywhere in the chain the write reaches through counts, wherever it stands
+	Assert::false($expr('$a?->b->c')->isWritable());
+	Assert::false($expr('$a?->b[0][1]')->isWritable());
+	Assert::false($expr('$a->b()?->c')->isWritable());
+	Assert::false($expr('$a?->b::$c')->isWritable());
+	Assert::false($expr('($a?->b)->c')->isWritable());
+	// what stands beside that chain does not: an index and an argument are read, not written
+	Assert::true($expr('$a[$b?->c]')->isWritable());
+	Assert::true($expr('f($a?->b)[0]')->isWritable());
+	Assert::true($expr('$a->b[$c?->d]')->isWritable());
+	// a call is part of the chain: a ?-> before it counts, and so does the ?-> of the call itself
+	Assert::false($expr('$o?->m()->p')->isWritable());
+	Assert::false($expr('$o?->p->m()->q')->isWritable());
+	Assert::false($expr('$o?->m()[0]')->isWritable());
+	Assert::false($expr('($o?->m())->p')->isWritable());
+	Assert::false($expr('$o?->m()::$p')->isWritable());
+	Assert::true($expr('$o->m()->p')->isWritable());
+	Assert::true($expr('$o->m($a?->b)->p')->isWritable());
+	Assert::true($expr('($o?->p)()->q')->isWritable()); // the function call starts a chain of its own
+	// a chain starting at a value of its own has no place to write to, one starting at a call or a named class has
+	foreach ([
+		'[1][0]',
+		"'ab'[0]",
+		'FOO[0]',
+		'A::B[0]',
+		'A::B->p',
+		'(new A)->p',
+		'(clone $x)->q',
+		'(fn() => 1)->p',
+		'($a ?: $b)->p',
+		'($a = $b)->p',
+	] as $code) {
+		Assert::false($expr($code)->isWritable(), $code);
+	}
+
+	Assert::true($expr('f()[0]->p')->isWritable());
+	Assert::true($expr('A::m()->p')->isWritable());
+	Assert::true($expr('$o::$p->q')->isWritable());
+	Assert::false($expr('f()')->isWritable());
+	Assert::false($expr('A::B')->isWritable());
+	Assert::false($expr('FOO')->isWritable());
+	Assert::false($expr('($a)')->isWritable());
+	Assert::false($expr('[1, 2]')->isWritable()); // a literal here, a destructuring only as a target
 });
 
 
