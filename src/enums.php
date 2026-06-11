@@ -41,6 +41,22 @@ enum SymbolKind
 
 
 /**
+ * What an unqualified name reaches, a function or a constant falling back from the namespace to the global one.
+ */
+enum UnqualifiedResolution
+{
+	/** a symbol of the global namespace for certain */
+	case Global;
+
+	/** the global symbol or one of the namespace: the namespace may declare it outside the file, or declares it in code that may not run */
+	case Uncertain;
+
+	/** a symbol of a namespace for certain */
+	case Namespaced;
+}
+
+
+/**
  * What is written after an expression and reaches into it.
  */
 enum DereferenceKind
