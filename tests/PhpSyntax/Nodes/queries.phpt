@@ -181,6 +181,13 @@ test('what a trivia says about a comment', function () {
 });
 
 
+test('matches() compares token texts, not whitespace', function () {
+	Assert::true(parseStatement("\$a[1] = 1;\n")->expression->matches(parseStatement("\$a [ 1 ]  =\n1;\n")->expression));
+	Assert::false(parseStatement("\$a[1] = 1;\n")->expression->matches(parseStatement("\$a[2] = 1;\n")->expression));
+	Assert::same(['$a', '[', '1', ']', '=', '1'], parseStatement("\$a [ 1 ]  = // c\n1;\n")->expression->getTokenTexts());
+});
+
+
 test('$plainName is the name without the dollar, and null where the name is an expression', function () {
 	$variable = parseStatement("\$a;\n")->expression;
 	assert($variable instanceof PhpSyntax\Nodes\Expression\VariableNode);
@@ -355,6 +362,46 @@ test('isDereferenced()', function () {
 	assert($callee instanceof PhpSyntax\Nodes\ExpressionNode);
 	Assert::true($callee->isDereferenced());
 	Assert::false($invoke->isDereferenced());
+});
+
+
+test('the value an expression is written as', function () {
+	$value = fn(string $code) => (new Builder)->expression($code)->toValue();
+	Assert::same(1, $value('1'));
+	Assert::same(1.5, $value('1.5'));
+	Assert::same('a', $value("'a'"));
+	Assert::same("b\n", $value('"b\n"'));
+	Assert::same([true, false, null], [$value('true'), $value('FALSE'), $value('null')]);
+	Assert::same(-1, $value('-1'));
+	Assert::same(2.5, $value('+2.5'));
+	Assert::same(1, $value('(1)'));
+	Assert::same('ab', $value("<<<TXT\n\tab\n\tTXT"));
+	Assert::same(['a' => 1, 'b' => [2, 3]], $value("['a' => 1, 'b' => [2, 3]]"));
+	Assert::same([1, 2, 3], $value('[1, ...[2, 3]]'));
+	// spreading gives its own numeric items new keys and keeps the string ones, the keys already there untouched
+	Assert::same([5 => 'a', 6 => 'b'], $value('[5 => "a", ...["b"]]'));
+	Assert::same(['k' => 2, 0 => 1], $value('["k" => 1, ...[1, "k" => 2]]'));
+
+	// what a name stands for depends on what the code around it defines, so it is no value here
+	foreach (['PHP_EOL', 'self::FOO', '$a', '1 + 2', '-PHP_INT_MAX', 'f()', '[&$a]', '"x{$a}"'] as $code) {
+		Assert::false((new Builder)->expression($code)->hasValue(), $code);
+		Assert::exception(
+			fn() => $value($code),
+			LogicException::class,
+			"Expression `$code` has no value of its own.",
+		);
+	}
+
+	// what is written inside says as much as what is written around it, and says it the same way
+	Assert::false((new Builder)->expression('["x{$a}"]')->hasValue());
+	Assert::exception(
+		fn() => $value('["x{$a}"]'),
+		LogicException::class,
+		'Expression `["x{$a}"]` has no value of its own.',
+	);
+
+	Assert::true((new Builder)->expression('[1, null]')->hasValue());
+	Assert::null($value('null')); // the value null is told apart from no value
 });
 
 
@@ -534,6 +581,75 @@ test('isInNullsafeChain() tells an expression with a ?-> in its chain', function
 
 	foreach (['$a->b()', '$a->b($c?->d)', '$a[$b?->c]', '($a?->b)()', '$a?->b::C', '$a?->b + 1'] as $code) {
 		Assert::false($expr($code)->isInNullsafeChain(), $code);
+	}
+});
+
+
+test('isWritten() tells what something writes, assigns, steps, unsets, binds or takes by reference', function () {
+	$code = '<?php $w1 = 1; $w2 += 1; $w3++; [$w4, [$w5]] = f(); list($w6) = f(); unset($w7, $w8); global $w9;'
+		. ' foreach ($r1 as $w10 => [$w11]) {} f(...$r2); echo $r3, $r4; $w12 = [$r5]; $w13[0] = 1; unset($w14[0]);'
+		. ' $r6->a = 1; echo $r7[0]; static $w15; try {} catch (E $w16) {} function () use (&$w17, $r8) {};'
+		. ' $w18 = &$w19; [$r9 => $w20, $r10 => [$r11 => $w21]] = f(); static $w22 = $r12; $w25 = [&$w23, $r14 => $r15];'
+		. ' foreach ($r16 as [$r17 => $w24]) {}';
+	foreach ((new Parser)->parse($code)->find(PhpSyntax\Nodes\Expression\VariableNode::class) as $variable) {
+		Assert::same(str_starts_with($variable->text, '$w'), $variable->isWritten(), $variable->text);
+	}
+
+	// a property and an element are written as a variable is
+	$fetches = (new Parser)->parse('<?php $o->p = 1; self::$s++; echo $o->q; $a[0] .= "x";')->find(
+		PhpSyntax\Nodes\ExpressionNode::class,
+		fn(PhpSyntax\Node $node) => $node instanceof PhpSyntax\Nodes\Expression\PropertyFetchNode
+			|| $node instanceof PhpSyntax\Nodes\Expression\StaticPropertyFetchNode
+			|| $node instanceof PhpSyntax\Nodes\Expression\ArrayAccessNode,
+	);
+	Assert::same([true, true, false, true], array_map(fn(PhpSyntax\Nodes\ExpressionNode $fetch) => $fetch->isWritten(), $fetches));
+});
+
+
+test('isRepeatableRead()', function () {
+	Assert::true(parseStatement("\$a->b[C::D];\n")->expression->isRepeatableRead());
+	Assert::false(parseStatement("\$a->b();\n")->expression->isRepeatableRead());
+	Assert::false(parseStatement("\$a[f()];\n")->expression->isRepeatableRead());
+
+	// every literal counts, whatever it is written with, and a string is worth what its pieces are
+	Assert::true(parseStatement("__LINE__;\n")->expression->isRepeatableRead());
+	Assert::true(parseStatement("\"a\$b\";\n")->expression->isRepeatableRead());
+	Assert::true(parseStatement("<<<X\n\ta\n\tX;\n")->expression->isRepeatableRead());
+	Assert::false(parseStatement("\"a{\$b->c()}\";\n")->expression->isRepeatableRead());
+
+	// parentheses, a unary operator and an array run nothing of their own; unpacking and a reference do
+	Assert::true(parseStatement("(\$a);\n")->expression->isRepeatableRead());
+	Assert::true(parseStatement("-1;\n")->expression->isRepeatableRead());
+	Assert::true(parseStatement("[1, 'k' => \$a[0]];\n")->expression->isRepeatableRead());
+	Assert::false(parseStatement("[f()];\n")->expression->isRepeatableRead());
+	Assert::false(parseStatement("[...\$a];\n")->expression->isRepeatableRead());
+	Assert::false(parseStatement("[&\$a];\n")->expression->isRepeatableRead());
+});
+
+
+test('evaluatesToBoolean() tells an expression that yields a boolean whatever its operands', function () {
+	foreach ([
+		'$a === $b', '$a < 1', '$a && $b', '$a or $b', '!$a', '(bool) $a', '($a == 1)', '$a instanceof B', 'isset($a)',
+		'empty($a)', 'true', 'FALSE',
+	] as $code) {
+		Assert::true((new Builder)->expression($code)->evaluatesToBoolean(), $code);
+	}
+
+	foreach (['$a', 'f()', '$a <=> $b', '$a ?? $b', '$a ? 1 : 2', '-$a', '(int) $a', 'null', '$a . $b', '$a = $b'] as $code) {
+		Assert::false((new Builder)->expression($code)->evaluatesToBoolean(), $code);
+	}
+});
+
+
+test('isLogical() tells the operators a condition is chained with', function () {
+	foreach (['$a && $b', '$a || $b', '$a and $b', '$a OR $b', '$a xor $b'] as $code) {
+		$node = (new Builder)->expression($code);
+		Assert::true($node instanceof PhpSyntax\Nodes\Expression\BinaryOpNode && $node->isLogical(), $code);
+	}
+
+	foreach (['$a & $b', '$a === $b', '$a ?? $b', '$a . $b'] as $code) {
+		$node = (new Builder)->expression($code);
+		Assert::true($node instanceof PhpSyntax\Nodes\Expression\BinaryOpNode && !$node->isLogical(), $code);
 	}
 });
 
