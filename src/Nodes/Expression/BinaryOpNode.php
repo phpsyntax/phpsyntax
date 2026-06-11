@@ -59,4 +59,11 @@ final class BinaryOpNode extends ExpressionNode implements OperatorNode
 			default => throw new \LogicException(Helpers::formatCode($operator) . ' is not a binary operator.'),
 		};
 	}
+
+
+	/** Whether the operator is `&&`, `||`, `and`, `or` or `xor`, the operators the parts of a condition are chained with. */
+	public function isLogical(): bool
+	{
+		return $this->operator->is([Token::BooleanAnd, Token::BooleanOr, Token::LogicalAnd, Token::LogicalOr, Token::LogicalXor]);
+	}
 }
