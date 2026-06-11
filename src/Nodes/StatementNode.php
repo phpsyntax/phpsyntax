@@ -8,6 +8,8 @@
 namespace PhpSyntax\Nodes;
 
 use PhpSyntax\{Node, Token};
+use PhpSyntax\Nodes\Expression\{ExitNode, ThrowNode};
+use PhpSyntax\Nodes\Statement\{BreakNode, ContinueNode, ExpressionStatementNode, GotoNode, ReturnNode};
 
 
 /**
@@ -17,4 +19,19 @@ use PhpSyntax\{Node, Token};
  */
 abstract class StatementNode extends Node
 {
+	/**
+	 * Whether the code does not go on after the statement: `return`, `break`, `continue`, `goto`, `throw` or `exit`.
+	 * It reads the statement itself, so an `if` whose every branch returns is no such statement; that is control flow.
+	 */
+	public function interruptsFlow(): bool
+	{
+		return match (true) {
+			$this instanceof ReturnNode,
+			$this instanceof BreakNode,
+			$this instanceof ContinueNode,
+			$this instanceof GotoNode => true,
+			$this instanceof ExpressionStatementNode => $this->expression instanceof ThrowNode || $this->expression instanceof ExitNode,
+			default => false,
+		};
+	}
 }
