@@ -137,6 +137,13 @@ test('what a trivia says about a comment', function () {
 });
 
 
+test('matches() compares token texts, not whitespace', function () {
+	Assert::true(parseStatement("\$a[1] = 1;\n")->expression->matches(parseStatement("\$a [ 1 ]  =\n1;\n")->expression));
+	Assert::false(parseStatement("\$a[1] = 1;\n")->expression->matches(parseStatement("\$a[2] = 1;\n")->expression));
+	Assert::same(['$a', '[', '1', ']', '=', '1'], parseStatement("\$a [ 1 ]  = // c\n1;\n")->expression->getTokenTexts());
+});
+
+
 test('$plainName is the name without the dollar, and null where the name is an expression', function () {
 	$variable = parseStatement("\$a;\n")->expression;
 	assert($variable instanceof PhpSyntax\Nodes\Expression\VariableNode);
@@ -281,6 +288,46 @@ test('isDereferenced()', function () {
 	assert($callee instanceof PhpSyntax\Nodes\ExpressionNode);
 	Assert::true($callee->isDereferenced());
 	Assert::false($invoke->isDereferenced());
+});
+
+
+test('the value an expression is written as', function () {
+	$value = fn(string $code) => (new Parser)->parseExpression($code)->toValue();
+	Assert::same(1, $value('1'));
+	Assert::same(1.5, $value('1.5'));
+	Assert::same('a', $value("'a'"));
+	Assert::same("b\n", $value('"b\n"'));
+	Assert::same([true, false, null], [$value('true'), $value('FALSE'), $value('null')]);
+	Assert::same(-1, $value('-1'));
+	Assert::same(2.5, $value('+2.5'));
+	Assert::same(1, $value('(1)'));
+	Assert::same('ab', $value("<<<TXT\n\tab\n\tTXT"));
+	Assert::same(['a' => 1, 'b' => [2, 3]], $value("['a' => 1, 'b' => [2, 3]]"));
+	Assert::same([1, 2, 3], $value('[1, ...[2, 3]]'));
+	// spreading gives its own numeric items new keys and keeps the string ones, the keys already there untouched
+	Assert::same([5 => 'a', 6 => 'b'], $value('[5 => "a", ...["b"]]'));
+	Assert::same(['k' => 2, 0 => 1], $value('["k" => 1, ...[1, "k" => 2]]'));
+
+	// what a name stands for depends on what the code around it defines, so it is no value here
+	foreach (['PHP_EOL', 'self::FOO', '$a', '1 + 2', '-PHP_INT_MAX', 'f()', '[&$a]', '"x{$a}"'] as $code) {
+		Assert::false((new Parser)->parseExpression($code)->hasValue(), $code);
+		Assert::exception(
+			fn() => $value($code),
+			LogicException::class,
+			"Expression '$code' has no value of its own.",
+		);
+	}
+
+	// what is written inside says as much as what is written around it, and says it the same way
+	Assert::false((new Parser)->parseExpression('["x{$a}"]')->hasValue());
+	Assert::exception(
+		fn() => $value('["x{$a}"]'),
+		LogicException::class,
+		'Expression \'["x{$a}"]\' has no value of its own.',
+	);
+
+	Assert::true((new Parser)->parseExpression('[1, null]')->hasValue());
+	Assert::null($value('null')); // the value null is told apart from no value
 });
 
 
@@ -449,6 +496,27 @@ test('isWritable() tells a place assigned to from a value read', function () {
 	Assert::false($expr('FOO')->isWritable());
 	Assert::false($expr('($a)')->isWritable());
 	Assert::false($expr('[1, 2]')->isWritable()); // a literal here, a destructuring only as a target
+});
+
+
+test('isRepeatableRead()', function () {
+	Assert::true(parseStatement("\$a->b[C::D];\n")->expression->isRepeatableRead());
+	Assert::false(parseStatement("\$a->b();\n")->expression->isRepeatableRead());
+	Assert::false(parseStatement("\$a[f()];\n")->expression->isRepeatableRead());
+
+	// every literal counts, whatever it is written with, and a string is worth what its pieces are
+	Assert::true(parseStatement("__LINE__;\n")->expression->isRepeatableRead());
+	Assert::true(parseStatement("\"a\$b\";\n")->expression->isRepeatableRead());
+	Assert::true(parseStatement("<<<X\n\ta\n\tX;\n")->expression->isRepeatableRead());
+	Assert::false(parseStatement("\"a{\$b->c()}\";\n")->expression->isRepeatableRead());
+
+	// parentheses, a unary operator and an array run nothing of their own; unpacking and a reference do
+	Assert::true(parseStatement("(\$a);\n")->expression->isRepeatableRead());
+	Assert::true(parseStatement("-1;\n")->expression->isRepeatableRead());
+	Assert::true(parseStatement("[1, 'k' => \$a[0]];\n")->expression->isRepeatableRead());
+	Assert::false(parseStatement("[f()];\n")->expression->isRepeatableRead());
+	Assert::false(parseStatement("[...\$a];\n")->expression->isRepeatableRead());
+	Assert::false(parseStatement("[&\$a];\n")->expression->isRepeatableRead());
 });
 
 
