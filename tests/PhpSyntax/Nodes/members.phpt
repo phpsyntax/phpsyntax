@@ -5,10 +5,11 @@
  */
 
 use PhpSyntax\{Node, Parser, SymbolKind, Visibility};
-use PhpSyntax\Nodes\{ArgumentListNode, IdentifierNode, ParameterNode, UseItemNode};
+use PhpSyntax\Nodes\{ArgumentListNode, IdentifierNode, ParameterNode, TypeNode, UseItemNode};
 use PhpSyntax\Nodes\Expression\{CastNode, FunctionCallNode, MethodCallNode, PropertyFetchNode};
 use PhpSyntax\Nodes\Member\{MethodNode, PropertyNode};
 use PhpSyntax\Nodes\Statement\{ClassNode, UseNode};
+use PhpSyntax\Nodes\Type\NamedTypeNode;
 use Tester\Assert;
 
 require __DIR__ . '/../../bootstrap.php';
@@ -116,6 +117,20 @@ test('a nullsafe call and fetch', function () {
 	[$nullsafeFetch, $fetch] = $file->find(PropertyFetchNode::class);
 	Assert::true($nullsafeFetch->isNullsafe());
 	Assert::false($fetch->isNullsafe());
+});
+
+
+test('a builtin type and a type that accepts null', function () {
+	$file = parseFile('function f(int $a, ?Foo $b, self $c, Foo|null $d, mixed $e, Foo $f, Foo&Bar $g) {}');
+	$types = array_map(fn(ParameterNode $param) => $param->type, $file->find(ParameterNode::class));
+	Assert::same([true, false, true, false, true, false, false], array_map(
+		fn(?TypeNode $type) => $type instanceof NamedTypeNode && $type->isBuiltin(),
+		$types,
+	));
+	Assert::same([false, true, false, true, true, false, false], array_map(
+		fn(?TypeNode $type) => $type?->allowsNull() ?? false,
+		$types,
+	));
 });
 
 
