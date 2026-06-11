@@ -41,6 +41,22 @@ enum SymbolKind
 
 
 /**
+ * What is written after an expression and reaches into it.
+ */
+enum DereferenceKind
+{
+	/** `->`, `?->` and `[ ]`, the call of a method included */
+	case Fetch;
+
+	/** `( )` */
+	case Call;
+
+	/** `::` */
+	case StaticAccess;
+}
+
+
+/**
  * Which side an operator leans to, where an operand of the same precedence may stand without parentheses.
  */
 enum Associativity

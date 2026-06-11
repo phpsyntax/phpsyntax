@@ -35,4 +35,20 @@ final class BlockNode extends StatementNode
 		$this->statements = $statements;
 		$this->closeBrace = $closeBrace;
 	}
+
+
+	/**
+	 * Whether the code does not go on after the last statement of the block, the empty statement a close tag leaves
+	 * behind it aside; false for an empty block.
+	 */
+	public function interruptsFlow(): bool
+	{
+		$stmts = $this->statements->getItems();
+		$last = array_pop($stmts);
+		if ($last instanceof EmptyStatementNode && $last->semicolon->is(Token::CloseTag)) {
+			$last = array_pop($stmts);
+		}
+
+		return $last?->interruptsFlow() ?? false;
+	}
 }
