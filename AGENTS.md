@@ -26,6 +26,7 @@ One namespace, one PSR-4 root: `PhpSyntax` (`src/`) holds the lexer, the parser,
 - Naming:
   - methods are actions and start with a verb (`getFirstToken()`, `replaceChild()`); a bare noun is not a method name;
   - `get*` returns something that belongs to the object (may be `null`), `find*` searches and `null` means not found;
+  - a setter, a method whose only job is to write one value (`setText()`, `setEdgeTrivia()`, `setTrailingSeparator()`), returns `static` so that writes chain; a method that decides what to change, such as `ensureLeadingNewline()` or `removeTrailingWhitespace()`, returns `void`;
   - boolean queries `is*`/`has*`/`can*`, never `check*`, which is the name of a method that answers nothing and throws when the answer would be no; one whose truth means a nullable slot is filled says so with `@phpstan-assert-if-true`, or a typed caller cannot use it;
   - analyses carry bare names in `Analyses/`;
   - no `Abstract`, `Interface`, `I` or `Aware` prefixes/suffixes; an interface or base class sits next to the directory of its implementations;
