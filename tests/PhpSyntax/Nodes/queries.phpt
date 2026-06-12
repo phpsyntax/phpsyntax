@@ -1,6 +1,7 @@
 <?php declare(strict_types=1);
 
 use PhpSyntax\{Associativity, Builder, DereferenceKind, Parser, Trivia};
+use PhpSyntax\Nodes\Member\MethodNode;
 use PhpSyntax\Nodes\Statement\{ExpressionStatementNode, InlineHtmlNode};
 use Tester\Assert;
 
@@ -63,6 +64,42 @@ test('hasInnerComment() sees comments inside the node, not on its edges', functi
 	Assert::true($detached->hasInnerComment());
 	Assert::same(['/* a */'], array_map(fn($trivia) => $trivia->text, $detached->getInnerComments()));
 	Assert::true((new Builder)->expression('f(/* a */ 1)')->hasInnerComment());
+});
+
+
+test('a comment found on a node is removed and replaced through it', function () {
+	$file = (new Parser)->parse("<?php\nclass A\n{\n\t/** doc */\n\tpublic function f()\n\t{\n\t\t// note\n\t\treturn 1;\n\t}\n}\n");
+	$method = $file->find(MethodNode::class)[0];
+
+	$note = $method->getInnerComments()[0];
+	Assert::same('// note', $note->text);
+	$method->replaceTrivia($note, new PhpSyntax\Trivia(Trivia::Comment, '// kept'));
+	Assert::same('// kept', $method->getInnerComments()[0]->text);
+	$method->removeTrivia($method->getInnerComments()[0]);
+	Assert::same([], $method->getInnerComments());
+	Assert::same("<?php\nclass A\n{\n\t/** doc */\n\tpublic function f()\n\t{\n\t\treturn 1;\n\t}\n}\n", (string) $file);
+
+	// the doc comment stands on the edge of the node, which the comment queries leave out, and is reached too
+	$doc = $method->getDocComment();
+	Assert::type(PhpSyntax\Trivia::class, $doc);
+	$method->removeTrivia($doc);
+	Assert::null($method->getDocComment());
+	Assert::same("<?php\nclass A\n{\n\tpublic function f()\n\t{\n\t\treturn 1;\n\t}\n}\n", (string) $file);
+
+	Assert::exception(
+		fn() => $method->removeTrivia(new PhpSyntax\Trivia(Trivia::Comment, '// alien')),
+		LogicException::class,
+		'The trivia does not belong to the node.',
+	);
+});
+
+
+test('a trivia a copy shares with the original standing before it is removed from the copy', function () {
+	$file = (new Parser)->parse("<?php\nf(); // c\n");
+	$copy = (clone $file->statements[0])->setEdgeTrivia(leading: []);
+	$file->statements->append($copy);
+	$copy->removeTrivia($copy->trailingTrivia[1]);
+	Assert::same("<?php\nf(); // c\nf();\n", (string) $file);
 });
 
 
