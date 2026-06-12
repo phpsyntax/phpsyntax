@@ -7,6 +7,8 @@
 
 namespace PhpSyntax;
 
+use function strlen;
+
 
 /**
  * Small operations that belong to no class of their own.
@@ -94,5 +96,22 @@ final class Helpers
 		$fence = str_repeat('`', max([0, ...array_map(strlen(...), $m[0])]) + 1);
 		$pad = str_starts_with($code, '`') || str_ends_with($code, '`') ? ' ' : '';
 		return $fence . $pad . $code . $pad . $fence;
+	}
+
+
+	/** Refuses a text that is not whitespace within a line, spaces and tabs; an empty one passes. */
+	public static function checkWhitespace(string $text): void
+	{
+		if (strspn($text, " \t") !== strlen($text)) {
+			throw new \InvalidArgumentException(self::formatCode(addcslashes($text, "\0..\37")) . ' is not whitespace within a line, which is made of spaces and tabs.');
+		}
+	}
+
+
+	public static function checkLineEnding(string $lineEnding): void
+	{
+		if ($lineEnding !== "\n" && $lineEnding !== "\r\n" && $lineEnding !== "\r") {
+			throw new \InvalidArgumentException(self::formatCode(addcslashes($lineEnding, "\0..\37")) . ' is not a line ending, which is `\n`, `\r\n` or `\r`.');
+		}
 	}
 }

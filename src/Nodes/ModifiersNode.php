@@ -137,6 +137,7 @@ final class ModifiersNode extends Node implements \Countable, \IteratorAggregate
 	/**
 	 * Removes a modifier. Its leading trivia go to the token after it, which may now open the declaration, and
 	 * a comment after it stays: after the modifier before it, or on a line of its own above the token after it.
+	 * A line the modifier ended after another token ends with that token now, which takes the line ending.
 	 */
 	public function removeToken(Token $token): void
 	{
@@ -147,6 +148,7 @@ final class ModifiersNode extends Node implements \Countable, \IteratorAggregate
 
 		$previous = $this->tokens[$index - 1] ?? null;
 		$next = $this->tokens[$index + 1] ?? $this->findFollowingToken();
+		$before = $token->startsLine() ? null : $token->getPrevious();
 		$this->release($token);
 		$this->tokens = Helpers::spliceList($this->tokens, $index, 1);
 		$this->structureChanged();
@@ -156,6 +158,9 @@ final class ModifiersNode extends Node implements \Countable, \IteratorAggregate
 		if (array_any($trailing, fn(Trivia $trivia) => !$trivia->is(Trivia::Whitespace))) {
 			if ($previous && !array_any($previous->trailingTrivia, fn(Trivia $trivia) => !$trivia->is(Trivia::Whitespace))) {
 				$previous->setTrailingTrivia($trailing);
+			} elseif ($before && array_any($trailing, fn(Trivia $trivia) => $trivia->is(Trivia::LineEnding))) {
+				$before->removeTrailingWhitespace();
+				$before->setTrailingTrivia([...$before->trailingTrivia, ...$trailing]);
 			} else {
 				$leading = [...$leading, ...array_slice($trailing, $trailing[0]->is(Trivia::Whitespace) ? 1 : 0)];
 			}
