@@ -1,7 +1,8 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{Builder, Node, Parser, Token};
+use PhpSyntax\{Builder, Node, Parser, Token, Trivia};
 use PhpSyntax\Nodes\{FileNode, MemberNode, ModifiersNode, NodeList, PlainNodeList, SeparatedNodeList, StatementNode};
+use PhpSyntax\Nodes\Member\MethodNode;
 use PhpSyntax\Nodes\Statement\{BlockNode, ClassNode, NamespaceNode};
 use Tester\Assert;
 
@@ -189,6 +190,25 @@ test('a modifier appended or removed keeps the trivia of the declaration where t
 	// a comment after the removed modifier stays
 	Assert::same("<?php\nclass A\n{\n\tpublic /* x */ function f() {}\n}\n", $change("<?php\nclass A\n{\n\tpublic static /* x */ function f() {}\n}\n", $remove(Token::Static)));
 	Assert::same("<?php\nclass A\n{\n\t/* x */ static function f() {}\n}\n", $change("<?php\nclass A\n{\n\tpublic /* x */ static function f() {}\n}\n", $remove(Token::Public)));
+});
+
+
+test('a line a removed modifier ended after another token ends with that token', function () {
+	$parser = new Parser;
+	$builder = new Builder;
+	foreach ([
+		"<?php\nabstract class A{abstract\nfunction f();}\n" => ["<?php\nabstract class A{\nfunction f();}\n", ['LineEnding']],
+		"<?php\nabstract class A{abstract // x\nfunction f();}\n" => ["<?php\nabstract class A{ // x\nfunction f();}\n", ['Whitespace', 'Comment', 'LineEnding']],
+	] as $code => [$expected, $trailing]) {
+		$file = $parser->parse($code);
+		$method = $file->find(MethodNode::class)[0];
+		$method->modifiers->removeToken($method->modifiers->getTokens()[0]);
+		Assert::same($expected, (string) $file);
+		// where the lexer puts the line ending: in the trailing trivia of the brace, not before the function
+		$brace = $method->functionKeyword->getPrevious() ?? throw new LogicException;
+		Assert::same($trailing, array_map(fn(Trivia $trivia) => Dumper::findKindName($trivia), $brace->trailingTrivia));
+		Assert::same([], $method->functionKeyword->leadingTrivia);
+	}
 });
 
 
