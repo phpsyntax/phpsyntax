@@ -411,6 +411,64 @@ final class Token implements \Stringable
 
 
 	/**
+	 * Removes one trivia of the token, tidying the whitespace around it: a comment alone on its line
+	 * takes the line with it, an inline one takes one adjacent space.
+	 */
+	public function removeTrivia(Trivia $trivia): void
+	{
+		if ($trivia->inInterpolation) {
+			throw new \LogicException('Trivia inside string interpolation cannot be removed.');
+		}
+
+		foreach ([true, false] as $isLeading) {
+			$list = $isLeading ? $this->leadingTrivia : $this->trailingTrivia;
+			$index = array_search($trivia, $list, strict: true);
+			if ($index === false) {
+				continue;
+			}
+
+			$from = $to = $index;
+			$space = ($list[$index - 1] ?? null)?->kind === TriviaKind::Whitespace;
+			$before = $list[$index - ($space ? 2 : 1)] ?? null;
+			$startsLine = $isLeading && ($before === null || $before->isEndOfLine());
+			$next = $list[$index + 1] ?? null;
+			if ($startsLine && $next?->kind === TriviaKind::EndOfLine) {
+				[$from, $to] = [$index - (int) $space, $index + 1]; // alone on its line: the indentation and the line ending go too
+			} elseif ($space && !$startsLine) {
+				$from = $index - 1;
+			} elseif ($next?->kind === TriviaKind::Whitespace) {
+				$to = $index + 1; // no space before, or only the indentation, which stays: take the one after
+			}
+
+			$result = [...array_slice($list, 0, $from), ...array_slice($list, $to + 1)];
+			$isLeading ? $this->setLeadingTrivia($result) : $this->setTrailingTrivia($result);
+			return;
+		}
+
+		throw new \LogicException('The trivia does not belong to the token.');
+	}
+
+
+	/** Replaces one trivia of the token with another in place. */
+	public function replaceTrivia(Trivia $old, Trivia $new): void
+	{
+		foreach ([true, false] as $isLeading) {
+			$list = $isLeading ? $this->leadingTrivia : $this->trailingTrivia;
+			$index = array_search($old, $list, strict: true);
+			if ($index === false) {
+				continue;
+			}
+
+			$list[$index] = $new;
+			$isLeading ? $this->setLeadingTrivia($list) : $this->setTrailingTrivia($list);
+			return;
+		}
+
+		throw new \LogicException('The trivia does not belong to the token.');
+	}
+
+
+	/**
 	 * Sets the number of blank lines before the token, which must start a line; comments before it keep
 	 * their position after the blank lines.
 	 */

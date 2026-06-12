@@ -1,6 +1,7 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{AccessKind, Parser};
+use PhpSyntax\{AccessKind, Parser, TriviaKind};
+use PhpSyntax\Nodes\Member\MethodNode;
 use PhpSyntax\Nodes\Statement\{ExpressionStatementNode, InlineHtmlNode};
 use Tester\Assert;
 
@@ -63,6 +64,33 @@ test('hasComment() sees comments inside the node, not on its edges', function ()
 	Assert::true($detached->hasComment());
 	Assert::same(['/* a */'], array_map(fn($trivia) => $trivia->text, $detached->getComments()));
 	Assert::true((new Parser)->parseExpression('f(/* a */ 1)')->hasComment());
+});
+
+
+test('a comment found on a node is removed and replaced through it', function () {
+	$file = (new Parser)->parse("<?php\nclass A\n{\n\t/** doc */\n\tpublic function f()\n\t{\n\t\t// note\n\t\treturn 1;\n\t}\n}\n");
+	$method = $file->find(MethodNode::class)[0];
+
+	$note = $method->getComments()[0];
+	Assert::same('// note', $note->text);
+	$method->replaceTrivia($note, new PhpSyntax\Trivia(TriviaKind::Comment, '// kept'));
+	Assert::same('// kept', $method->getComments()[0]->text);
+	$method->removeTrivia($method->getComments()[0]);
+	Assert::same([], $method->getComments());
+	Assert::same("<?php\nclass A\n{\n\t/** doc */\n\tpublic function f()\n\t{\n\t\treturn 1;\n\t}\n}\n", (string) $file);
+
+	// the doc comment stands on the edge of the node, which the comment queries leave out, and is reached too
+	$doc = $method->getDocComment();
+	Assert::type(PhpSyntax\Trivia::class, $doc);
+	$method->removeTrivia($doc);
+	Assert::null($method->getDocComment());
+	Assert::same("<?php\nclass A\n{\n\tpublic function f()\n\t{\n\t\treturn 1;\n\t}\n}\n", (string) $file);
+
+	Assert::exception(
+		fn() => $method->removeTrivia(new PhpSyntax\Trivia(TriviaKind::Comment, '// alien')),
+		LogicException::class,
+		'The trivia does not belong to the node.',
+	);
 });
 
 

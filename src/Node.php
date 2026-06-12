@@ -303,6 +303,62 @@ abstract class Node implements \Stringable
 	}
 
 
+	/** Replaces one trivia of the node, wherever among its tokens it stands, with another in place. */
+	public function replaceTrivia(Trivia $old, Trivia $new): void
+	{
+		$this->findTriviaOwner($old)->replaceTrivia($old, $new);
+	}
+
+
+	/**
+	 * Removes one trivia of the node, wherever among its tokens it stands, tidying the whitespace around it
+	 * the way `Token::removeTrivia()` does.
+	 */
+	public function removeTrivia(Trivia $trivia): void
+	{
+		$this->findTriviaOwner($trivia)->removeTrivia($trivia);
+	}
+
+
+	/** Replaces the doc comment of the node (see `getDocComment()`) with the trivia given. */
+	public function replaceDocComment(Trivia $docComment): void
+	{
+		$this->replaceTrivia($this->getDocComment() ?? throw new \LogicException('The node has no doc comment.'), $docComment);
+	}
+
+
+	/** Removes the doc comment of the node (see `getDocComment()`) together with the line it stands on. */
+	public function removeDocComment(): void
+	{
+		$this->removeTrivia($this->getDocComment() ?? throw new \LogicException('The node has no doc comment.'));
+	}
+
+
+	/**
+	 * The token carrying the trivia, found by identity: one of the node, or the one before it, where
+	 * a doc comment of the node may stand.
+	 */
+	private function findTriviaOwner(Trivia $trivia): Token
+	{
+		$tokens = $this->getTokens();
+		$previous = ($tokens[0] ?? null)?->getPrevious();
+		if ($previous !== null) {
+			$tokens[] = $previous;
+		}
+
+		foreach ($tokens as $token) {
+			if (
+				in_array($trivia, $token->leadingTrivia, true)
+				|| in_array($trivia, $token->trailingTrivia, true)
+			) {
+				return $token;
+			}
+		}
+
+		throw new \LogicException('The trivia does not belong to the node.');
+	}
+
+
 	/**
 	 * @template T of object
 	 * @param  class-string<T>  $class
