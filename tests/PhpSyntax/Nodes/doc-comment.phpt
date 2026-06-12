@@ -1,0 +1,31 @@
+<?php declare(strict_types=1);
+
+use PhpSyntax\{Parser, Trivia};
+use Tester\Assert;
+
+require __DIR__ . '/../../bootstrap.php';
+
+
+test('doc comment above the node, or after the previous token', function () {
+	$file = (new Parser)->parse("<?php\nclass A {\n\t/** @var int */\n\tpublic \$a; /** @var string */ public \$b;\n\tpublic \$c;\n}\n");
+	$class = $file->statements[0];
+	assert($class instanceof PhpSyntax\Nodes\Statement\ClassNode);
+	[$a, $b, $c] = $class->members->getItems();
+	Assert::same('/** @var int */', $a->getDocComment()?->text);
+	Assert::same('/** @var string */', $b->getDocComment()?->text);
+	Assert::null($c->getDocComment());
+
+	$a->replaceDocComment(new Trivia(Trivia::DocComment, '/** @var float */'));
+	$b->removeDocComment();
+	Assert::same("<?php\nclass A {\n\t/** @var float */\n\tpublic \$a; public \$b;\n\tpublic \$c;\n}\n", (string) $file);
+
+	$a->removeDocComment();
+	Assert::same("<?php\nclass A {\n\tpublic \$a; public \$b;\n\tpublic \$c;\n}\n", (string) $file);
+	Assert::exception($c->removeDocComment(...), LogicException::class, 'The node has no doc comment.');
+});
+
+
+test('a doc comment inside string interpolation documents nothing', function () {
+	$file = (new Parser)->parse("<?php \"{\$x[/** c */ 1]}\";\n");
+	Assert::null($file->find(PhpSyntax\Nodes\Scalar\IntegerNode::class)[0]->getDocComment());
+});
