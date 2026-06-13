@@ -1,0 +1,26 @@
+presets:
+	- nette
+
+rules:
+	strict-comparison: true
+	final-internal-class: true
+	ternary-for-simple-branch: true
+
+paths:
+	- tests
+
+excludePaths:
+	- fixtures
+	- corpus
+	- dump
+
+fileExtensions:
+	- php
+	- phpt
+
+overrides:
+	- paths: [src]
+	  groups: [optimized-calls]
+	  rules:
+	  	name-fallback: {optimizedFunctions: qualified, optimizedConstants: qualified}
+	  nameResolution: certain
