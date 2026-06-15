@@ -12,7 +12,8 @@ use PhpSyntax\{Node, SymbolKind, Token};
 
 /**
  * Imported name with an optional alias; the type (`function`, `const`) appears only inside a group use.
- * What the item imports is said by the statement it stands in, the prefix of a group included.
+ * What the item imports is said by the statement it stands in, the prefix of a group included, so an
+ * item is not moved from one statement to another but written anew by `UseNode::addImport()`.
  */
 final class UseItemNode extends Node
 {

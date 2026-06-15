@@ -7,8 +7,9 @@
 
 namespace PhpSyntax\Nodes\Statement;
 
-use PhpSyntax\Nodes\{NameNode, SeparatedNodeList, StatementNode, UseItemNode};
-use PhpSyntax\{SymbolKind, Token};
+use PhpSyntax\Nodes\{IdentifierNode, NameNode, SeparatedNodeList, StatementNode, UseItemNode};
+use PhpSyntax\{SymbolKind, Token, TokenKind, Trivia, TriviaKind};
+use function strlen;
 
 
 /**
@@ -47,5 +48,37 @@ final class UseNode extends StatementNode
 	public function isGroup(): bool
 	{
 		return $this->prefix !== null;
+	}
+
+
+	/**
+	 * Adds an import of the fully qualified name, written the way the statement writes its items: whole in
+	 * a plain import, under the prefix in a group, which refuses a name standing outside it. The item
+	 * imports what the statement imports and goes last unless an index says where.
+	 */
+	public function addImport(string $name, ?string $alias = null, ?int $index = null): UseItemNode
+	{
+		$name = ltrim($name, '\\');
+		if ($this->isGroup()) {
+			$prefix = ltrim($this->prefix->text, '\\') . '\\';
+			if (strncasecmp($name, $prefix, strlen($prefix)) !== 0) {
+				throw new \InvalidArgumentException("The name '$name' does not stand under the prefix of the group.");
+			}
+
+			$name = substr($name, strlen($prefix));
+		}
+
+		$item = new UseItemNode(type: null, name: NameNode::fromText($name), asKeyword: null, alias: null);
+		if ($alias !== null) {
+			$space = [new Trivia(TriviaKind::Whitespace, ' ')];
+			$asKeyword = new Token(TokenKind::As, 'as');
+			$asKeyword->setTrailingTrivia($space);
+			$item->name->token->setTrailingTrivia($space);
+			$item->asKeyword = $asKeyword;
+			$item->alias = IdentifierNode::fromText($alias);
+		}
+
+		$index === null ? $this->items->append($item) : $this->items->insert($index, $item);
+		return $item;
 	}
 }
