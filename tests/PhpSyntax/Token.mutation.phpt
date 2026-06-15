@@ -244,6 +244,11 @@ test('the whitespace helpers refuse what is no whitespace, line ending or count 
 		InvalidArgumentException::class,
 		'Count of blank lines `-1` is negative.',
 	);
+	Assert::exception(
+		fn() => PhpSyntax\Indentation::set($foo, "\t", 'x'),
+		InvalidArgumentException::class,
+		'`x` is not whitespace within a line, which is made of spaces and tabs.',
+	);
 	Assert::same($code, (string) $file);
 	Assert::same(0, $file->revision);
 });

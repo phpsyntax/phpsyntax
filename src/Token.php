@@ -192,7 +192,7 @@ final class Token extends \PhpToken implements \Stringable
 	}
 
 
-	/** Column the token stands on now, 1-based, in UTF-8 characters. */
+	/** Column the token stands on now, 1-based, in UTF-8 characters; `getVisualColumn()` expands the tabs. */
 	public function getCurrentColumn(): ?int
 	{
 		return $this->findIndex()?->getColumn($this);
@@ -203,6 +203,13 @@ final class Token extends \PhpToken implements \Stringable
 	public function getCurrentOffset(): ?int
 	{
 		return $this->findIndex()?->getOffset($this);
+	}
+
+
+	/** Current column with tabs expanded, 1-based. */
+	public function getVisualColumn(Style $style): ?int
+	{
+		return $this->findIndex()?->getVisualColumn($this, $style);
 	}
 
 
