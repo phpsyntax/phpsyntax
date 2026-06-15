@@ -579,6 +579,7 @@ abstract class Node implements \Stringable
 	}
 
 
+	/** The node printed back to source, the trivia on its outer edges included; `$text` leaves them out. */
 	public function __toString(): string
 	{
 		return Printer::print($this);
