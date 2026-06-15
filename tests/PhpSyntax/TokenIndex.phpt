@@ -1,7 +1,7 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{Node, Parser, Printer, Token, TokenKind, Trivia, TriviaKind};
-use PhpSyntax\Nodes\{ArgumentNode, FileNode, NodeList, StatementNode};
+use PhpSyntax\{Node, Parser, Printer, Style, Token, TokenKind, Trivia, TriviaKind};
+use PhpSyntax\Nodes\{ArgumentNode, ArrayItemNode, FileNode, NodeList, StatementNode};
 use PhpSyntax\Nodes\Expression\{ArrayNode, BinaryOpNode};
 use PhpSyntax\Nodes\Statement\{BlockNode, ExpressionStatementNode, IfNode};
 use Tester\Assert;
@@ -126,6 +126,18 @@ test('lines, columns and offsets follow trivia, CRLF and UTF-8', function () {
 	Assert::same([4, 3], [$b->getLine(), $b->getColumn()]);
 	Assert::same(4, $tokens[6]->getLine());
 	Assert::same(2, $tokens[0]->originalLine);
+});
+
+
+test('visual column expands tabs', function () {
+	$tokens = tokensOf("<?php\n\t\$a;\n \t\$b;\n\$x=\t\$c;");
+	$style = new Style(tabWidth: 4);
+	Assert::same(5, $tokens[0]->getVisualColumn($style));
+	Assert::same(5, $tokens[2]->getVisualColumn($style));
+	Assert::same('$c', $tokens[6]->text);
+	Assert::same(5, $tokens[6]->getVisualColumn($style));
+	Assert::same(9, $tokens[6]->getVisualColumn(new Style(tabWidth: 8)));
+	Assert::same(2, $tokens[0]->getColumn());
 });
 
 
@@ -258,4 +270,21 @@ test('a node moved into the subtree that replaced it stands in the order once', 
 		Assert::same($i, $index->getIndex($token));
 		Assert::same($index->getTokens()[$i - 1] ?? null, $token->getPrevious());
 	}
+});
+
+
+test('line width counts the indentation visually and drops trailing whitespace', function () {
+	$file = (new Parser)->parse("<?php\n\tif (\$a) { // c   \n\t\t\$bb = 'ěšč';\t\n\t}\n");
+	$style = new Style(tabWidth: 4);
+	$if = $file->statements->getItems()[0];
+	Assert::same(strlen('    if ($a) { // c'), $if->getFirstToken()?->getLineWidth($style));
+	$assign = $file->find(ExpressionStatementNode::class)[0];
+	Assert::same(strlen('        $bb = ') + 5 + 1, $assign->semicolon->getLineWidth($style));
+	Assert::same(5, $file->getLastToken()?->getPrevious()?->getLineWidth($style));
+
+	// a tab inside the line moves to the next stop as well, which is what the editor shows
+	$file = (new Parser)->parse("<?php\n\$a = [\n\t'xy'\t=> 1,\n];\n");
+	$item = $file->find(ArrayItemNode::class)[0];
+	Assert::same(strlen("    'xy'    => 1,"), $item->getFirstToken()?->getLineWidth($style));
+	Assert::same(strlen("    'xy'    ") + 1, $item->doubleArrow?->getVisualColumn($style));
 });
