@@ -204,6 +204,7 @@ test('the whitespace helpers refuse what is no whitespace, line ending or count 
 	Assert::exception(fn() => $bar->ensureStartsLine('<br>'), InvalidArgumentException::class, '`<br>` is not a line ending, which is `\n`, `\r\n` or `\r`.');
 	Assert::exception(fn() => $foo->setBlankLinesBefore(1, "\n\n"), InvalidArgumentException::class, '`\n\n` is not a line ending, which is `\n`, `\r\n` or `\r`.');
 	Assert::exception(fn() => $foo->setBlankLinesBefore(-1, "\n"), InvalidArgumentException::class, 'Count of blank lines `-1` is negative.');
+	Assert::exception(fn() => PhpSyntax\Indentation::set($foo, "\t", 'x'), InvalidArgumentException::class, '`x` is not whitespace within a line, which is made of spaces and tabs.');
 	Assert::same($code, (string) $file);
 	Assert::same(0, $file->revision);
 });

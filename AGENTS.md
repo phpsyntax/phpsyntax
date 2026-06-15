@@ -23,8 +23,8 @@ One namespace, one PSR-4 root: `PhpSyntax` (`src/`) holds the lexer, the parser,
 ## Conventions
 
 - Nette coding standard: tabs, `declare(strict_types=1)`, single quotes, types everywhere, two blank lines between methods.
-- Modern PHP: `match` instead of `switch`, enums, `readonly`, promoted properties, named arguments, `never`.
-- The kind of a token or a trivia is asked by `is()` (`$token->is(Token::Variable)`, `$token->is(';')`, `$trivia->is(Trivia::DocComment)`). `->id` stays where the kind is a value, compared with another one or a key (`$a->id !== $b->id`, `isset($map[$token->id])`), and on a hot path (the lexer, the parser, the index, the printer, `Token`, `Trivia`), where the call costs twice the comparison. A set of several kinds asked over every token is a constant map and `isset()`, an array literal in `is([...])` being built anew on every call.
+- Modern PHP: `match` instead of `switch`, enums, `readonly`, promoted properties, named arguments, `never`. A method every rule or the parser calls over every token (`Indentation::opensLine()`) keeps its `foreach` over `array_any()` and its kin, a closure call per item costing a measurable share of the run; the exception says so where the style would rewrite it, `// dresscode:ignore arrayFunctionForForeach -- a loop is faster than array_any() on this hot path`.
+- The kind of a token or a trivia is asked by `is()` (`$token->is(Token::Variable)`, `$token->is(';')`, `$trivia->is(Trivia::DocComment)`). `->id` stays where the kind is a value, compared with another one or a key (`$a->id !== $b->id`, `isset($map[$token->id])`), and on a hot path (the lexer, the parser, the index, the printer, `Indentation`, `Token`, `Trivia`), where the call costs twice the comparison. A set of several kinds asked over every token is a constant map and `isset()`, an array literal in `is([...])` being built anew on every call.
 - Naming:
   - methods are actions and start with a verb (`getFirstToken()`, `replaceChild()`); a bare noun is not a method name;
   - `get*` returns something that belongs to the object (may be `null`), `find*` searches and `null` means not found;

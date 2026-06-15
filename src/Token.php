@@ -49,7 +49,7 @@ final class Token extends \PhpToken implements \Stringable
 		get => $this->findIndex()?->getLine($this);
 	}
 
-	/** Column the token stands on now, 1-based, in UTF-8 characters. */
+	/** Column the token stands on now, 1-based, in UTF-8 characters; `getVisualColumn()` expands the tabs. */
 	public ?int $currentColumn {
 		get => $this->findIndex()?->getColumn($this);
 	}
@@ -197,6 +197,13 @@ final class Token extends \PhpToken implements \Stringable
 		}
 
 		return $index->getOrdinal($this) < $index->getOrdinal($other);
+	}
+
+
+	/** Current column with tabs expanded, 1-based. */
+	public function getVisualColumn(Style $style): ?int
+	{
+		return $this->findIndex()?->getVisualColumn($this, $style);
 	}
 
 
