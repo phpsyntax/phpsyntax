@@ -301,6 +301,29 @@ test('syntax of newer PHP versions, natively or through emulation', function () 
 });
 
 
+test('canAdjoin() tells whether two tokens written side by side stay the two', function () {
+	$lexer = new Lexer;
+	Assert::true($lexer->canAdjoin('$a', '.'));
+	Assert::true($lexer->canAdjoin('!', '$a'));
+	Assert::true($lexer->canAdjoin('-', '$a'));
+	Assert::false($lexer->canAdjoin('.', '1')); // a number
+	Assert::false($lexer->canAdjoin('1', '.'));
+	Assert::false($lexer->canAdjoin('return', 'FOO'));
+	Assert::false($lexer->canAdjoin('-', '-'));
+	Assert::false($lexer->canAdjoin('/', '*')); // an unterminated comment, which the lexer refuses
+	Assert::false($lexer->canAdjoin('?', '>'));
+
+	// a piece of several tokens is judged by the token at its edge
+	Assert::false($lexer->canAdjoin('-', '-$a'));
+	Assert::false($lexer->canAdjoin("'a'.", '119 + 1'));
+	Assert::true($lexer->canAdjoin('$a =', '-$b'));
+
+	// the pieces of a string are no tokens of code, and a space would not make them any
+	Assert::true($lexer->canAdjoin('{$', '$a'));
+	Assert::true($lexer->canAdjoin('"', 'text'));
+});
+
+
 test('lexer errors', function () {
 	$e = Assert::exception(fn() => tokenize("<?php\n\$a = \x01;"), ParseException::class, 'Unexpected character 0x01');
 	Assert::type(ParseException::class, $e);
