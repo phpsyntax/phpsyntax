@@ -17,6 +17,7 @@ One namespace, one PSR-4 root: `PhpSyntax` (`src/`) holds the lexer, the parser,
 - `composer tester`: Nette Tester over `tests/`.
 - `composer phpstan`: PHPStan level 8, no baseline; `ignoreErrors` only with a reason.
 - `composer compile-grammar`: regenerates `src/ParserData.php`, `src/TokenKind.php`, `src/LayoutData.php` and, in every node class, the `Slots` constant and the constructor from `grammar/` (`php.y` for the parser, `nodes.php` for the slots of the nodes); the rest of a node class is handwritten. Commit the output once the code style of `dresscode.neon` has run over it: what is committed is the formatted form, so a bare rebuild differs from it and that difference is no defect. A rebuild marks every generated file in `git status`, because the generator writes LF and the checkout has CRLF; `git diff` is the one that says what really changed. The procedure for a new PHP version is in `docs/internals.md`.
+- `composer reference`: regenerates `docs/reference/nodes.md` (the base classes and the node classes with their slots, properties and methods) from `grammar/nodes.php` and the classes. Commit the output.
 - Round-trip over an external corpus: `PHPSYNTAX_CORPUS=/path/to/php/code composer tester`.
 
 ## Conventions
@@ -33,6 +34,7 @@ One namespace, one PSR-4 root: `PhpSyntax` (`src/`) holds the lexer, the parser,
   - enums of a namespace live in `enums.php`, exceptions in `exceptions.php`;
   - names of the API are written in full (`expression`, `condition`, `statements`, `arguments`, `parameters`, `variable`); the abbreviations left there are `paren` in `openParen`/`closeParen`, the delimiter having no one-word English name, `eol`, and `Op` in `BinaryOpNode` and its kin, which names the family across PHP tooling. A local variable may be abbreviated and often reads better for it (`$stmts`, `$eof`, `$args`). How a node class and its slots are named is in `docs/internals.md`, the tree growing once a year with a PHP version.
 - Comments only where the code itself is not enough; never restate what the code shows; density follows the surrounding file. No phpDoc for what the types already say.
+- Code in a doc comment is written in backticks: a call, a variable or a property, an operator, a keyword, a literal, the case of an enum (`setEdgeTrivia()`, `$this`, `?->`, `static`, `''`, `StopTraversal`). Doc comments are read as Markdown, in an IDE and in `docs/reference/nodes.md`, and what stands bare there is typeset as text: `->` becomes an arrow, `...` an ellipsis. Backticks mark the code itself, so what only resembles code stays bare, whatever the IDE makes of it: a keyword used as a word (a static method, a readonly class, but a `match` expression), `null`, `true` and `false` in "null when …", and the `=>` describing a map (path => its size).
 - Code, comments, identifiers and messages in English.
 
 ## Working rules
