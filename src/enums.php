@@ -120,7 +120,7 @@ enum CommentPolicy
 
 /**
  * What a slot is to the indentation of the lines its node spreads over, relative to the line the node
- * begins on; the level each role stands for is left to whatever lays the code out.
+ * begins on; the level each role stands for is the business of the style.
  */
 enum LayoutRole
 {
