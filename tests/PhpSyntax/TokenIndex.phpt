@@ -1,7 +1,7 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{Builder, Parser, Printer, Token, Trivia};
-use PhpSyntax\Nodes\{ArgumentNode, FileNode, PlainNodeList, SeparatedNodeList, StatementNode};
+use PhpSyntax\{Builder, Indentation, Parser, Printer, Style, Token, Trivia};
+use PhpSyntax\Nodes\{ArgumentNode, ArrayItemNode, FileNode, PlainNodeList, SeparatedNodeList, StatementNode};
 use PhpSyntax\Nodes\Expression\{ArrayNode, BinaryOpNode};
 use PhpSyntax\Nodes\Statement\{BlockNode, ExpressionStatementNode, IfNode};
 use Tester\Assert;
@@ -118,6 +118,22 @@ test('lines, columns and offsets follow trivia, CRLF and UTF-8', function () {
 	Assert::same([4, 3], [$b->getCurrentLine(), $b->getCurrentColumn()]);
 	Assert::same(4, $tokens[6]->getCurrentLine());
 	Assert::same(2, $tokens[0]->line);
+});
+
+
+test('visual column expands tabs', function () {
+	$tokens = tokensOf("<?php\n\t\$a;\n \t\$b;\n\$x=\t\$c;");
+	$style = new Style(tabWidth: 4);
+	Assert::same(5, $tokens[0]->getVisualColumn($style));
+	Assert::same(5, $tokens[2]->getVisualColumn($style));
+	Assert::same('$c', $tokens[6]->text);
+	Assert::same(5, $tokens[6]->getVisualColumn($style));
+	Assert::same(9, $tokens[6]->getVisualColumn(new Style(tabWidth: 8)));
+	Assert::same(5, $tokens[6]->getVisualColumn($style));
+	Assert::same(2, $tokens[0]->getCurrentColumn());
+
+	$tokens[4]->setText('$xx'); // the text before the tab reaches its stop
+	Assert::same(9, $tokens[6]->getVisualColumn($style));
 });
 
 
@@ -319,4 +335,43 @@ test('a node moved into the subtree that replaced it stands in the order once', 
 		Assert::same($i, $index->getOrdinal($token));
 		Assert::same($index->getTokens()[$i - 1] ?? null, $token->getPrevious());
 	}
+});
+
+
+test('line width counts the indentation visually and drops trailing whitespace', function () {
+	$file = (new Parser)->parse("<?php\n\tif (\$a) { // c   \n\t\t\$bb = 'ěšč';\t\n\t}\n");
+	$style = new Style(tabWidth: 4);
+	$if = $file->statements[0]->getFirstToken();
+	$assign = $file->find(ExpressionStatementNode::class)[0];
+	$close = $file->getLastToken()->getPrevious();
+	assert($close !== null);
+	Assert::same(strlen('    if ($a) { // c'), Indentation::measureLineWidth($if, $style));
+	Assert::same(strlen('        $bb = ') + 5 + 1, Indentation::measureLineWidth($assign->semicolon, $style));
+	Assert::same(5, Indentation::measureLineWidth($close, $style));
+
+	// a tab inside the line moves to the next stop as well, which is what the editor shows
+	$file = (new Parser)->parse("<?php\n\$a = [\n\t'xy'\t=> 1,\n];\n");
+	$item = $file->find(ArrayItemNode::class)[0];
+	$first = $item->getFirstToken();
+	Assert::same(strlen("    'xy'    => 1,"), Indentation::measureLineWidth($first, $style));
+	Assert::same(strlen("    'xy'    ") + 1, $item->doubleArrow?->getVisualColumn($style));
+});
+
+
+test('line width ends and starts at a line ending inside a token or a comment', function () {
+	$measure = function (string $code, string $text): int {
+		$token = array_find((new Parser)->parse($code)->getTokens(), fn(Token $token) => $token->text === $text);
+		assert($token !== null);
+		return Indentation::measureLineWidth($token, new Style);
+	};
+
+	Assert::same(strlen('$x = "a'), $measure("<?php\n\$x = \"a\nbbbb\";\n", '$x'));
+	Assert::same(strlen('bbbb";'), $measure("<?php\n\$x = \"a\nbbbb\";\n", ';'));
+	Assert::same(strlen('foo(); /* one'), $measure("<?php\nfoo(); /* one\n  two */ bar();\n", 'foo'));
+	Assert::same(strlen('  two */ bar();'), $measure("<?php\nfoo(); /* one\n  two */ bar();\n", 'bar'));
+	Assert::same(strlen('$a = <<<X'), $measure("<?php\n\$a = <<<X\n  long line here\n  X;\n", '$a'));
+	Assert::same(strlen('  X;'), $measure("<?php\n\$a = <<<X\n  long line here\n  X;\n", ';'));
+	Assert::same(strlen('<?php foo(); ?>'), $measure("<?php foo(); ?>\n<p>x</p>\n<?php bar();\n", 'foo'));
+	Assert::same(strlen('<?php bar();'), $measure("<?php foo(); ?>\n<p>x</p>\n<?php bar();\n", 'bar'));
+	Assert::same(strlen('$a = 1;'), $measure("<?php\r\n\$a = 1;\r\n", '$a'));
 });

@@ -13,7 +13,7 @@ use function count, strlen;
 /**
  * Order and positions of the tokens of a file, built lazily and kept up to date after mutations rather than
  * rebuilt: the tokens of adopted and released children move at the next query, and the numbering, the lines,
- * the offsets and the columns after a change are brought up to date as far as the queries reach.
+ * the offsets, the columns and the visual columns after a change are brought up to date as far as the queries reach.
  * @internal the tokens and the nodes ask it for what they give their callers
  */
 final class TokenIndex
@@ -40,6 +40,14 @@ final class TokenIndex
 
 	/** number of leading tokens whose offset and column are current */
 	private int $positioned = 0;
+
+	/** @var array<int, int>  visual column of the token by index, valid up to `$visualized`, for the tab width `$visualTabWidth` */
+	private array $visualColumns = [];
+
+	/** number of leading tokens whose visual column is current */
+	private int $visualized = 0;
+
+	private int $visualTabWidth = 0;
 
 	/** the tree changed shape since the tokens were last moved */
 	private bool $structureChanged = false;
@@ -274,6 +282,56 @@ final class TokenIndex
 
 
 	/**
+	 * Column with tabs expanded to the next multiple of the tab width, 1-based.
+	 */
+	public function getVisualColumn(Token $token, Style $style): int
+	{
+		$index = $this->getOrdinal($token);
+		if ($this->visualTabWidth !== $style->tabWidth) {
+			$this->visualTabWidth = $style->tabWidth;
+			$this->visualized = 0;
+		}
+
+		if ($this->visualized <= $index) {
+			$column = 0;
+			if ($this->visualized > 0) {
+				$previous = $this->tokens[$this->visualized - 1];
+				$column = self::advanceVisually($this->visualColumns[$this->visualized - 1] - 1, $previous->text, $style);
+				foreach ($previous->trailingTrivia as $trivia) {
+					$column = self::advanceVisually($column, $trivia->text, $style);
+				}
+			}
+
+			for ($i = $this->visualized; $i <= $index; $i++) {
+				$current = $this->tokens[$i];
+				foreach ($current->leadingTrivia as $trivia) {
+					$column = self::advanceVisually($column, $trivia->text, $style);
+				}
+
+				$this->visualColumns[$i] = $column + 1;
+				$column = self::advanceVisually($column, $current->text, $style);
+				foreach ($current->trailingTrivia as $trivia) {
+					$column = self::advanceVisually($column, $trivia->text, $style);
+				}
+			}
+
+			$this->visualized = $index + 1;
+		}
+
+		return $this->visualColumns[$index];
+	}
+
+
+	/** The visual column, 0-based, after the text written from the column given; a line ending starts from zero. */
+	private static function advanceVisually(int $column, string $text, Style $style): int
+	{
+		return preg_match('~[\r\n]~', $text)
+			? Indentation::advance(0, (string) preg_replace('~^.*[\r\n]~s', '', $text), $style)
+			: Indentation::advance($column, $text, $style);
+	}
+
+
+	/**
 	 * Number of line endings (`"\n"`, `"\r\n"` or a lone `"\r"`) in the text.
 	 * @internal shared by the classes of the library
 	 */
@@ -355,10 +413,11 @@ final class TokenIndex
 	}
 
 
-	/** The offsets and columns from the index on are stale. */
+	/** The offsets, columns and visual columns from the index on are stale. */
 	private function invalidatePositions(int $from): void
 	{
 		$this->positioned = min($this->positioned, $from);
+		$this->visualized = min($this->visualized, $from);
 	}
 
 
