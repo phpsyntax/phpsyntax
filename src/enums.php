@@ -102,6 +102,23 @@ enum TraverseAction
 
 
 /**
+ * Where the comments a removed node owns go: those inside it and on its line, its doc comment and the comments right
+ * above it. A comment above it set apart by a blank line belongs to no node and stays where it stands.
+ */
+enum CommentPolicy
+{
+	/** to the token after the node, which is where they stood; the node goes without them */
+	case MoveToNextToken;
+
+	/** right after the token before the node, or with none to the next one; the node goes without them */
+	case MoveToPreviousToken;
+
+	/** out of the tree with the node, which keeps them, so that the node can be inserted elsewhere */
+	case StayWithNode;
+}
+
+
+/**
  * What a slot is to the indentation of the lines its node spreads over, relative to the line the node
  * begins on; the level each role stands for is left to whatever lays the code out.
  */
