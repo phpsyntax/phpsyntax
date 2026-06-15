@@ -19,7 +19,7 @@ final class FileNode extends Node
 {
 	public const Slots = ['statements', 'endOfFile'];
 
-	/** version of the tree: every write to a slot, a list, or the text or trivia of a token increments it */
+	/** version of the tree: every write to a slot, a list, or the text or trivia of a token that changes it increments it */
 	public private(set) int $revision = 0;
 
 	private ?TokenIndex $index = null;
@@ -46,7 +46,9 @@ final class FileNode extends Node
 	protected function prepareSlot(string $slot, Node|Token|null $value): Node|Token|null
 	{
 		$old = $this->$slot ?? null;
-		if ($value !== null) {
+		if ($value === $old) {
+			return $value;
+		} elseif ($value !== null) {
 			$this->prepareValue($value, $old);
 		}
 

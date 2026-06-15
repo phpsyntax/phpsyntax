@@ -219,6 +219,8 @@ final class ModifiersNode extends Node implements \Countable, \IteratorAggregate
 		$index = $old instanceof Token ? array_search($old, $this->tokens, strict: true) : false;
 		if ($index === false || !$new instanceof Token) {
 			throw self::describeChildMismatch($old);
+		} elseif ($new === $old) {
+			return;
 		}
 
 		$this->prepareValue($new, $old);

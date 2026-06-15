@@ -106,6 +106,10 @@ abstract class Node implements \Stringable
 	{
 		$old = $this->$slot ?? null;
 		if ($value !== null && ($value->parent !== null || $this->parent !== null || $value === $this)) {
+			if ($value === $old) {
+				return $value;
+			}
+
 			$this->prepareValue($value, $old); // the value may stand elsewhere or hold this node
 		}
 
@@ -118,6 +122,9 @@ abstract class Node implements \Stringable
 				$old->parent = null;
 			}
 
+			return $value;
+
+		} elseif ($value === $old) { // an empty slot cleared
 			return $value;
 		}
 
@@ -543,6 +550,30 @@ abstract class Node implements \Stringable
 		}
 
 		return $this;
+	}
+
+
+	/**
+	 * Replaces this node in its parent; the trivia around the old node stay in place around the new one, or with
+	 * the tokens on either side when the new one has no tokens, an empty list, and where the new one then stands
+	 * right against a token it would be read together with, `.` against `1` or `return` against `FOO`, a space
+	 * keeps the two apart.
+	 */
+	public function replaceWith(self $node): void
+	{
+		Surgery::replace($this, $node);
+	}
+
+
+	/**
+	 * Removes this node from its list, together with the separator that goes with it. A node alone on its
+	 * lines takes the lines with it (indentation and line ending), otherwise the whitespace around stays; its
+	 * comments, those on its edges included, go where the policy says, each with its indentation and the line
+	 * ending after it.
+	 */
+	public function remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken): void
+	{
+		Surgery::remove($this, $comments);
 	}
 
 

@@ -7,9 +7,9 @@
 
 namespace PhpSyntax\Nodes;
 
-use PhpSyntax\{Node, Token};
+use PhpSyntax\{CommentPolicy, Node, Token};
 use PhpSyntax\Nodes\Expression\{ExitNode, ThrowNode};
-use PhpSyntax\Nodes\Statement\{BreakNode, ContinueNode, ExpressionStatementNode, GotoNode, ReturnNode};
+use PhpSyntax\Nodes\Statement\{BreakNode, ContinueNode, EmptyStatementNode, ExpressionStatementNode, GotoNode, ReturnNode};
 
 
 /**
@@ -19,6 +19,31 @@ use PhpSyntax\Nodes\Statement\{BreakNode, ContinueNode, ExpressionStatementNode,
  */
 abstract class StatementNode extends Node
 {
+	/**
+	 * Removes the statement as `Node::remove()` does. A statement ended by a close tag leaves the tag behind as
+	 * an empty statement, so that the text after it stays text. A statement that opens its code too, as `<?=`
+	 * does, goes whole, and so does the empty statement of a close tag, whose removal is for the caller to decide.
+	 */
+	public function remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken): void
+	{
+		$tag = $this->getLastToken();
+		if (
+			$tag->is(Token::CloseTag)
+			&& $tag->parent
+			&& !$this instanceof EmptyStatementNode
+			&& !$this->getFirstToken()->is(Token::OpenTagWithEcho)
+			&& $this->parent instanceof PlainNodeList
+		) {
+			$leading = $tag->leadingTrivia;
+			$tag->parent->replaceChild($tag, Token::fromText(';'));
+			$this->parent->insert($this->parent->indexOf($this) + 1, new EmptyStatementNode($tag));
+			$tag->setLeadingTrivia($leading); // neither the replacement nor the insertion lays the tag out anew
+		}
+
+		parent::remove($comments);
+	}
+
+
 	/**
 	 * Whether the code does not go on after the statement: `return`, `break`, `continue`, `goto`, `throw` or `exit`.
 	 * It reads the statement itself, so an `if` whose every branch returns is no such statement; that is control flow.

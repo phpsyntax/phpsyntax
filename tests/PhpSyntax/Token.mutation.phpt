@@ -42,6 +42,81 @@ test('setText and trivia setters record a non-structural mutation', function () 
 });
 
 
+test('replaceWith puts a token of another kind in place, the trivia around staying', function () {
+	$file = parse('<?php class A { /* c */ protected function f() {} }');
+	$protected = array_find(tokens($file), fn(Token $token) => $token->is(Token::Protected)) ?? throw new LogicException;
+	$public = new Token(Token::Public, 'public');
+	$protected->replaceWith($public);
+	Assert::same('<?php class A { /* c */ public function f() {} }', (string) $file);
+	Assert::true($public->is(Token::Public));
+	Assert::null($protected->parent);
+	Assert::same([], $protected->leadingTrivia);
+
+	// a token the neighbor would be read together with is kept apart from it
+	$file = parse('<?php $a+1;');
+	$plus = tokens($file)[1];
+	$plus->replaceWith(new Token(ord('.'), '.'));
+	Assert::same('<?php $a. 1;', (string) $file); // .1 would be a number
+
+	// a separator of a list, and a refusal that moves nothing
+	$file = parse('<?php f($a, $b);');
+	$comma = array_find(tokens($file), fn(Token $token) => $token->is(',')) ?? throw new LogicException;
+	Assert::exception(fn() => $comma->replaceWith($comma->getNext() ?? throw new LogicException), LogicException::class);
+	Assert::same('<?php f($a, $b);', (string) $file);
+	Assert::exception(fn() => new Token(ord(';'), ';')->replaceWith(new Token(ord(','), ',')), LogicException::class, 'A token without a parent cannot be replaced.');
+});
+
+
+test('startsLine and indentation', function () {
+	$file = parse("<?php\n\t\$a; \$b;\n\n  // c\n    \$c;");
+	[$a, , $b, , $c] = tokens($file);
+	Assert::true($a->startsLine());
+	Assert::false($b->startsLine());
+	Assert::true($c->startsLine());
+	Assert::same("\t", $a->getIndentation());
+	Assert::same('', $b->getIndentation());
+	Assert::same('    ', $c->getIndentation());
+
+	$c->setIndentation("\t\t");
+	Assert::same("<?php\n\t\$a; \$b;\n\n  // c\n\t\t\$c;", (string) $file);
+	$a->setIndentation('');
+	Assert::same("<?php\n\$a; \$b;\n\n  // c\n\t\t\$c;", (string) $file);
+	Assert::exception(fn() => $b->setIndentation("\t"), LogicException::class, "Token `\$b` does not start a line.");
+
+	// the space after an inline comment is not indentation and survives reindenting
+	$file = parse("<?php\n/*enum*/ final class A {}");
+	[$final] = tokens($file);
+	Assert::same('', $final->getIndentation());
+	$final->setIndentation("\t");
+	Assert::same("<?php\n\t/*enum*/ final class A {}", (string) $file);
+});
+
+
+test('isFollowedByLineEnding() sees a single line ending and nothing but whitespace up to the next token', function () {
+	[$a, $plus, $b, $dot, $c, $and, $d, $semicolon] = tokens(parse("<?php \$a +\n\t\$b .\n\n\t\$c && // x\n\t\$d;"));
+	Assert::true($plus->isFollowedByLineEnding());
+	Assert::false($a->isFollowedByLineEnding());
+	Assert::false($dot->isFollowedByLineEnding()); // a blank line is two line endings
+	Assert::false($and->isFollowedByLineEnding()); // a comment stands between
+	Assert::false($semicolon->isFollowedByLineEnding()); // nothing follows
+
+	// a close tag ends its line by itself, and a token without a file has nothing after it
+	[, $close] = tokens(parse("<?php \$a ?>\nhtml"));
+	Assert::same(Token::CloseTag, $close->id);
+	Assert::true($close->isFollowedByLineEnding());
+	Assert::false(new Token(ord('+'), '+')->isFollowedByLineEnding());
+});
+
+
+test('the line indentation of a line a heredoc closes on is written in its closing marker', function () {
+	$file = parse("<?php\n\t\$a = [<<<A\n\t\tx\n\t\tA, 1];\n");
+	$one = array_find(tokens($file), fn(Token $token) => $token->text === '1') ?? throw new LogicException;
+	Assert::same('', $one->getIndentation());
+	Assert::same("\t\t", $one->getLineIndentation());
+	Assert::same("\t", tokens($file)[0]->getLineIndentation());
+});
+
+
 test('ensureStartsLine and removeTrailingWhitespace', function () {
 	$file = parse("<?php\n\$a;  \$b; // c  \n\$d;  ");
 	[$a, $semicolonA, $b, $semicolonB, $d, $semicolonD] = tokens($file);

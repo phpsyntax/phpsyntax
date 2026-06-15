@@ -102,6 +102,20 @@ enum TraverseAction
 
 
 /**
+ * Where the comments of a removed node go.
+ */
+enum CommentPolicy
+{
+	case MoveToNextToken;
+
+	/** with no token before the node, to the next one */
+	case MoveToPreviousToken;
+
+	case Drop;
+}
+
+
+/**
  * What a slot is to the indentation of the lines its node spreads over, relative to the line the node
  * begins on; the level each role stands for is left to whatever lays the code out.
  */
