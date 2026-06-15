@@ -33,6 +33,10 @@ final class NameNode extends Node
 		get => $this->token->text;
 		set {
 			$old = $this->token;
+			if ($value === $old->text) {
+				return;
+			}
+
 			$token = new Token(self::tokenize($value), $value, $old->line, $old->pos);
 			$token->setLeadingTrivia($old->leadingTrivia);
 			$token->setTrailingTrivia($old->trailingTrivia);

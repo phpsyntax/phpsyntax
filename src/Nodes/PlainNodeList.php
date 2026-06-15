@@ -118,6 +118,8 @@ final class PlainNodeList extends NodeList
 		$index = $old instanceof Node ? $this->indexOf($old) : throw self::describeChildMismatch($old);
 		if (!$new instanceof Node) {
 			throw new \InvalidArgumentException('A token cannot be an item of `' . static::class . '`.');
+		} elseif ($new === $old) {
+			return;
 		}
 
 		/** @var T $new  the item type is erased at runtime */

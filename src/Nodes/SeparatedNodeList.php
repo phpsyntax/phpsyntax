@@ -120,7 +120,10 @@ final class SeparatedNodeList extends NodeList
 	/** Writes the separator after the last item, or removes it with null. */
 	public function setTrailingSeparator(?Token $separator): static
 	{
-		if ($separator && $this->items === []) {
+		$current = $this->hasTrailingSeparator() ? $this->separators[count($this->separators) - 1] : null;
+		if ($separator === $current) {
+			return $this;
+		} elseif ($separator && $this->items === []) {
 			throw new \LogicException('An empty list has no item a trailing separator could follow.');
 		} elseif ($separator) {
 			$this->prepareValue($separator, null);
@@ -205,7 +208,10 @@ final class SeparatedNodeList extends NodeList
 
 	public function replaceChild(Node|Token $old, Node|Token $new): void
 	{
-		if ($old instanceof Node && $new instanceof Node) {
+		if ($old === $new) {
+			$this->findSlotOf($old) ?? throw self::describeChildMismatch($old);
+			return;
+		} elseif ($old instanceof Node && $new instanceof Node) {
 			$index = $this->indexOf($old);
 			/** @var T $new  the item type is erased at runtime */
 			$this->prepareValue($new, $old);
