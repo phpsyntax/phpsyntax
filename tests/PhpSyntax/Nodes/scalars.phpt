@@ -82,6 +82,17 @@ test('writing a value keeps the delimiter and escapes what it must', function ()
 	$node->setValue("x\ty\"");
 	Assert::same('b"x\ty\""', $node->token->text);
 	Assert::same("x\ty\"", $node->toValue());
+
+	// the value a literal already reads as leaves its spelling alone, another delimiter writes it anew
+	foreach (['"\x41"', '"$"', "'" . chr(92) . "n'"] as $code) {
+		$node = literal($code, StringNode::class);
+		$node->setValue($node->toValue());
+		Assert::same($code, $node->token->text);
+	}
+
+	$node = literal('"\x41"', StringNode::class);
+	$node->setValue($node->toValue(), "'");
+	Assert::same("'A'", $node->token->text);
 });
 
 

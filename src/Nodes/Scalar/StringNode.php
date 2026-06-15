@@ -57,13 +57,16 @@ final class StringNode extends ScalarNode
 
 	/**
 	 * Writes the literal: the value escaped as the delimiter needs it, in the delimiter given or in the one
-	 * it has. The two go together, because the delimiter decides how the value is written.
+	 * it has. The two go together, because the delimiter decides how the value is written. A literal that
+	 * already reads as the value, in that delimiter, stays as it is written.
 	 */
 	public function setValue(string $value, ?string $quote = null): static
 	{
 		$quote ??= $this->quote;
 		if ($quote !== '"' && $quote !== "'") {
 			throw new \InvalidArgumentException('A string is written with `\'` or `"`, not ' . Helpers::formatCode($quote) . '.');
+		} elseif ($quote === $this->quote && $value === $this->toValue()) {
+			return $this;
 		}
 
 		$prefix = substr($this->token->text, 0, strpos($this->token->text, $this->quote) ?: 0);

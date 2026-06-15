@@ -2,8 +2,8 @@
 
 use PhpSyntax\{Builder, Parser, Printer, Token, Trivia};
 use PhpSyntax\Nodes\{ArgumentNode, FileNode, PlainNodeList, SeparatedNodeList, StatementNode};
-use PhpSyntax\Nodes\Expression\ArrayNode;
-use PhpSyntax\Nodes\Statement\ExpressionStatementNode;
+use PhpSyntax\Nodes\Expression\{ArrayNode, BinaryOpNode};
+use PhpSyntax\Nodes\Statement\{BlockNode, ExpressionStatementNode, IfNode};
 use Tester\Assert;
 
 require __DIR__ . '/../bootstrap.php';
@@ -182,6 +182,49 @@ test('a subtree entering the file with a hole a write left in it is refused', fu
 });
 
 
+test('the order and the positions follow mutations of every kind', function () {
+	$file = (new Parser)->parse("<?php\nfunction f(\$a) {\n\treturn [\n\t\t1,\n\t\t2\n\t];\n}\nfoo(1, 2);\n\$x = 'a' . 'b';\n");
+	$verify = function () use ($file): void {
+		$describe = fn(Token $token) => [$token->text, $token->getCurrentLine(), $token->getCurrentColumn(), $token->getCurrentOffset()];
+		$fresh = (new Parser)->parse(Printer::print($file));
+		$index = $file->getIndex();
+		Assert::same(array_map($describe, $fresh->getIndex()->getTokens()), array_map($describe, $index->getTokens()));
+		foreach ($index->getTokens() as $i => $token) {
+			Assert::same($i, $index->getOrdinal($token));
+			Assert::same($index->getTokens()[$i - 1] ?? null, $token->getPrevious());
+		}
+	};
+	$file->getLastToken()->getCurrentLine(); // builds the index before the mutations
+	$file->statements[1]->remove(); // foo(1, 2);
+	$verify();
+	$file->statements->insert(1, (new Builder)->statement("\$y = 1;\n")); // tokens numbered by another tree
+	$verify();
+	$concat = $file->find(BinaryOpNode::class)[0];
+	$concat->replaceWith((new Builder)->expression("'ab'"));
+	$verify();
+	$array = $file->find(ArrayNode::class)[0];
+	$array->items->setTrailingSeparator(new Token(ord(','), ','));
+	$verify();
+	$semicolon = $file->getLastToken()->getPrevious();
+	Assert::type(Token::class, $semicolon);
+	$semicolon->setTrailingTrivia([new Trivia(Trivia::LineEnding, "\n"), new Trivia(Trivia::LineEnding, "\n")]);
+	$verify();
+	$semicolon->setLeadingTrivia([new Trivia(Trivia::Whitespace, '  ')]);
+	$verify();
+
+	$other = (new Parser)->parse("<?php\n\$z;\n");
+	$moved = $other->statements[0];
+	Assert::same(2, $moved->getStartLine()); // numbered by the index of the other file
+	$other->statements->removeItem($moved);
+	Assert::null($moved->getStartLine());
+	$moved->setEdgeTrivia(leading: []); // the open tag of the other file
+	$file->statements->append($moved);
+	$verify();
+	Assert::same(11, $moved->getStartLine()); // the statement inserted above ends its line, as its neighbor does
+	Assert::same(1, $other->getLastToken()->getCurrentLine());
+});
+
+
 test('offsets and columns stay right when the queries reach only part of the file', function () {
 	$file = (new Parser)->parse("<?php\n\$a = f(1);\n\$b = g(2, 'é');\n\$c = h(3);\n");
 	$tokens = $file->getIndex()->getTokens();
@@ -246,4 +289,34 @@ test('a trailing separator taken away before the index caught up with its insert
 	$list->setTrailingSeparator(null);
 	Assert::same("<?php\nf(\$a, \$b);\n", Printer::print($file));
 	Assert::same(2, $file->getLastToken()->getPrevious()?->getCurrentLine());
+});
+
+
+test('a node moved into the subtree that replaced it stands in the order once', function () {
+	// the way a body without braces is enclosed in them: the block takes the place of the statement,
+	// the statement then moves into the block, and both are adopted children of the same change
+	$parser = new Parser;
+	$builder = new Builder;
+	$file = $parser->parse("<?php\nif (\$a)\n\t\$b = 1;\n");
+	$file->getIndex()->getTokens();
+
+	$if = $file->statements[0];
+	Assert::type(IfNode::class, $if);
+	$body = $if->body;
+	$block = $builder->statement('{}');
+	Assert::type(BlockNode::class, $block);
+	Assert::type(StatementNode::class, $body);
+	$body->replaceWith($block);
+	$block->statements->append($body);
+
+	$fresh = (new Parser)->parse(Printer::print($file));
+	Assert::same(
+		array_map(fn(Token $token) => $token->text, $fresh->getIndex()->getTokens()),
+		array_map(fn(Token $token) => $token->text, $file->getIndex()->getTokens()),
+	);
+	$index = $file->getIndex();
+	foreach ($index->getTokens() as $i => $token) {
+		Assert::same($i, $index->getOrdinal($token));
+		Assert::same($index->getTokens()[$i - 1] ?? null, $token->getPrevious());
+	}
 });

@@ -62,6 +62,10 @@ final class Token extends \PhpToken implements \Stringable
 	 */
 	public function setText(string $text): static
 	{
+		if ($text === $this->text) {
+			return $this;
+		}
+
 		$file = $this->getFile();
 		$lineEndings = $file ? TokenIndex::countLineEndings($text) - TokenIndex::countLineEndings($this->text) : 0;
 		$this->text = $text;
@@ -77,6 +81,10 @@ final class Token extends \PhpToken implements \Stringable
 	 */
 	public function setLeadingTrivia(array $trivia): static
 	{
+		if ($trivia === $this->leadingTrivia) {
+			return $this;
+		}
+
 		$file = $this->getFile();
 		$lineEndings = $file ? TokenIndex::countLineEndingsIn($trivia) - TokenIndex::countLineEndingsIn($this->leadingTrivia) : 0;
 		$this->leadingTrivia = $trivia;
@@ -91,11 +99,26 @@ final class Token extends \PhpToken implements \Stringable
 	 */
 	public function setTrailingTrivia(array $trivia): static
 	{
+		if ($trivia === $this->trailingTrivia) {
+			return $this;
+		}
+
 		$file = $this->getFile();
 		$lineEndings = $file ? TokenIndex::countLineEndingsIn($trivia) - TokenIndex::countLineEndingsIn($this->trailingTrivia) : 0;
 		$this->trailingTrivia = $trivia;
 		$file?->tokenChanged($this, $lineEndings, leading: false);
 		return $this;
+	}
+
+
+	/**
+	 * Replaces this token in its parent by another, which is how the kind changes, `setText()` writing the same
+	 * kind alone; the trivia around the old token stay around the new one, and where the new one then stands right
+	 * against a token it would be read together with, a space keeps the two apart.
+	 */
+	public function replaceWith(self $token): void
+	{
+		Surgery::replace($this, $token);
 	}
 
 
@@ -269,8 +292,11 @@ final class Token extends \PhpToken implements \Stringable
 	{
 		Helpers::checkWhitespace($space);
 		$this->refuseInterpolation();
-		if ($this->getTrailingSpace() === null) {
+		$current = $this->getTrailingSpace();
+		if ($current === null) {
 			throw new \LogicException('Token ' . Helpers::formatCode($this->text) . ' is followed by a line ending or a comment, so `setTrailingSpace()` cannot write the space after it.');
+		} elseif ($current === $space) {
+			return $this;
 		}
 
 		return $this->setTrailingTrivia($space === '' ? [] : [new Trivia(Trivia::Whitespace, $space)]);
@@ -336,7 +362,9 @@ final class Token extends \PhpToken implements \Stringable
 		Helpers::checkWhitespace($indentation);
 		$this->refuseInterpolation();
 		if (!$this->startsLine()) {
-			throw new \LogicException('Token ' . Helpers::formatCode($this->text) . ' does not start a line, so the blank lines before it cannot be set.');
+			throw new \LogicException('Token ' . Helpers::formatCode($this->text) . ' does not start a line, so its indentation cannot be set.');
+		} elseif ($this->getIndentation() === $indentation) {
+			return $this;
 		}
 
 		$leading = $this->leadingTrivia;
@@ -616,6 +644,11 @@ final class Token extends \PhpToken implements \Stringable
 		$end = $start;
 		while ($end < count($leading) && $leading[$end]->id === Trivia::LineEnding) {
 			$end++;
+		}
+
+		$current = array_slice($leading, $start, $end - $start);
+		if (count($current) === $count && array_all($current, fn(Trivia $trivia) => $trivia->text === $lineEnding)) {
+			return $this;
 		}
 
 		$blank = array_fill(0, $count, new Trivia(Trivia::LineEnding, $lineEnding));

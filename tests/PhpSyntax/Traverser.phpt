@@ -1,7 +1,8 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{Node, Parser, Token, TraverseAction, Traverser};
+use PhpSyntax\{Builder, Node, Parser, Token, TraverseAction, Traverser};
 use PhpSyntax\Nodes\Expression\{FunctionCallNode, VariableNode};
+use PhpSyntax\Nodes\Statement\ExpressionStatementNode;
 use Tester\Assert;
 
 require __DIR__ . '/../bootstrap.php';
@@ -25,6 +26,66 @@ test('pre-order with enter and leave', function () {
 		'>FileNode', '>PlainNodeList', '>ExpressionStatementNode', '>VariableNode', ">'\$a'", "<'\$a'", '<VariableNode',
 		">';'", "<';'", '<ExpressionStatementNode', '<PlainNodeList', ">''", "<''", '<FileNode',
 	], $log);
+});
+
+
+test('a replaced node is not descended into, but is left like any other', function () {
+	$file = (new Parser)->parse('<?php $a; $b;');
+	$log = [];
+	Traverser::traverse(
+		$file,
+		function (Node|Token $node) use (&$log) {
+			$log[] = '>' . label($node);
+			if ($node instanceof VariableNode && $node->name instanceof Token && $node->name->text === '$a') {
+				$node->replaceWith((new Builder)->expression('$x'));
+			}
+		},
+		function (Node|Token $node) use (&$log) { $log[] = '<' . label($node); },
+	);
+	Assert::same('<?php $x; $b;', (string) $file);
+	Assert::same([
+		'>FileNode', '>PlainNodeList', '>ExpressionStatementNode', '>VariableNode', '<VariableNode',
+		">';'", "<';'", '<ExpressionStatementNode',
+		'>ExpressionStatementNode', '>VariableNode', ">'\$b'", "<'\$b'", '<VariableNode', ">';'", "<';'", '<ExpressionStatementNode',
+		'<PlainNodeList', ">''", "<''", '<FileNode',
+	], $log);
+});
+
+
+test('a callback keeping a state of its own sees a leave for every enter', function () {
+	$file = (new Parser)->parse('<?php $a; $b;');
+	$depth = 0;
+	$deepest = 0;
+	Traverser::traverse(
+		$file,
+		function (Node|Token $node) use (&$depth, &$deepest) {
+			$deepest = max($deepest, ++$depth);
+			if ($node instanceof VariableNode) {
+				$node->replaceWith((new Builder)->expression('f()'));
+			}
+		},
+		function () use (&$depth) { $depth--; },
+	);
+	Assert::same('<?php f(); f();', (string) $file);
+	Assert::same(0, $depth); // every enter was paid back
+	Assert::same(4, $deepest);
+});
+
+
+test('siblings removed meanwhile are skipped, inserted ones wait for the next walk', function () {
+	$file = (new Parser)->parse('<?php $a; $b; $c;');
+	$visited = [];
+	Traverser::traverse($file, function (Node|Token $node) use (&$visited, $file) {
+		if ($node instanceof ExpressionStatementNode) {
+			$visited[] = $name = $node->expression->getFirstToken()->text;
+			if ($name === '$a') {
+				$file->statements[1]->remove();
+				$file->statements->append((new Builder)->statement('$d;'));
+			}
+		}
+	});
+	Assert::same(['$a', '$c'], $visited);
+	Assert::same('<?php $a;  $c;$d;', (string) $file);
 });
 
 
