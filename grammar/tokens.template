@@ -1,26 +1,4 @@
-/* Copied from Latte grammar/tokens.template (https://latte.nette.org), itself a port of nikic/php-parser grammar/tokens.template. */
-<?php declare(strict_types=1);
-
-/**
- * This file is part of the Latte (https://latte.nette.org)
- * Copyright (c) 2008 David Grudl (https://davidgrudl.com)
- */
-
 $meta #
-#semval($) $this->semValue
-#semval($,%t) $this->semValue
-#semval(%n) $this->stackPos-(%l-%n)
-#semval(%n,%t) $this->stackPos-(%l-%n)
-
-namespace Latte\Compiler;
-#include;
-
-/* GENERATED file based on grammar/tokens.y */
-final class Token
-{
-	public const
 #tokenval
-		%s = %n,
+%s = %n
 #endtokenval
-	foo = 0;
-}
