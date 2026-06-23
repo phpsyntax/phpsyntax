@@ -21,13 +21,15 @@
 		"nette/phpstan-rules": "^1.0"
 	},
 	"autoload": {
+		"classmap": ["src/"],
 		"psr-4": {
 			"PhpSyntax\\": "src"
 		}
 	},
 	"scripts": {
 		"phpstan": "phpstan analyse",
-		"tester": "tester tests -s"
+		"tester": "tester tests -s",
+		"compile-grammar": "php grammar/build.php"
 	},
 	"config": {
 		"allow-plugins": {
