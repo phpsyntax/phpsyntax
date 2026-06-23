@@ -7,7 +7,9 @@
 use PhpSyntax\Nodes\EmptyArrayItemNode;
 use PhpSyntax\Nodes\Expression\TernaryNode;
 use PhpSyntax\Nodes\Expression\VariableNode;
+use PhpSyntax\Nodes\NodeList;
 use PhpSyntax\Nodes\Scalar\IntegerNode;
+use PhpSyntax\Nodes\Statement\BlockNode;
 use PhpSyntax\Token;
 use PhpSyntax\TokenKind;
 use Tester\Assert;
@@ -77,6 +79,15 @@ test('replaceChild checks the slot type', function () {
 		InvalidArgumentException::class,
 		'PhpSyntax\Nodes\Expression\VariableNode is not a child of PhpSyntax\Nodes\Expression\TernaryNode.',
 	);
+});
+
+
+test('list slots are replaced by lists only', function () {
+	$block = new BlockNode(token('{'), $stmts = new NodeList, token('}'));
+	Assert::same($block, $stmts->parent);
+	$block->replaceChild($stmts, $other = new NodeList);
+	Assert::same($other, $block->statements);
+	Assert::exception(fn() => $block->replaceChild($other, token('x')), InvalidArgumentException::class, "%a% cannot be placed in the slot 'statements' %a%");
 });
 
 
