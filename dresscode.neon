@@ -1,0 +1,24 @@
+presets:
+	- nette
+
+rules:
+	strict-comparison: true
+	final-internal-class: true
+	ternary-for-simple-branch: true
+
+paths:
+	- src
+	- tests
+
+excludePaths:
+	- fixtures
+	- corpus
+	- dump
+
+fileExtensions:
+	- php
+	- phpt
+
+overrides:
+	- paths: [src]
+	  rules: {global-imports: true}
