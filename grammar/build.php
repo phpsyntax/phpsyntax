@@ -35,6 +35,7 @@ if (isset($options['--strip-actions'])) {
 
 // a checkout on Windows may hand the file over with CRLF, which the patterns below do not expect
 $grammar = str_replace("\r\n", "\n", file_get_contents($grammarFile));
+checkActionCoverage($grammar);
 $grammar = preprocessGrammar($grammar);
 file_put_contents($tmpGrammarFile, $grammar);
 
@@ -216,4 +217,49 @@ function buildTokenKind(string $list): string
 		}
 
 		PHP);
+}
+
+
+/**
+ * Every alternative with two or more symbols must have an action that uses every symbol, otherwise tokens
+ * would silently drop out of the tree; a single symbol passes through by default.
+ */
+function checkActionCoverage(string $grammar): void
+{
+	$body = explode("\n%%\n", $grammar)[1];
+	$body = preg_replace(regex('(?&string)(*SKIP)(*FAIL)|(?&code)(*SKIP)(*FAIL)|/\*.*?\*/'), '', $body);
+	$errors = [];
+	foreach (preg_split('~^(?=\w+:)~m', $body) as $chunk) {
+		if (!preg_match('~^(\w+):\s*(.*?)\s*;?\s*$~s', $chunk, $m)) {
+			continue;
+		}
+
+		[, $name, $content] = $m;
+		$alternatives = preg_split(regex('(?&string)(*SKIP)(*FAIL)|(?&code)(*SKIP)(*FAIL)|\|'), $content);
+		foreach ($alternatives as $alternative) {
+			$action = preg_match(regex('(?&code)\s*$'), $alternative, $am) ? $am[0] : null;
+			$symbols = preg_split('~\s+~', trim($action === null ? $alternative : substr($alternative, 0, -strlen($am[0]))), -1, PREG_SPLIT_NO_EMPTY);
+			if (($index = array_search('%prec', $symbols, strict: true)) !== false) {
+				array_splice($symbols, $index, 2);
+			}
+
+			if (count($symbols) < 2) {
+				continue;
+			} elseif ($action === null) {
+				$errors[] = "$name: '" . implode(' ', $symbols) . "' has no action";
+				continue;
+			}
+
+			foreach ($symbols as $i => $symbol) {
+				if (!preg_match('~\$' . ($i + 1) . '\b~', $action)) {
+					$errors[] = "$name: '" . implode(' ', $symbols) . "' does not use \$" . ($i + 1) . " ($symbol)";
+				}
+			}
+		}
+	}
+
+	if ($errors) {
+		echo "Action coverage errors:\n  " . implode("\n  ", $errors) . "\n";
+		exit(1);
+	}
 }
