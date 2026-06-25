@@ -6,8 +6,8 @@ use Tester\Assert;
 require __DIR__ . '/../bootstrap.php';
 
 
-// host tokens that never become a token: trivia, errors, and aliases of listed constants
-$ignored = ['T_WHITESPACE', 'T_COMMENT', 'T_DOC_COMMENT', 'T_OPEN_TAG', 'T_BAD_CHARACTER', 'T_DOUBLE_COLON'];
+// host tokens that never become a token: the lexer error, and the alias of T_PAAMAYIM_NEKUDOTAYIM
+$ignored = ['T_BAD_CHARACTER', 'T_DOUBLE_COLON'];
 
 
 test('every host T_* constant has a kind or is explicitly ignored', function () use ($ignored) {

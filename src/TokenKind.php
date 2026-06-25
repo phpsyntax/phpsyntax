@@ -164,6 +164,13 @@ final class TokenKind
 		OpenTagWithEcho = 403,
 		HaltCompilerData = 404;
 
+	/** raw kinds between the tokenizer and trivia folding; they become trivia and never reach the parser */
+	public const
+		Whitespace = 405,
+		Comment = 406,
+		DocComment = 407,
+		OpenTag = 408;
+
 	public const HostConstants = [
 		'T_VOID_CAST' => self::VoidCast,
 		'T_THROW' => self::Throw,
@@ -312,5 +319,9 @@ final class TokenKind
 		'T_ATTRIBUTE' => self::Attribute,
 		'T_CLOSE_TAG' => self::CloseTag,
 		'T_OPEN_TAG_WITH_ECHO' => self::OpenTagWithEcho,
+		'T_WHITESPACE' => self::Whitespace,
+		'T_COMMENT' => self::Comment,
+		'T_DOC_COMMENT' => self::DocComment,
+		'T_OPEN_TAG' => self::OpenTag,
 	];
 }
