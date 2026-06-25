@@ -130,6 +130,29 @@ test('close tag keeps its newline and never has trailing trivia', function () {
 });
 
 
+test('close tag directly followed by an open tag', function () {
+	Assert::same([
+		"';' ; [OpenTag:<?php ] []",
+		'CloseTag ?> [] []',
+		"';' ; [OpenTag:<?php ] []",
+		'EndOfFile  [] []',
+	], dump(tokenize('<?php ;?><?php ;')));
+});
+
+
+test('whitespace inside string content stays in the token', function () {
+	Assert::same([
+		'\'"\' " [OpenTag:<?php ] []',
+		'EncapsedAndWhitespace a  [] []',
+		'Variable $b [] []',
+		'EncapsedAndWhitespace  c\n [] []',
+		'\'"\' " [] []',
+		"';' ; [] []",
+		'EndOfFile  [] []',
+	], dump(tokenize("<?php \"a \$b c\n\";")));
+});
+
+
 test('single-line comment ends before the close tag', function () {
 	Assert::same([
 		'CloseTag ?>\n [OpenTag:<?php , Comment:// foo ] []',
@@ -250,6 +273,34 @@ test('comments at the end of file', function () {
 		"';' ; [OpenTag:<?php ] [Whitespace: , Comment:/* a\\n b */, Whitespace: , Comment:// c, EndOfLine:\\n]",
 		'EndOfFile  [] []',
 	], dump(tokenize("<?php ; /* a\n b */ // c\n")));
+});
+
+
+test('syntax of newer PHP versions, natively or through emulation', function () {
+	Assert::same([
+		'Variable $a [OpenTag:<?php ] [Whitespace: ]',
+		'Pipe |> [] [Whitespace: ]',
+		'Identifier f [] []',
+		"';' ; [] [Whitespace: ]",
+		'VoidCast ( void ) [] [Whitespace: ]',
+		'Identifier g [] []',
+		"';' ; [] [Whitespace: ]",
+		'MagicProperty __PROPERTY__ [] []',
+		"';' ; [] [Whitespace: ]",
+		'Variable $o [] []',
+		'ObjectOperator -> [] []',
+		'Identifier __property__ [] []',
+		"';' ; [] [Whitespace: ]",
+		'PublicSet public(set) [] [Whitespace: ]',
+		'Variable $x [] []',
+		"';' ; [] [Whitespace: ]",
+		'Private private [] []',
+		"'(' ( [] [Whitespace: ]",
+		'Identifier set [] [Whitespace: ]',
+		"')' ) [] []",
+		"';' ; [] []",
+		'EndOfFile  [] []',
+	], dump(tokenize('<?php $a |> f; ( void ) g; __PROPERTY__; $o->__property__; public(set) $x; private( set );')));
 });
 
 
