@@ -24,16 +24,10 @@
 %left T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG
 %nonassoc T_IS_EQUAL T_IS_NOT_EQUAL T_IS_IDENTICAL T_IS_NOT_IDENTICAL T_SPACESHIP
 %nonassoc '<' T_IS_SMALLER_OR_EQUAL '>' T_IS_GREATER_OR_EQUAL
-#if PHP7
-%left T_SL T_SR
-%left '+' '-' '.'
-#endif
-#if PHP8
 %left T_PIPE
 %left '.'
 %left T_SL T_SR
 %left '+' '-'
-#endif
 %left '*' '/' '%'
 %right '!'
 %nonassoc T_INSTANCEOF
@@ -203,7 +197,6 @@ plain_variable:
 
 semi:
       ';'                                                   { /* nothing */ }
-    | error                                                 { /* nothing */ }
 ;
 
 no_comma:
@@ -372,8 +365,6 @@ inner_statement:
       statement
     | function_declaration_statement
     | class_declaration_statement
-    | T_HALT_COMPILER
-          { throw new Error('__HALT_COMPILER() can only be used from the outermost scope', attributes()); }
 ;
 
 non_empty_statement:
@@ -403,14 +394,11 @@ non_empty_statement:
           { $$ = Stmt\Foreach_[$3, $5[0], ['keyVar' => null, 'byRef' => $5[1], 'stmts' => $7]]; }
     | T_FOREACH '(' expr T_AS variable T_DOUBLE_ARROW foreach_variable ')' foreach_statement
           { $$ = Stmt\Foreach_[$3, $7[0], ['keyVar' => $5, 'byRef' => $7[1], 'stmts' => $9]]; }
-    | T_FOREACH '(' expr error ')' foreach_statement
-          { $$ = Stmt\Foreach_[$3, new Expr\Error(stackAttributes(#4)), ['stmts' => $6]]; }
     | T_DECLARE '(' declare_list ')' declare_statement      { $$ = Stmt\Declare_[$3, $5]; }
     | T_TRY '{' inner_statement_list '}' catches optional_finally
           { $$ = Stmt\TryCatch[$3, $5, $6]; $this->checkTryCatch($$); }
     | T_GOTO identifier_not_reserved semi                   { $$ = Stmt\Goto_[$2]; }
     | identifier_not_reserved ':'                           { $$ = Stmt\Label[$1]; }
-    | error                                                 { $$ = null; /* means: no statement */ }
 ;
 
 statement:
@@ -468,7 +456,6 @@ optional_ellipsis:
 
 block_or_error:
       '{' inner_statement_list '}'                          { $$ = $2; }
-    | error                                                 { $$ = []; }
 ;
 
 fn_identifier:
@@ -702,9 +689,6 @@ parameter:
           { $$ = new Node\Param($6, $8, $3, $4, $5, attributes(), $2, $1, $9);
             $this->checkParam($$);
             $this->addPropertyNameToHooks($$); }
-    | optional_attributes optional_property_modifiers optional_type_without_static
-      optional_arg_ref optional_ellipsis error
-          { $$ = new Node\Param(Expr\Error[], null, $3, $4, $5, attributes(), $2, $1); }
 ;
 
 type_expr:
@@ -781,7 +765,6 @@ optional_type_without_static:
 optional_return_type:
       /* empty */                                           { $$ = null; }
     | ':' type_expr                                         { $$ = $2; }
-    | ':' error                                             { $$ = null; }
 ;
 
 argument_list:
@@ -868,13 +851,11 @@ class_statement_list:
 class_statement:
       optional_attributes variable_modifiers optional_type_without_static property_declaration_list semi
           { $$ = new Stmt\Property($2, $4, attributes(), $3, $1); }
-#if PHP8
     | optional_attributes variable_modifiers optional_type_without_static property_declaration_list '{' property_hook_list '}'
           { $$ = new Stmt\Property($2, $4, attributes(), $3, $1, $6);
             $this->checkPropertyHooksForMultiProperty($$, #5);
             $this->checkEmptyPropertyHookList($6, #5);
             $this->addPropertyNameToHooks($$); }
-#endif
     | optional_attributes method_modifiers T_CONST class_const_list semi
           { $$ = new Stmt\ClassConst($4, $2, attributes(), $1);
             $this->checkClassConst($$, #2); }
@@ -888,7 +869,6 @@ class_statement:
     | T_USE class_name_list trait_adaptations               { $$ = Stmt\TraitUse[$2, $3]; }
     | optional_attributes T_CASE identifier_maybe_reserved enum_case_expr semi
          { $$ = Stmt\EnumCase[$3, $4, $1]; }
-    | error                                                 { $$ = null; /* will be skipped */ }
 ;
 
 trait_adaptations:
@@ -981,9 +961,7 @@ property_hook_list:
 
 optional_property_hook_list:
       /* empty */                                           { $$ = []; }
-#if PHP8
     | '{' property_hook_list '}'                            { $$ = $2; $this->checkEmptyPropertyHookList($2, #1); }
-#endif
 ;
 
 property_hook:
@@ -1090,12 +1068,10 @@ expr:
     | expr T_IS_SMALLER_OR_EQUAL expr                       { $$ = Expr\BinaryOp\SmallerOrEqual[$1, $3]; }
     | expr '>' expr                                         { $$ = Expr\BinaryOp\Greater       [$1, $3]; }
     | expr T_IS_GREATER_OR_EQUAL expr                       { $$ = Expr\BinaryOp\GreaterOrEqual[$1, $3]; }
-#if PHP8
     | expr T_PIPE expr {
           $$ = Expr\BinaryOp\Pipe[$1, $3];
           $this->checkPipeOperatorParentheses($3);
       }
-#endif
     | expr T_INSTANCEOF class_name_reference                { $$ = Expr\Instanceof_[$1, $3]; }
     | '(' expr ')' {
           $$ = $2;
@@ -1231,7 +1207,6 @@ class_name_reference:
       class_name
     | new_variable
     | '(' expr ')'                                          { $$ = $2; }
-    | error                                                 { $$ = Expr\Error[]; $this->errorState = 2; }
 ;
 
 class_name_or_var:
@@ -1269,10 +1244,6 @@ class_constant:
           { $$ = Expr\ClassConstFetch[$1, $3]; }
     | class_name_or_var T_PAAMAYIM_NEKUDOTAYIM '{' expr '}'
           { $$ = Expr\ClassConstFetch[$1, $4]; }
-    /* We interpret an isolated FOO:: as an unfinished class constant fetch. It could also be
-       an unfinished static property fetch or unfinished scoped call. */
-    | class_name_or_var T_PAAMAYIM_NEKUDOTAYIM error
-          { $$ = Expr\ClassConstFetch[$1, new Expr\Error(stackAttributes(#3))]; $this->errorState = 2; }
 ;
 
 array_short_syntax:
@@ -1338,9 +1309,6 @@ callable_expr:
 callable_variable:
       simple_variable
     | array_object_dereferenceable '[' optional_expr ']'     { $$ = Expr\ArrayDimFetch[$1, $3]; }
-#if PHP7
-    | array_object_dereferenceable '{' expr '}'              { $$ = Expr\ArrayDimFetch[$1, $3]; }
-#endif
     | function_call
     | array_object_dereferenceable T_OBJECT_OPERATOR property_name argument_list
           { $$ = Expr\MethodCall[$1, $3, $4]; }
@@ -1366,7 +1334,6 @@ simple_variable:
       plain_variable
     | '$' '{' expr '}'                                      { $$ = Expr\Variable[$3]; }
     | '$' simple_variable                                   { $$ = Expr\Variable[$2]; }
-    | '$' error                                             { $$ = Expr\Variable[Expr\Error[]]; $this->errorState = 2; }
 ;
 
 static_member_prop_name:
@@ -1382,9 +1349,6 @@ static_member:
 new_variable:
       simple_variable
     | new_variable '[' optional_expr ']'                    { $$ = Expr\ArrayDimFetch[$1, $3]; }
-#if PHP7
-    | new_variable '{' expr '}'                             { $$ = Expr\ArrayDimFetch[$1, $3]; }
-#endif
     | new_variable T_OBJECT_OPERATOR property_name          { $$ = Expr\PropertyFetch[$1, $3]; }
     | new_variable T_NULLSAFE_OBJECT_OPERATOR property_name { $$ = Expr\NullsafePropertyFetch[$1, $3]; }
     | class_name T_PAAMAYIM_NEKUDOTAYIM static_member_prop_name
@@ -1403,7 +1367,6 @@ property_name:
       identifier_not_reserved
     | '{' expr '}'                                          { $$ = $2; }
     | simple_variable
-    | error                                                 { $$ = Expr\Error[]; $this->errorState = 2; }
 ;
 
 list_expr:
@@ -1417,14 +1380,8 @@ array_pair_list:
           { $$ = $1; $end = count($$)-1; if ($$[$end]->value instanceof Expr\Error) array_pop($$); }
 ;
 
-comma_or_error:
-      ','
-    | error
-          { /* do nothing -- prevent default action of $$=$1. See #551. */ }
-;
-
 inner_array_pair_list:
-      inner_array_pair_list comma_or_error array_pair       { push($1, $3); }
+      inner_array_pair_list ',' array_pair       { push($1, $3); }
     | array_pair                                            { init($1); }
 ;
 
