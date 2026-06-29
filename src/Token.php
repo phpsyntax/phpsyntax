@@ -7,6 +7,9 @@ use function is_int;
 
 final class Token implements \Stringable
 {
+	/** The node the token belongs to; only the tree writes it, through attachTo(). */
+	public private(set) ?Node $parent = null;
+
 	/** @var list<Trivia> */
 	public array $leadingTrivia = [];
 
@@ -25,6 +28,16 @@ final class Token implements \Stringable
 		public readonly ?int $originalOffset = null,
 		public readonly ?int $originalLine = null,
 	) {
+	}
+
+
+	/**
+	 * Puts the token under the node, or takes it out of the tree with null.
+	 * @internal called by Node::adopt() and Node::release()
+	 */
+	public function attachTo(?Node $parent): void
+	{
+		$this->parent = $parent;
 	}
 
 
