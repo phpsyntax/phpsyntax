@@ -17,7 +17,27 @@ abstract class Node implements \Stringable
 	public private(set) ?Node $parent = null;
 
 	/**
-	 * The trivia before the node, which are the leading trivia of its first token.
+	 * The node as it is written, without the trivia on its outer edges, which printing it writes too.
+	 */
+	public string $text {
+		get {
+			$text = '';
+			$previous = null;
+			foreach ($this->getTokens() as $token) {
+				if ($previous !== null) { // what stands between two tokens, so the edges never come up
+					$text .= self::textOf($previous->trailingTrivia) . self::textOf($token->leadingTrivia);
+				}
+
+				$text .= $token->text;
+				$previous = $token;
+			}
+
+			return $text;
+		}
+	}
+
+	/**
+	 * The trivia before the node, which are the leading trivia of its first token; setEdgeTrivia() writes them.
 	 * @var list<Trivia>
 	 */
 	public array $leadingTrivia {
@@ -25,7 +45,7 @@ abstract class Node implements \Stringable
 	}
 
 	/**
-	 * The trivia after the node, which are the trailing trivia of its last token.
+	 * The trivia after the node, which are the trailing trivia of its last token; setEdgeTrivia() writes them.
 	 * @var list<Trivia>
 	 */
 	public array $trailingTrivia {
@@ -136,6 +156,46 @@ abstract class Node implements \Stringable
 	}
 
 
+	/**
+	 * The text the trivia stand for.
+	 * @param  list<Trivia>  $trivia
+	 */
+	private static function textOf(array $trivia): string
+	{
+		$text = '';
+		foreach ($trivia as $item) {
+			$text .= $item->text;
+		}
+
+		return $text;
+	}
+
+
+	/**
+	 * The tokens of the whole subtree in source order; empty for a node without tokens, such as an empty list.
+	 * @return list<Token>
+	 */
+	public function getTokens(): array
+	{
+		$tokens = [];
+		$stack = [$this];
+		while ($stack) {
+			$node = array_pop($stack);
+			if ($node instanceof Token) {
+				$tokens[] = $node;
+				continue;
+			}
+
+			$children = $node->getChildren();
+			for ($i = count($children) - 1; $i >= 0; $i--) {
+				$stack[] = $children[$i];
+			}
+		}
+
+		return $tokens;
+	}
+
+
 	/** Null only for a node without tokens, such as an empty list. */
 	public function getFirstToken(): ?Token
 	{
@@ -181,6 +241,111 @@ abstract class Node implements \Stringable
 		}
 
 		return null;
+	}
+
+
+	/** Current line of the first token; null for a detached subtree or a node without tokens. */
+	public function getStartLine(): ?int
+	{
+		return $this->getFirstToken()?->getLine();
+	}
+
+
+	/** Current line where the last token ends. */
+	public function getEndLine(): ?int
+	{
+		$token = $this->getLastToken();
+		$line = $token?->getLine();
+		return $line === null ? null : $line + preg_match_all('~\r\n|\r|\n~', $token->text);
+	}
+
+
+	/**
+	 * @template T of object
+	 * @param  class-string<T>  $class
+	 * @return (T&Node)|null
+	 */
+	public function findAncestor(string $class): ?self
+	{
+		for ($node = $this->parent; $node; $node = $node->parent) {
+			if ($node instanceof $class) {
+				return $node;
+			}
+		}
+
+		return null;
+	}
+
+
+	/**
+	 * The first descendant of the class the predicate accepts, in pre-order; null when there is none.
+	 * @template T of object
+	 * @param  class-string<T>  $class  a node class or an interface node classes implement
+	 * @param  ?callable(T&Node): bool  $predicate
+	 * @return (T&Node)|null
+	 */
+	public function findFirst(string $class, ?callable $predicate = null): ?self
+	{
+		self::checkFilter($class);
+		$found = null;
+		new Traverser()->traverse($this, function (self|Token $node) use ($class, $predicate, &$found): ?int {
+			if (
+				$node !== $this
+				&& $node instanceof self
+				&& $node instanceof $class
+				&& ($predicate === null || $predicate($node))
+			) {
+				$found = $node;
+				return Traverser::StopTraversal;
+			}
+
+			return null;
+		});
+		/** @var (T&Node)|null $found */
+		return $found;
+	}
+
+
+	/**
+	 * Descendant nodes of the class the predicate accepts, in pre-order, as a snapshot safe to iterate
+	 * while mutating the tree.
+	 * @template T of object
+	 * @param  class-string<T>  $class  a node class or an interface node classes implement
+	 * @param  ?callable(T&Node): bool  $predicate
+	 * @return list<T&Node>
+	 */
+	public function find(string $class, ?callable $predicate = null): array
+	{
+		self::checkFilter($class);
+		$result = [];
+		$stack = array_reverse($this->getChildren());
+		while ($stack) {
+			$node = array_pop($stack);
+			if ($node instanceof Token) {
+				continue;
+			}
+
+			if ($node instanceof $class && ($predicate === null || $predicate($node))) {
+				$result[] = $node;
+			}
+
+			$children = $node->getChildren();
+			for ($i = count($children) - 1; $i >= 0; $i--) {
+				$stack[] = $children[$i];
+			}
+		}
+
+		/** @var list<T&Node> $result */
+		return $result;
+	}
+
+
+	/** The class the descendants are looked up by must be one a node can be. */
+	private static function checkFilter(string $class): void
+	{
+		if (!is_a($class, self::class, allow_string: true) && !interface_exists($class)) {
+			throw new \InvalidArgumentException("The class must be a node class or an interface, '$class' given.");
+		}
 	}
 
 
