@@ -13,7 +13,7 @@ One namespace, one PSR-4 root: `PhpSyntax` (`src/`) holds the lexer, the parser,
 
 - `composer tester`: Nette Tester over `tests/`.
 - `composer phpstan`: PHPStan level 8, no baseline; `ignoreErrors` only with a reason.
-- `composer compile-grammar`: regenerates `src/ParserData.php` and `src/TokenKind.php` from `grammar/php.y`. Commit the output once the code style of `dresscode.neon` has run over it: what is committed is the formatted form, so a bare rebuild differs from it and that difference is no defect.
+- `composer compile-grammar`: regenerates `src/ParserData.php`, `src/TokenKind.php`, `src/LayoutData.php` and, in every node class, the `Slots` constant and the constructor from `grammar/` (`php.y` for the parser, `nodes.php` for the slots of the nodes); the rest of a node class is handwritten. Commit the output once the code style of `dresscode.neon` has run over it: what is committed is the formatted form, so a bare rebuild differs from it and that difference is no defect.
 - Round-trip over an external corpus: `PHPSYNTAX_CORPUS=/path/to/php/code composer tester`.
 
 ## Conventions
@@ -34,5 +34,6 @@ One namespace, one PSR-4 root: `PhpSyntax` (`src/`) holds the lexer, the parser,
 ## Working rules
 
 - Every unit of work (class, grammar production) ends with tests, PHPStan and a critical review of correctness, clarity, elegance and names. Fix findings immediately, not in a later commit.
+- Generated files, and the `Slots` constant and the constructor of a node class, are never edited by hand; change `grammar/` and rebuild. Everything else in a node class is handwritten and the generator leaves it alone.
 - One commit per unit, message lowercase, past tense, `subject: description` when it clarifies the area. Linear history.
 - Committed files, commit messages and code comments never refer to documents outside the repository, nor to transient states of the work (milestones, phases, "until X exists"). Describe the current state; the history is in git.
