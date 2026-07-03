@@ -9,7 +9,7 @@
 
 const NodesNamespace = 'PhpSyntax\Nodes';
 const RootClasses = ['Node', 'Token'];
-const DefaultParents = ['Expression' => 'ExpressionNode', 'Scalar' => 'ExpressionNode', 'Statement' => 'StatementNode', 'Type' => 'TypeNode', 'Member' => 'MemberNode'];
+const DefaultParents = ['Expression' => 'ExpressionNode', 'Scalar' => 'ScalarNode', 'Statement' => 'StatementNode', 'Type' => 'TypeNode', 'Member' => 'MemberNode'];
 
 
 /**

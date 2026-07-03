@@ -86,6 +86,53 @@ return [
 		],
 		'layout' => ['statements' => 'Anchor', 'endOfFile' => 'Anchor'],
 	],
+	// ---------- scalars ----------
+
+	'Scalar\IntegerNode' => [
+		'slots' => ['token' => 'Token'],
+	],
+	'Scalar\FloatNode' => [
+		'slots' => ['token' => 'Token'],
+	],
+	'Scalar\BooleanNode' => [
+		'slots' => ['token' => 'Token'],
+	],
+	'Scalar\NullNode' => [
+		'slots' => ['token' => 'Token'],
+	],
+	'Scalar\StringNode' => [
+		'slots' => ['token' => 'Token'],
+	],
+	'Scalar\UnquotedStringNode' => [
+		'slots' => ['token' => 'Token'],
+	],
+	'Scalar\MagicConstantNode' => [
+		'slots' => ['token' => 'Token'],
+	],
+	'Scalar\InterpolatedStringNode' => [
+		'slots' => [
+			'openQuote' => 'Token',
+			'parts' => 'NodeList<Scalar\InterpolatedStringPartNode|Scalar\InterpolationNode|ExpressionNode>',
+			'closeQuote' => 'Token',
+		],
+	],
+	'Scalar\HeredocNode' => [
+		'slots' => [
+			'openDelimiter' => 'Token',
+			'parts' => 'NodeList<Scalar\InterpolatedStringPartNode|Scalar\InterpolationNode|ExpressionNode>',
+			'closeDelimiter' => 'Token',
+		],
+	],
+	'Scalar\InterpolatedStringPartNode' => [
+		'slots' => ['token' => 'Token'],
+	],
+	'Scalar\InterpolationNode' => [
+		'slots' => [
+			'openBrace' => 'Token',
+			'expression' => 'ExpressionNode',
+			'closeBrace' => 'Token',
+		],
+	],
 
 	// ---------- types ----------
 
