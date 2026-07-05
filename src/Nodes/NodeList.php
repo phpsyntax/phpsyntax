@@ -60,7 +60,7 @@ final class NodeList extends Node implements \Countable, \IteratorAggregate
 	}
 
 
-	public function remove(Node $item): void
+	public function removeItem(Node $item): void
 	{
 		$index = $this->indexOf($item);
 		$this->release($item);
@@ -121,5 +121,12 @@ final class NodeList extends Node implements \Countable, \IteratorAggregate
 	public function getIterator(): \ArrayIterator
 	{
 		return new \ArrayIterator($this->items);
+	}
+
+
+	public function __clone()
+	{
+		parent::__clone();
+		$this->items = $this->cloneChildren($this->items);
 	}
 }

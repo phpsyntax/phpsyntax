@@ -136,7 +136,7 @@ final class ModifiersNode extends Node implements \Countable, \IteratorAggregate
 	}
 
 
-	public function remove(Token $token): void
+	public function removeToken(Token $token): void
 	{
 		$index = array_search($token, $this->tokens, strict: true);
 		if ($index === false) {
@@ -189,5 +189,12 @@ final class ModifiersNode extends Node implements \Countable, \IteratorAggregate
 	public function getIterator(): \ArrayIterator
 	{
 		return new \ArrayIterator($this->tokens);
+	}
+
+
+	public function __clone()
+	{
+		parent::__clone();
+		$this->tokens = $this->cloneChildren($this->tokens);
 	}
 }

@@ -76,33 +76,9 @@ final class FileNode extends Node
 	}
 
 
-	public function getChildren(): array
+	public function __clone()
 	{
-		return [$this->statements, $this->endOfFile];
-	}
-
-
-	public function replaceChild(Node|Token $old, Node|Token $new): void
-	{
-		if ($old === $this->statements && $new instanceof NodeList) {
-			$this->setStatements($new);
-		} elseif ($old === $this->endOfFile && $new instanceof Token) {
-			$this->setEndOfFile($new);
-		} else {
-			throw self::describeChildMismatch($old);
-		}
-	}
-
-
-	/** @param NodeList<StatementNode> $statements */
-	public function setStatements(NodeList $statements): void
-	{
-		$this->setSlot('statements', $statements);
-	}
-
-
-	public function setEndOfFile(Token $endOfFile): void
-	{
-		$this->setSlot('endOfFile', $endOfFile);
+		$this->index = null; // before the children are written, so that their hooks do not report to the index of the original
+		parent::__clone();
 	}
 }

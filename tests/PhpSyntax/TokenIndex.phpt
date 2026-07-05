@@ -71,7 +71,7 @@ test('detached subtree has no positions', function () {
 	$file = (new Parser)->parse('<?php $a; $b;');
 	$stmt = $file->statements->getItems()[0];
 	Assert::type(ExpressionStatementNode::class, $stmt);
-	$file->statements->remove($stmt);
+	$file->statements->removeItem($stmt);
 	Assert::null($stmt->semicolon->getLine());
 	Assert::null($stmt->semicolon->getNext());
 	Assert::null($stmt->getFile());

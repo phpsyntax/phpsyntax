@@ -56,7 +56,7 @@ test('NodeList: items, parents, iteration, mutation', function () {
 	Assert::same([$z, $a, $b, $c], $list->getItems());
 	Assert::same($list, $z->parent);
 
-	$list->remove($a);
+	$list->removeItem($a);
 	Assert::null($a->parent);
 	$list->replaceChild($b, $x = node('x'));
 	Assert::same([$z, $x, $c], $list->getItems());
@@ -106,7 +106,7 @@ test('ModifiersNode', function () {
 	Assert::false($modifiers->has(TokenKind::Static));
 	$modifiers->append($static = new Token(TokenKind::Static, 'static'));
 	Assert::same('publicstatic', (string) $modifiers);
-	$modifiers->remove($public);
+	$modifiers->removeToken($public);
 	Assert::same([$static], $modifiers->getTokens());
 	Assert::null($public->parent);
 });

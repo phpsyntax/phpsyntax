@@ -38,16 +38,6 @@ final class Token implements \Stringable
 
 
 	/**
-	 * Puts the token under the node, or takes it out of the tree with null.
-	 * @internal called by Node::adopt() and Node::release()
-	 */
-	public function attachTo(?Node $parent): void
-	{
-		$this->parent = $parent;
-	}
-
-
-	/**
 	 * Replaces the text of the token, the trivia around it untouched; the file learns how many line endings
 	 * the token gained or lost, so that the lines after it stay right.
 	 */
@@ -123,6 +113,23 @@ final class Token implements \Stringable
 	public function getOffset(): ?int
 	{
 		return $this->getFile()?->getIndex()->getOffset($this);
+	}
+
+
+	/**
+	 * Puts the token under the node, or takes it out of the tree with null.
+	 * @internal called by Node::adopt() and Node::release()
+	 */
+	public function attachTo(?Node $parent): void
+	{
+		$this->parent = $parent;
+	}
+
+
+	/** Copy without a parent; the trivia are immutable, so the copy shares them. */
+	public function __clone()
+	{
+		$this->parent = null;
 	}
 
 

@@ -3,6 +3,8 @@
 namespace PhpSyntax;
 
 use PhpSyntax\Nodes\FileNode;
+use PhpSyntax\Nodes\NodeList;
+use PhpSyntax\Nodes\SeparatedNodeList;
 use function array_slice, count, in_array;
 
 
@@ -15,6 +17,44 @@ abstract class Node implements \Stringable
 
 	/** The node this one belongs to; only the tree writes it, through attachTo(). */
 	public private(set) ?Node $parent = null;
+
+	/**
+	 * The node as it is written, without the trivia on its outer edges: what stands between its tokens
+	 * belongs to it, what stands before the first and after the last one belongs to the file around it.
+	 * Printing the node writes those edges too, which is what the round trip needs and a report does not.
+	 */
+	public string $text {
+		get {
+			$text = '';
+			$previous = null;
+			foreach ($this->getTokens() as $token) {
+				if ($previous !== null) { // what stands between two tokens, so the edges never come up
+					$text .= self::textOf($previous->trailingTrivia) . self::textOf($token->leadingTrivia);
+				}
+
+				$text .= $token->text;
+				$previous = $token;
+			}
+
+			return $text;
+		}
+	}
+
+	/**
+	 * The trivia before the node, which are the leading trivia of its first token; setEdgeTrivia() writes them.
+	 * @var list<Trivia>
+	 */
+	public array $leadingTrivia {
+		get => $this->getFirstToken()->leadingTrivia ?? [];
+	}
+
+	/**
+	 * The trivia after the node, which are the trailing trivia of its last token; setEdgeTrivia() writes them.
+	 * @var list<Trivia>
+	 */
+	public array $trailingTrivia {
+		get => $this->getLastToken()->trailingTrivia ?? [];
+	}
 
 
 	/**
@@ -120,9 +160,337 @@ abstract class Node implements \Stringable
 	}
 
 
+	/**
+	 * The text the trivia stand for.
+	 * @param  list<Trivia>  $trivia
+	 */
+	private static function textOf(array $trivia): string
+	{
+		$text = '';
+		foreach ($trivia as $item) {
+			$text .= $item->text;
+		}
+
+		return $text;
+	}
+
+
+	/**
+	 * The tokens of the whole subtree in source order; empty for a node without tokens, such as an empty list.
+	 * @return list<Token>
+	 */
+	public function getTokens(): array
+	{
+		$tokens = [];
+		$stack = [$this];
+		while ($stack) {
+			$node = array_pop($stack);
+			if ($node instanceof Token) {
+				$tokens[] = $node;
+				continue;
+			}
+
+			$children = $node->getChildren();
+			for ($i = count($children) - 1; $i >= 0; $i--) {
+				$stack[] = $children[$i];
+			}
+		}
+
+		return $tokens;
+	}
+
+
+	/** Null only for a node without tokens, such as an empty list. */
+	public function getFirstToken(): ?Token
+	{
+		if (static::Slots === []) { // a list, which reads its items itself
+			foreach ($this->getChildren() as $child) {
+				if ($token = $child instanceof Token ? $child : $child->getFirstToken()) {
+					return $token;
+				}
+			}
+
+			return null;
+		}
+
+		foreach (static::Slots as $slot) {
+			$child = $this->$slot;
+			if ($token = $child instanceof Token ? $child : $child?->getFirstToken()) {
+				return $token;
+			}
+		}
+
+		return null;
+	}
+
+
+	public function getLastToken(): ?Token
+	{
+		if (static::Slots === []) {
+			$children = $this->getChildren();
+			for ($i = count($children) - 1; $i >= 0; $i--) {
+				if ($token = $children[$i] instanceof Token ? $children[$i] : $children[$i]->getLastToken()) {
+					return $token;
+				}
+			}
+
+			return null;
+		}
+
+		for ($i = count(static::Slots) - 1; $i >= 0; $i--) {
+			$child = $this->{static::Slots[$i]};
+			if ($token = $child instanceof Token ? $child : $child?->getLastToken()) {
+				return $token;
+			}
+		}
+
+		return null;
+	}
+
+
+	/** Current line of the first token; null for a detached subtree or a node without tokens. */
+	public function getStartLine(): ?int
+	{
+		return $this->getFirstToken()?->getLine();
+	}
+
+
+	/** Current line where the last token ends. */
+	public function getEndLine(): ?int
+	{
+		$token = $this->getLastToken();
+		$line = $token?->getLine();
+		return $line === null ? null : $line + preg_match_all('~\r\n|\r|\n~', $token->text);
+	}
+
+
+	/**
+	 * Doc comment before the node: the last one in the leading trivia of the first token, or in the trailing
+	 * trivia of the previous token (public $a; /** @var int * / public $b;).
+	 */
+	public function getDocComment(): ?Trivia
+	{
+		$token = $this->getFirstToken();
+		if (!$token) {
+			return null;
+		}
+
+		foreach ([$token->leadingTrivia, $token->getPrevious()->trailingTrivia ?? []] as $trivias) {
+			for ($i = count($trivias) - 1; $i >= 0; $i--) {
+				if ($trivias[$i]->kind === TriviaKind::DocComment) {
+					return $trivias[$i];
+				}
+			}
+		}
+
+		return null;
+	}
+
+
+	/**
+	 * @template T of object
+	 * @param  class-string<T>  $class
+	 * @return (T&Node)|null
+	 */
+	public function findAncestor(string $class): ?self
+	{
+		for ($node = $this->parent; $node; $node = $node->parent) {
+			if ($node instanceof $class) {
+				return $node;
+			}
+		}
+
+		return null;
+	}
+
+
+	/**
+	 * The first descendant of the class the predicate accepts, in pre-order; null when there is none.
+	 * @template T of object
+	 * @param  class-string<T>  $class  a node class or an interface node classes implement
+	 * @param  ?callable(T&Node): bool  $predicate
+	 * @return (T&Node)|null
+	 */
+	public function findFirst(string $class, ?callable $predicate = null): ?self
+	{
+		self::checkFilter($class);
+		$accepts = static fn(self $node): bool => $node instanceof $class && ($predicate === null || $predicate($node));
+		$found = null;
+		new Traverser()->traverse($this, function (self|Token $node) use ($accepts, &$found): ?int {
+			if ($node !== $this && $node instanceof self && $accepts($node)) {
+				$found = $node;
+				return Traverser::StopTraversal;
+			}
+
+			return null;
+		});
+		/** @var (T&Node)|null $found */
+		return $found;
+	}
+
+
+	/**
+	 * Descendant nodes of the class the predicate accepts, in pre-order, as a snapshot safe to iterate
+	 * while mutating the tree.
+	 * @template T of object
+	 * @param  class-string<T>  $class  a node class or an interface node classes implement
+	 * @param  ?callable(T&Node): bool  $predicate
+	 * @return list<T&Node>
+	 */
+	public function find(string $class, ?callable $predicate = null): array
+	{
+		self::checkFilter($class);
+		$result = [];
+		$stack = array_reverse($this->getChildren());
+		while ($stack) {
+			$node = array_pop($stack);
+			if ($node instanceof Token) {
+				continue;
+			}
+
+			if ($node instanceof $class && ($predicate === null || $predicate($node))) {
+				$result[] = $node;
+			}
+
+			$children = $node->getChildren();
+			for ($i = count($children) - 1; $i >= 0; $i--) {
+				$stack[] = $children[$i];
+			}
+		}
+
+		/** @var list<T&Node> $result */
+		return $result;
+	}
+
+
+	/** The class the descendants are looked up by must be one a node can be. */
+	private static function checkFilter(string $class): void
+	{
+		if (!is_a($class, self::class, allow_string: true) && !interface_exists($class)) {
+			throw new \InvalidArgumentException("The class must be a node class or an interface, '$class' given.");
+		}
+	}
+
+
+	/**
+	 * Replaces this node in its parent; the trivia around the old node stay in place around the new one.
+	 */
+	public function replaceWith(self $node): void
+	{
+		$parent = $this->parent ?? throw new \LogicException('Cannot replace a node without a parent.');
+		$parent->replaceChild($this, $node); // the parent takes the node before the trivia move, so a refused one leaves them where they stand
+		if ($first = $this->getFirstToken()) {
+			$leading = $first->leadingTrivia;
+			$first->setLeadingTrivia([]);
+			if ($target = $node->getFirstToken()) {
+				$target->setLeadingTrivia([...$leading, ...$target->leadingTrivia]);
+			}
+		}
+
+		if ($last = $this->getLastToken()) {
+			$trailing = $last->trailingTrivia;
+			$last->setTrailingTrivia([]);
+			if ($target = $node->getLastToken()) {
+				$target->setTrailingTrivia([...$target->trailingTrivia, ...$trailing]);
+			}
+		}
+	}
+
+
+	/**
+	 * Removes this node from its list. A node alone on its lines takes the lines with it (indentation and
+	 * line ending), otherwise the whitespace around stays; comments inside, each with the line ending that
+	 * follows it, go where the policy says.
+	 */
+	public function remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken): void
+	{
+		$parent = $this->parent;
+		if (!$parent instanceof NodeList && !$parent instanceof SeparatedNodeList) {
+			throw new \LogicException('Only an item of a list can be removed; use the setter of the slot instead.');
+		}
+
+		$tokens = $this->getTokens();
+		$first = $tokens[0] ?? null;
+		$last = $tokens[count($tokens) - 1] ?? null;
+		$previous = $first?->getPrevious();
+		$next = $last?->getNext();
+		[$leading, $moved] = self::splitComments($first->leadingTrivia ?? []);
+		foreach ($tokens as $token) {
+			foreach ([$token === $first ? [] : $token->leadingTrivia, $token === $last ? [] : $token->trailingTrivia] as $trivias) {
+				$moved = [...$moved, ...self::splitComments($trivias)[1]];
+			}
+		}
+
+		[$trailing, $trailingComments] = self::splitComments($last->trailingTrivia ?? []);
+		$moved = [...$moved, ...$trailingComments];
+
+		if (self::standsAlone($first->leadingTrivia ?? [], $last->trailingTrivia ?? [], $previous, $next)) {
+			if ($leading && end($leading)->kind === TriviaKind::Whitespace) {
+				array_pop($leading);
+			}
+
+			$trailing = [];
+		}
+
+		$before = $after = [];
+		if ($comments === CommentPolicy::MoveToPreviousToken && $previous) {
+			$before = $moved;
+		} elseif ($comments !== CommentPolicy::Drop) {
+			$after = $moved;
+		}
+
+		if ($previous) {
+			$previous->setTrailingTrivia([...$previous->trailingTrivia, ...$before, ...$trailing]);
+			$trailing = [];
+		}
+
+		if ($next) {
+			$next->setLeadingTrivia([...$leading, ...$after, ...$trailing, ...$next->leadingTrivia]);
+		} elseif ($previous) {
+			$previous->setTrailingTrivia([...$previous->trailingTrivia, ...$leading, ...$after]);
+		}
+
+		$parent->removeItem($this);
+	}
+
+
 	public function __toString(): string
 	{
 		return Printer::print($this);
+	}
+
+
+	/**
+	 * Deep copy without a parent; the copy takes the children the slots name, never what a property
+	 * computes from the tokens, which is work nobody asked for and which a heredoc refuses to do.
+	 */
+	public function __clone()
+	{
+		$this->parent = null;
+		foreach (static::Slots as $slot) {
+			if ($this->$slot !== null) {
+				$this->$slot = clone $this->$slot; // the set hook adopts the copy and leaves the original alone
+			}
+		}
+	}
+
+
+	/**
+	 * Copies of the children of a list, adopted by the copy; a list has no slots to copy by and holds
+	 * its children in an array of its own.
+	 * @template C of self|Token
+	 * @param  list<C>  $children
+	 * @return list<C>
+	 */
+	protected function cloneChildren(array $children): array
+	{
+		foreach ($children as $i => $child) {
+			$copy = clone $child;
+			$copy->attachTo($this);
+			$children[$i] = $copy;
+		}
+
+		return $children;
 	}
 
 
@@ -287,50 +655,65 @@ abstract class Node implements \Stringable
 	}
 
 
-	/** Null only for a node without tokens, such as an empty list. */
-	public function getFirstToken(): ?Token
+	/**
+	 * Separates comments, each with the line ending directly after it, from the rest of the trivia.
+	 * @param  list<Trivia>  $trivias
+	 * @return array{list<Trivia>, list<Trivia>}  [rest, comments]
+	 */
+	private static function splitComments(array $trivias): array
 	{
-		if (static::Slots === []) { // a list, which reads its items itself
-			foreach ($this->getChildren() as $child) {
-				if ($token = $child instanceof Token ? $child : $child->getFirstToken()) {
-					return $token;
-				}
-			}
-
-			return null;
-		}
-
-		foreach (static::Slots as $slot) {
-			$child = $this->$slot;
-			if ($token = $child instanceof Token ? $child : $child?->getFirstToken()) {
-				return $token;
+		$rest = $comments = [];
+		foreach ($trivias as $i => $trivia) {
+			if ($trivia->isComment()) {
+				$comments[] = $trivia;
+			} elseif ($trivia->kind === TriviaKind::EndOfLine && $i > 0 && $trivias[$i - 1]->isComment()) {
+				$comments[] = $trivia;
+			} else {
+				$rest[] = $trivia;
 			}
 		}
 
-		return null;
+		return [$rest, $comments];
 	}
 
 
-	public function getLastToken(): ?Token
+	/**
+	 * Whether nothing but whitespace and comments shares the lines of the node.
+	 * @param list<Trivia> $leading
+	 * @param list<Trivia> $trailing
+	 */
+	private static function standsAlone(array $leading, array $trailing, ?Token $previous, ?Token $next): bool
 	{
-		if (static::Slots === []) {
-			$children = $this->getChildren();
-			for ($i = count($children) - 1; $i >= 0; $i--) {
-				if ($token = $children[$i] instanceof Token ? $children[$i] : $children[$i]->getLastToken()) {
-					return $token;
-				}
-			}
-
-			return null;
-		}
-
-		for ($i = count(static::Slots) - 1; $i >= 0; $i--) {
-			$child = $this->{static::Slots[$i]};
-			if ($token = $child instanceof Token ? $child : $child?->getLastToken()) {
-				return $token;
+		$startsLine = false;
+		for ($i = count($leading) - 1; $i >= 0; $i--) {
+			if ($leading[$i]->isEndOfLine()) {
+				$startsLine = true;
+				break;
+			} elseif ($leading[$i]->kind !== TriviaKind::Whitespace && !$leading[$i]->isComment()) {
+				return false;
 			}
 		}
 
-		return null;
+		if (!$startsLine) {
+			$before = $previous->trailingTrivia ?? [];
+			$startsLine = !$previous || ($before && end($before)->isEndOfLine());
+		}
+
+		$endsLine = false;
+		foreach ($trailing as $trivia) {
+			if ($trivia->isEndOfLine()) {
+				$endsLine = true;
+				break;
+			} elseif ($trivia->kind !== TriviaKind::Whitespace && !$trivia->isComment()) {
+				return false;
+			}
+		}
+
+		if (!$endsLine) {
+			$after = $next->leadingTrivia ?? [];
+			$endsLine = !$next || $next->kind === TokenKind::EndOfFile || ($after && $after[0]->isEndOfLine());
+		}
+
+		return $startsLine && $endsLine;
 	}
 }
