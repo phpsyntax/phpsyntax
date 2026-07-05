@@ -19,6 +19,12 @@ final class Token implements \Stringable
 	 */
 	public private(set) array $trailingTrivia = [];
 
+	/** @internal position in the order of the tokens of the file, written by TokenIndex */
+	public int $index = 0;
+
+	/** @internal the index that numbered the token last: a shortcut to the file, verified before use */
+	public ?TokenIndex $indexedBy = null;
+
 
 	public function __construct(
 		public int $kind,
@@ -41,23 +47,82 @@ final class Token implements \Stringable
 	}
 
 
+	/**
+	 * Replaces the text of the token, the trivia around it untouched; the file learns how many line endings
+	 * the token gained or lost, so that the lines after it stay right.
+	 */
 	public function setText(string $text): void
 	{
+		$file = $this->getFile();
+		$lineEndings = $file ? TokenIndex::countLineEndings($text) - TokenIndex::countLineEndings($this->text) : 0;
 		$this->text = $text;
+		$file?->tokenChanged($this, $lineEndings, leading: false);
 	}
 
 
 	/** @param list<Trivia> $trivia */
 	public function setLeadingTrivia(array $trivia): void
 	{
+		$file = $this->getFile();
+		$lineEndings = $file ? TokenIndex::countLineEndingsIn($trivia) - TokenIndex::countLineEndingsIn($this->leadingTrivia) : 0;
 		$this->leadingTrivia = $trivia;
+		$file?->tokenChanged($this, $lineEndings, leading: true);
 	}
 
 
 	/** @param list<Trivia> $trivia */
 	public function setTrailingTrivia(array $trivia): void
 	{
+		$file = $this->getFile();
+		$lineEndings = $file ? TokenIndex::countLineEndingsIn($trivia) - TokenIndex::countLineEndingsIn($this->trailingTrivia) : 0;
 		$this->trailingTrivia = $trivia;
+		$file?->tokenChanged($this, $lineEndings, leading: false);
+	}
+
+
+	public function getFile(): ?Nodes\FileNode
+	{
+		return $this->parent?->getFile();
+	}
+
+
+	/** Navigation and positions come from the file index; a token of a detached subtree has none. */
+	public function getNext(): ?self
+	{
+		return $this->getFile()?->getIndex()->getNext($this);
+	}
+
+
+	public function getPrevious(): ?self
+	{
+		return $this->getFile()?->getIndex()->getPrevious($this);
+	}
+
+
+	/** Current line, 1-based; unlike originalLine it follows mutations. */
+	public function getLine(): ?int
+	{
+		return $this->getFile()?->getIndex()->getLine($this);
+	}
+
+
+	/** Current column, 1-based, in UTF-8 characters. */
+	public function getColumn(): ?int
+	{
+		return $this->getFile()?->getIndex()->getColumn($this);
+	}
+
+
+	/** Current column with tabs expanded, 1-based. */
+	public function getVisualColumn(Style $style): ?int
+	{
+		return $this->getFile()?->getIndex()->getVisualColumn($this, $style);
+	}
+
+
+	public function getOffset(): ?int
+	{
+		return $this->getFile()?->getIndex()->getOffset($this);
 	}
 
 

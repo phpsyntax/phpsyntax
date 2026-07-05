@@ -25,6 +25,6 @@ final class ParseException extends \Exception
 		parent::__construct($message);
 		$this->sourceColumn = $code === null || $sourceOffset === null
 			? null
-			: mb_strlen((string) preg_replace('~^.*[\r\n]~s', '', substr($code, 0, $sourceOffset))) + 1;
+			: TokenIndex::countCharacters((string) preg_replace('~^.*[\r\n]~s', '', substr($code, 0, $sourceOffset))) + 1;
 	}
 }
