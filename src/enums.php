@@ -26,6 +26,29 @@ enum NameKind
 
 
 /**
+ * Which of the three tables of names PHP keeps a symbol in.
+ */
+enum SymbolKind
+{
+	/** a class, an interface, a trait, an enum and a namespace, which PHP does not tell apart */
+	case ClassLike;
+	case Function;
+	case Constant;
+
+
+	/** What the type token of a use statement or of one of its items stands for; without one it is ClassLike. */
+	public static function fromUseType(?Token $type): self
+	{
+		return match ($type?->kind) {
+			TokenKind::Function => self::Function,
+			TokenKind::Const => self::Constant,
+			default => self::ClassLike,
+		};
+	}
+}
+
+
+/**
  * What a slot is to the indentation of the lines its node spreads over, relative to the line the node
  * begins on; the level each role stands for is the business of the style.
  */
