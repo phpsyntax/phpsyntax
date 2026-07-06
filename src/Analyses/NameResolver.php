@@ -63,6 +63,27 @@ final class NameResolver
 	}
 
 
+	/** @return array<string, string>  lowercased alias → fully qualified name of the class imports in effect at the node */
+	public function getClassImports(Node|Token $node): array
+	{
+		return $this->imports[$this->getScope($node)][self::Classes];
+	}
+
+
+	/** @return array<string, string>  lowercased alias → fully qualified name */
+	public function getFunctionImports(Node|Token $node): array
+	{
+		return $this->imports[$this->getScope($node)][self::Functions];
+	}
+
+
+	/** @return array<string, string>  alias → fully qualified name, case-sensitive */
+	public function getConstantImports(Node|Token $node): array
+	{
+		return $this->imports[$this->getScope($node)][self::Constants];
+	}
+
+
 	/**
 	 * Fully qualified class name without a leading backslash; self, static and parent stay as they are.
 	 * The name may stand outside the file, a clone of a part of it for instance, and $at then says where
