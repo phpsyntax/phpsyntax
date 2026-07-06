@@ -10,6 +10,8 @@ use PhpSyntax\Nodes\Expression\VariableNode;
 use PhpSyntax\Nodes\NodeList;
 use PhpSyntax\Nodes\Scalar\IntegerNode;
 use PhpSyntax\Nodes\Statement\BlockNode;
+use PhpSyntax\Nodes\Statement\ClassNode;
+use PhpSyntax\Nodes\Statement\ExpressionStatementNode;
 use PhpSyntax\Token;
 use PhpSyntax\TokenKind;
 use Tester\Assert;
@@ -96,4 +98,12 @@ test('node without slots', function () {
 	Assert::same([], $item->getChildren());
 	Assert::same('', (string) $item);
 	Assert::exception(fn() => $item->replaceChild(token('x'), token('y')), InvalidArgumentException::class);
+});
+
+
+test('union slots accept every listed type', function () {
+	$statement = new ExpressionStatementNode(variable('$a'), token(';'));
+	Assert::same('$a;', (string) $statement);
+	$class = new ClassNode(new NodeList, new PhpSyntax\Nodes\ModifiersNode, token('class'), new PhpSyntax\Nodes\IdentifierNode(token('A')), null, null, null, null, token('{'), new NodeList, token('}'));
+	Assert::same('classA{}', (string) $class);
 });
