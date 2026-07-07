@@ -196,6 +196,18 @@ abstract class Node implements \Stringable
 	}
 
 
+	/**
+	 * The texts of the tokens of the subtree in source order, the trivia left out: what matches() compares two
+	 * nodes by, and what a tool keys a map by where the layout of the code must not count. The size of the code
+	 * is measured on $text, which keeps the layout.
+	 * @return list<string>
+	 */
+	public function getTokenTexts(): array
+	{
+		return array_map(fn(Token $token) => $token->text, $this->getTokens());
+	}
+
+
 	/** Null only for a node without tokens, such as an empty list. */
 	public function getFirstToken(): ?Token
 	{
@@ -370,6 +382,15 @@ abstract class Node implements \Stringable
 		if (!is_a($class, self::class, allow_string: true) && !interface_exists($class)) {
 			throw new \InvalidArgumentException("The class must be a node class or an interface, '$class' given.");
 		}
+	}
+
+
+	/**
+	 * Whether the tokens of both nodes carry the same texts, whatever the whitespace between them.
+	 */
+	public function matches(self $other): bool
+	{
+		return $this->getTokenTexts() === $other->getTokenTexts();
 	}
 
 
