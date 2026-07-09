@@ -25,20 +25,7 @@ abstract class Node implements \Stringable
 	 * The node as it is written, without the trivia on its outer edges, which printing it writes too.
 	 */
 	public string $text {
-		get {
-			$text = '';
-			$previous = null;
-			foreach ($this->getTokens() as $token) {
-				if ($previous !== null) { // what stands between two tokens, so the edges never come up
-					$text .= self::textOf($previous->trailingTrivia) . self::textOf($token->leadingTrivia);
-				}
-
-				$text .= $token->text;
-				$previous = $token;
-			}
-
-			return $text;
-		}
+		get => Printer::printText($this);
 	}
 
 	/**
@@ -160,21 +147,6 @@ abstract class Node implements \Stringable
 		}
 
 		return $node instanceof FileNode ? $node : null;
-	}
-
-
-	/**
-	 * The text the trivia stand for.
-	 * @param  list<Trivia>  $trivia
-	 */
-	private static function textOf(array $trivia): string
-	{
-		$text = '';
-		foreach ($trivia as $item) {
-			$text .= $item->text;
-		}
-
-		return $text;
 	}
 
 
