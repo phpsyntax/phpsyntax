@@ -59,7 +59,7 @@ test('NodeList: items, parents, iteration, mutation', function () {
 	Assert::same($list, $x->parent);
 	Assert::same(1, $list->indexOf($x));
 
-	Assert::exception(fn() => $list->append($x), LogicException::class, 'The node already belongs to a tree, clone it first.');
+	Assert::exception(fn() => $list->append($x), LogicException::class, 'The node already belongs to a tree; a copy comes from withoutEdgeTrivia(), or from clone with the trivia on its edges.');
 	Assert::exception(fn() => $list->indexOf($a), InvalidArgumentException::class, 'StubNode is not a child of PhpSyntax\Nodes\NodeList.');
 });
 
@@ -140,6 +140,33 @@ test('ModifiersNode', function () {
 	$modifiers->removeToken($public);
 	Assert::same([$static], $modifiers->getTokens());
 	Assert::null($public->parent);
+});
+
+
+test('a modifier appended or removed keeps the trivia of the declaration where they belong', function () {
+	$parser = new Parser;
+	$change = function (string $code, callable $edit) use ($parser): string {
+		$file = $parser->parse($code);
+		$all = $file->find(ModifiersNode::class);
+		$edit($all[count($all) - 1]); // those of the method where the class has some too
+		return (string) $file;
+	};
+	$final = fn() => new Token(TokenKind::Final, 'final');
+
+	// the first modifier opens the declaration, the open tag and the doc comment go before it
+	Assert::same("<?php\n\n/** doc */\nfinal class B {}\n", $change("<?php\n\n/** doc */\nclass B {}\n", fn($m) => $m->append($final())));
+	Assert::same("<?php\nclass A\n{\n\tfinal function g() {}\n}\n", $change("<?php\nclass A\n{\n\tfunction g() {}\n}\n", fn($m) => $m->append($final())));
+	Assert::same("<?php\nreadonly final class B {}\n", $change("<?php\nreadonly class B {}\n", fn($m) => $m->append($final())));
+
+	// the one after a removed modifier takes its place in the lines
+	$remove = fn(int $kind) => fn(ModifiersNode $m) => $m->removeToken($m->findToken($kind) ?? throw new LogicException);
+	Assert::same("<?php\n\n/** doc */\nclass E {}\n", $change("<?php\n\n/** doc */\nreadonly class E {}\n", $remove(TokenKind::Readonly)));
+	Assert::same("<?php\nclass A\n{\n\t/** doc */\n\tstatic function f() {}\n}\n", $change("<?php\nclass A\n{\n\t/** doc */\n\tpublic static function f() {}\n}\n", $remove(TokenKind::Public)));
+	Assert::same("<?php\nclass A\n{\n\tpublic function f() {}\n}\n", $change("<?php\nclass A\n{\n\tpublic static function f() {}\n}\n", $remove(TokenKind::Static)));
+
+	// a comment after the removed modifier stays
+	Assert::same("<?php\nclass A\n{\n\tpublic /* x */ function f() {}\n}\n", $change("<?php\nclass A\n{\n\tpublic static /* x */ function f() {}\n}\n", $remove(TokenKind::Static)));
+	Assert::same("<?php\nclass A\n{\n\t/* x */ static function f() {}\n}\n", $change("<?php\nclass A\n{\n\tpublic /* x */ static function f() {}\n}\n", $remove(TokenKind::Public)));
 });
 
 
