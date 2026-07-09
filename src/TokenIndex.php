@@ -49,6 +49,9 @@ final class TokenIndex
 
 	private int $visualTabWidth = 0;
 
+	/** @var ?array<string, list<Node>>  nodes by `"start:end"` of their offsets, inner first; built with all the positions */
+	private ?array $spans = null;
+
 	/** the tree changed shape since the tokens were last moved */
 	private bool $structureChanged = false;
 
@@ -265,6 +268,74 @@ final class TokenIndex
 	}
 
 
+	/**
+	 * Byte offsets of the text of the node or token in the current text of the file, the end exclusive; null for
+	 * a node without tokens.
+	 * @return ?array{int, int}
+	 */
+	public function getOffsetRange(Node|Token $node): ?array
+	{
+		$first = $node->getFirstToken();
+		$last = $node->getLastToken();
+		if ($first === null || $last === null) {
+			return null;
+		}
+
+		return [$this->getOffset($first), $this->getOffset($last) + strlen($last->text)];
+	}
+
+
+	/**
+	 * The outermost node of the class whose text stands exactly at the offsets, the end exclusive; the way a
+	 * position of another tool (a parser of its own, an editor) is brought to the tree.
+	 * @template T of Node
+	 * @param  class-string<T>  $class
+	 * @return ?T
+	 */
+	public function findNode(int $start, int $end, string $class = Node::class): ?Node
+	{
+		$this->ensureOrder();
+		$this->ensurePositions(count($this->tokens) - 1);
+		if ($this->spans === null) {
+			$this->spans = [];
+			$this->collectSpans($this->root);
+		}
+
+		$nodes = $this->spans["$start:$end"] ?? [];
+		for ($i = count($nodes) - 1; $i >= 0; $i--) {
+			if ($nodes[$i] instanceof $class) {
+				return $nodes[$i];
+			}
+		}
+
+		return null;
+	}
+
+
+	/**
+	 * Records the offsets of the node and of everything under it.
+	 * @return ?array{int, int}  index of its first and last token, null for a node without tokens
+	 */
+	private function collectSpans(Node $node): ?array
+	{
+		$first = $last = null;
+		foreach ($node->getChildren() as $child) {
+			$range = $child instanceof Token ? array_fill(0, 2, $this->getOrdinal($child)) : $this->collectSpans($child);
+			if ($range !== null) {
+				$first ??= $range[0];
+				$last = $range[1];
+			}
+		}
+
+		if ($first === null || $last === null) {
+			return null;
+		}
+
+		$this->spans[$this->offsets[$first] . ':' . ($this->offsets[$last] + strlen($this->tokens[$last]->text))][] = $node;
+		return [$first, $last];
+	}
+
+
 	public function getLine(Token $token): int
 	{
 		$index = $this->getOrdinal($token);
@@ -413,11 +484,12 @@ final class TokenIndex
 	}
 
 
-	/** The offsets, columns and visual columns from the index on are stale. */
+	/** The offsets, columns and visual columns from the index on are stale, and so are the spans, which need all of them. */
 	private function invalidatePositions(int $from): void
 	{
 		$this->positioned = min($this->positioned, $from);
 		$this->visualized = min($this->visualized, $from);
+		$this->spans = null;
 	}
 
 

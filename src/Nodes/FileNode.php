@@ -102,6 +102,26 @@ final class FileNode extends Node
 	}
 
 
+	/** The tokens of the file in source order, kept by the index rather than collected anew. */
+	public function getTokens(): array
+	{
+		return $this->getIndex()->getTokens();
+	}
+
+
+	/**
+	 * The outermost node of the class whose text stands exactly at the byte offsets of the current text, the end
+	 * exclusive; the way a position of another tool (a parser of its own, an editor) is brought to the tree.
+	 * @template T of Node
+	 * @param  class-string<T>  $class
+	 * @return ?T
+	 */
+	public function findNode(int $start, int $end, string $class = Node::class): ?Node
+	{
+		return $this->getIndex()->findNode($start, $end, $class);
+	}
+
+
 	public function __clone()
 	{
 		$this->index = null; // before the children are written, so that their hooks do not report to the index of the original
