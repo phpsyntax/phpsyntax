@@ -60,7 +60,7 @@ test('PlainNodeList: items, parents, iteration, mutation', function () {
 	Assert::same($list, $x->parent);
 	Assert::same(1, $list->indexOf($x));
 
-	Assert::exception(fn() => $list->append($x), LogicException::class, 'The node already belongs to a tree, `clone` it first.');
+	Assert::exception(fn() => $list->append($x), LogicException::class, 'The node already belongs to a tree; a copy comes from `withoutEdgeTrivia()`, or from `clone` with the trivia on its edges.');
 	Assert::exception(fn() => $list->indexOf($a), InvalidArgumentException::class, '`StubNode` is not a child of `PhpSyntax\Nodes\PlainNodeList`.');
 });
 
