@@ -172,3 +172,26 @@ test('a clone copies the children, never a property computed from them', functio
 	Assert::same($copy, $copy[0]->parent);
 	Assert::notSame($params[0], $copy[0]);
 });
+
+
+test('positions asked of the file, a node and a token', function () {
+	$file = (new Parser)->parse("<?php\n\$a = \$b + 1;\n");
+	$sum = $file->findFirst(BinaryOpNode::class) ?? throw new LogicException;
+	$b = $sum->getFirstToken();
+	$one = $sum->getLastToken();
+
+	Assert::same($file->getIndex()->getTokens(), $file->getTokens());
+	Assert::same(array_map(fn($token) => $token->text, $file->getTokens()), $file->getTokenTexts());
+	Assert::same([11, 17], $sum->getOffsetRange());
+	Assert::same($sum, $file->findNode(11, 17, ExpressionNode::class));
+	Assert::null($file->findNode(11, 16));
+	Assert::true($b->isBefore($one));
+	Assert::false($one->isBefore($b));
+	Assert::false($b->isBefore($b));
+
+	$detached = (new Builder)->expression('$c + 2');
+	$c = $detached->getFirstToken();
+	Assert::null($detached->getOffsetRange());
+	Assert::exception(fn() => $c->isBefore($b), LogicException::class, 'A token without a file has no order.');
+	Assert::exception(fn() => $b->isBefore($c), InvalidArgumentException::class, 'Token `$c` stands in another file than token `$b`.');
+});
