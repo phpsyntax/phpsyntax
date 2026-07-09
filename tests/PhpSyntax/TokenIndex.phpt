@@ -1,7 +1,7 @@
 <?php declare(strict_types=1);
 
 use PhpSyntax\{Node, Parser, Printer, Style, Token, TokenKind, Trivia, TriviaKind};
-use PhpSyntax\Nodes\{ArgumentNode, ArrayItemNode, FileNode, NodeList, StatementNode};
+use PhpSyntax\Nodes\{ArgumentNode, ArrayItemNode, ExpressionNode, FileNode, NodeList, SeparatedNodeList, StatementNode};
 use PhpSyntax\Nodes\Expression\{ArrayNode, BinaryOpNode};
 use PhpSyntax\Nodes\Statement\{BlockNode, ExpressionStatementNode, IfNode};
 use Tester\Assert;
@@ -244,6 +244,18 @@ test('the order and the lines follow mutations of every kind', function () {
 });
 
 
+test('a trailing separator taken away before the index caught up with its insertion', function () {
+	$file = (new Parser)->parse("<?php\nf(\$a);\n");
+	$list = $file->find(ArgumentNode::class)[0]->parent;
+	assert($list instanceof SeparatedNodeList);
+	$list->append((new Parser)->parseFragment(ArgumentNode::class, '$b'));
+	$list->setTrailingSeparator(new Token(ord(','), ','));
+	$list->setTrailingSeparator(null);
+	Assert::same("<?php\nf(\$a, \$b);\n", Printer::print($file));
+	Assert::same(2, $file->getLastToken()?->getPrevious()?->getLine());
+});
+
+
 test('a node moved into the subtree that replaced it stands in the order once', function () {
 	// the way a body without braces is enclosed in them: the block takes the place of the statement,
 	// the statement then moves into the block, and both are adopted children of the same change
@@ -287,4 +299,49 @@ test('line width counts the indentation visually and drops trailing whitespace',
 	$item = $file->find(ArrayItemNode::class)[0];
 	Assert::same(strlen("    'xy'    => 1,"), $item->getFirstToken()?->getLineWidth($style));
 	Assert::same(strlen("    'xy'    ") + 1, $item->doubleArrow?->getVisualColumn($style));
+});
+
+
+test('offset range of a node and a token, in the current text', function () {
+	$code = "<?php\n\$a = (1 + \$b);\n";
+	$file = (new Parser)->parse($code);
+	$index = $file->getIndex();
+	$sum = $file->find(BinaryOpNode::class)[0];
+	Assert::same([12, 18], $index->getOffsetRange($sum)); // '1 + $b'
+	Assert::same([16, 18], $index->getOffsetRange($sum->right));
+	Assert::same([14, 15], $index->getOffsetRange($sum->operator));
+	Assert::null($index->getOffsetRange(new NodeList([])));
+
+	$sum->left->getFirstToken()?->setText('100');
+	Assert::same([12, 20], $index->getOffsetRange($sum));
+	Assert::same([18, 20], $index->getOffsetRange($sum->right));
+});
+
+
+test('a node is found by its offsets: the outermost of the class, none without the exact text', function () {
+	$code = "<?php\n\$a = (1 + \$b);\n";
+	$file = (new Parser)->parse($code);
+	$index = $file->getIndex();
+	$sum = $file->find(BinaryOpNode::class)[0];
+	Assert::same($sum, $index->findNode(12, 18));
+	Assert::same($sum, $index->findNode(12, 18, ExpressionNode::class));
+	Assert::null($index->findNode(12, 18, StatementNode::class));
+	Assert::null($index->findNode(12, 17));
+	Assert::same($sum->parent, $index->findNode(11, 19)); // the parentheses
+	Assert::same($sum->right, $index->findNode(16, 18, ExpressionNode::class));
+
+	// the statement and its assignment share nothing, the statement ends with the semicolon; the list of the
+	// one statement stands at the same offsets and is the outermost
+	$statement = $file->statements->items[0];
+	Assert::same($file->statements, $index->findNode(6, 20));
+	Assert::same($statement, $index->findNode(6, 20, StatementNode::class));
+	Assert::null($index->findNode(6, 20, ExpressionNode::class));
+	Assert::same($statement->getChildren()[0], $index->findNode(6, 19, ExpressionNode::class));
+
+	// the map follows a mutation
+	$sum->left->getFirstToken()?->setText('100');
+	Assert::null($index->findNode(12, 18));
+	Assert::same($sum, $index->findNode(12, 20));
+	$file->statements->removeItem($statement);
+	Assert::null($index->findNode(12, 20));
 });
