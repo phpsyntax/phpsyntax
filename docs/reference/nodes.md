@@ -25,6 +25,7 @@ Node of the concrete syntax tree; every token of the source is reachable through
 | `getStartLine(): ?int` | Current line of the first token; null for a detached subtree or a node without tokens. |
 | `getEndLine(): ?int` | Current line where the last token ends; null as for `getStartLine()`. |
 | `isMultiLine(): bool` | Whether a line ends inside the text of the node, the trivia on its outer edges left out; unlike the lines, it needs no file. |
+| `getOffsetRange(): ?array` | Byte offsets of the node in the current text of the file, the end exclusive; null as for `getStartLine()`. |
 | `getDocComment(): ?Trivia` | Doc comment before the node: the last one in the leading trivia of the first token, or in the trailing trivia of the previous token, where a doc comment stands between two declarations on one line. |
 | `replaceTrivia(Trivia $old, Trivia $new): void` | Replaces one trivia of the node, wherever among its tokens it stands, with another in place. |
 | `removeTrivia(Trivia $trivia): void` | Removes one trivia of the node, wherever among its tokens it stands, tidying the whitespace around it the way `Token::removeTrivia()` does. |
@@ -457,6 +458,8 @@ Extends `Node`. Handwritten class.
 | Member | Description |
 |---|---|
 | `$revision: int` | version of the tree: every write to a slot, a list, or the text or trivia of a token that changes it increments it |
+| `getTokens(): array` | The tokens of the file in source order, kept by the index rather than collected anew. |
+| `findNode(int $start, int $end, string $class = 'PhpSyntax\\Node'): ?Node` | The outermost node of the class whose text stands exactly at the byte offsets of the current text, the end exclusive; the way a position of another tool (a parser of its own, an editor) is brought to the tree. |
 | `getFirstToken(): Token` | Narrows the return type of `Node::getFirstToken()`. |
 | `getLastToken(): Token` | Narrows the return type of `Node::getLastToken()`. |
 

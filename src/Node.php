@@ -264,6 +264,16 @@ abstract class Node implements \Stringable
 
 
 	/**
+	 * Byte offsets of the node in the current text of the file, the end exclusive; null as for `getStartLine()`.
+	 * @return ?array{int, int}
+	 */
+	public function getOffsetRange(): ?array
+	{
+		return $this->getFile()?->getIndex()->getOffsetRange($this);
+	}
+
+
+	/**
 	 * Doc comment before the node: the last one in the leading trivia of the first token, or in the trailing
 	 * trivia of the previous token, where a doc comment stands between two declarations on one line.
 	 */
