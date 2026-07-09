@@ -19,6 +19,7 @@ const LIB = '(?(DEFINE)
 const PARAMS = '\[(?<params>[^[\]]*+(?:\[(?&params)\][^[\]]*+)*+)\]';
 const ARGS   = '\((?<args>[^()]*+(?:\((?&args)\)[^()]*+)*+)\)';
 
+
 ///////////////////////////////
 /// Preprocessing functions ///
 ///////////////////////////////
@@ -46,12 +47,7 @@ function resolveNodes($code)
 				$matches['params'],
 			);
 
-			$paramCode = '';
-			foreach ($params as $param) {
-				$paramCode .= $param . ', ';
-			}
-
-			return 'new ' . $matches['name'] . 'Node(' . $paramCode . 'line())';
+			return 'new ' . $matches['name'] . '(' . implode(', ', $params) . ')';
 		},
 		$code,
 	);
@@ -72,30 +68,31 @@ function resolveMacros($code)
 				$matches['args'],
 			);
 
-			if ($name === 'line') {
-				assertArgs(0, $args, $name);
-				return '$this->startPos(#1), $this->endPos($pos)';
-			}
-
-			if ($name === 'stackLine') {
-				assertArgs(1, $args, $name);
-				return '$this->startTokenStack[' . $args[0] . ']->position';
-			}
-
+			// expressions building a list
 			if ($name === 'init') {
-				return '$$ = [' . implode(', ', $args) . ']';
+				return $args ? 'new NodeList([' . implode(', ', $args) . '])' : 'new NodeList';
 			}
 
+			if ($name === 'separated') {
+				assertArgs($args ? 1 : 0, $args, $name);
+				return $args ? 'new SeparatedNodeList([' . $args[0] . '])' : 'new SeparatedNodeList';
+			}
+
+			if ($name === 'modifiers') {
+				assertArgs($args ? 1 : 0, $args, $name);
+				return $args ? 'new Nodes\ModifiersNode([' . $args[0] . '])' : 'new Nodes\ModifiersNode';
+			}
+
+			// statements extending a list; push(list, item) or push(list, separator, item)
 			if ($name === 'push') {
-				assertArgs(2, $args, $name);
-
-				return $args[0] . '[] = ' . $args[1] . '; $$ = ' . $args[0];
+				return count($args) === 3
+					? $args[0] . '->append(' . $args[2] . ', ' . $args[1] . '); $$ = ' . $args[0]
+					: (assertArgs(2, $args, $name) ?? $args[0] . '->append(' . $args[1] . '); $$ = ' . $args[0]);
 			}
 
-			if ($name === 'parseVar') {
-				assertArgs(1, $args, $name);
-
-				return 'substr(' . $args[0] . ', 1)';
+			if ($name === 'trailing') {
+				assertArgs(2, $args, $name);
+				return $args[0] . '->setTrailingSeparator(' . $args[1] . ')';
 			}
 
 			return $matches[0];
@@ -107,7 +104,7 @@ function resolveMacros($code)
 
 function assertArgs($num, $args, $name)
 {
-	if ($num != count($args)) {
+	if ($num !== count($args)) {
 		die('Wrong argument count for ' . $name . '().');
 	}
 }
