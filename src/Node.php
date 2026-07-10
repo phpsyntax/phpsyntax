@@ -723,7 +723,7 @@ abstract class Node implements \Stringable
 
 	/**
 	 * Lets go of the children of a node that is dropped, so that they can stand elsewhere.
-	 * @internal the parser takes apart what it built
+	 * @internal the parser and the builder take apart what they built
 	 */
 	public function dismantle(): void
 	{
