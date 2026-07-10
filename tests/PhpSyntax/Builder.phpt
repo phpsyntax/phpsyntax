@@ -420,3 +420,18 @@ test('a placeholder that cannot stand where the variable stands is refused', fun
 	Assert::type(ArrayNode::class, $b->value([1]));
 	Assert::same('f()', (string) $b->call('f'));
 });
+
+
+test('a placeholder refused by its place in a string leaves the detached part as it was', function () use ($b) {
+	$sum = expression('$a + $b');
+	$sum->setEdgeTrivia([PhpSyntax\Trivia::fromText('/* lead */')], [PhpSyntax\Trivia::fromText('/* trail */')]);
+	$message = 'Expression `$a + $b` cannot be written inside a string, which takes a variable, an element, a property or a call reached from a variable.';
+	Assert::exception(fn() => $b->expression('"{$x}"', x: $sum), InvalidArgumentException::class, $message);
+	Assert::same('/* lead */$a + $b/* trail */', (string) $sum);
+	Assert::null($sum->parent);
+
+	// the second place refuses what the first one took
+	Assert::exception(fn() => $b->expression('f($x, "{$x}")', x: $sum), InvalidArgumentException::class, $message);
+	Assert::same('/* lead */$a + $b/* trail */', (string) $sum);
+	Assert::null($sum->parent);
+});

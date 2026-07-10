@@ -28,7 +28,7 @@ final class Trivia extends \PhpToken
 	/** a line ending, which PHP reads as a part of `T_WHITESPACE` and the lexer splits out; far from the kinds `Token` has of its own */
 	public const LineEnding = -100;
 
-	/** inside string interpolation, where whitespace can change what the string reads: `"${a}"` and `"${a }"` differ; only the lexer writes it */
+	/** inside string interpolation, where whitespace can change what the string reads: `"${a}"` and `"${a }"` differ; written by the lexer and by `withInterpolation()` and `withoutInterpolation()` */
 	public bool $inInterpolation = false;
 
 
@@ -60,6 +60,30 @@ final class Trivia extends \PhpToken
 	{
 		$trivia = clone $this;
 		$trivia->text = $text;
+		return $trivia;
+	}
+
+
+	/**
+	 * A copy standing inside string interpolation.
+	 * @internal what `ExpressionNode::replaceWithExpression()` marks the trivia it writes into a string with
+	 */
+	public function withInterpolation(): self
+	{
+		$trivia = clone $this;
+		$trivia->inInterpolation = true;
+		return $trivia;
+	}
+
+
+	/**
+	 * A copy standing outside string interpolation.
+	 * @internal what `ExpressionNode::replaceWithExpression()` clears on the trivia it writes out of a string
+	 */
+	public function withoutInterpolation(): self
+	{
+		$trivia = clone $this;
+		$trivia->inInterpolation = false;
 		return $trivia;
 	}
 

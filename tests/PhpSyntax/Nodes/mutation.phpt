@@ -258,13 +258,40 @@ test('replaceWithExpression into a slot that takes no parentheses replaces bare 
 	$donor = (new Builder)->expression('f() + $b');
 	assert($donor instanceof BinaryOpNode);
 	$call = $donor->left;
-	Assert::exception(fn() => $variable->replaceWithExpression($call), InvalidArgumentException::class);
+	$message = '`PhpSyntax\Nodes\Expression\FunctionCallNode` cannot be placed in the slot `variable` of `PhpSyntax\Nodes\ParameterNode`.';
+	Assert::exception(fn() => $variable->checkReplaceWithExpression($call), InvalidArgumentException::class, $message);
+	Assert::exception(fn() => $variable->replaceWithExpression($call), InvalidArgumentException::class, $message);
 	Assert::same($donor, $call->parent);
 	Assert::same('f() + $b', (string) $donor);
 	Assert::same('<?php function f($a) {}', (string) $file);
 
 	$variable->replaceWithExpression($variable);
 	Assert::same('<?php function f($a) {}', (string) $file);
+});
+
+
+test('replaceWithExpression writes the name of a member or of a variable in braces unless it is a variable', function () {
+	$builder = new Builder;
+	foreach ([
+		'$o->$m;' => ['$o->{$a . "b"};', '$o->$x;'],
+		'$o->$m();' => ['$o->{$a . "b"}();', '$o->$x();'],
+		'A::$m();' => ['A::{$a . "b"}();', 'A::$x();'],
+		'A::$$m;' => ['A::${$a . "b"};', 'A::$$x;'],
+		'$$m;' => ['${$a . "b"};', '$$x;'],
+	] as $code => [$braced, $bare]) {
+		foreach ([$braced => '$a . "b"', $bare => '$x'] as $expected => $with) {
+			$file = parse("<?php $code");
+			$name = $file->find(VariableNode::class, fn(VariableNode $node) => $node->plainName === 'm')[0] ?? throw new LogicException;
+			$name->replaceWithExpression($builder->expression($with));
+			Assert::same("<?php $expected", (string) $file);
+			Assert::true($file->statements[0]->matches(parse("<?php $expected")->statements[0]));
+		}
+	}
+
+	// a name already in braces keeps them
+	$file = parse('<?php $o->{$m}();');
+	($file->find(VariableNode::class, fn(VariableNode $node) => $node->plainName === 'm')[0] ?? throw new LogicException)->replaceWithExpression($builder->expression('$x'));
+	Assert::same('<?php $o->{$x}();', (string) $file);
 });
 
 

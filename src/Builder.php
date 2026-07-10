@@ -514,26 +514,32 @@ final class Builder
 	}
 
 
-	/** Refuses a part that cannot stand where the placeholder stands, before anything moves. */
+	/**
+	 * Refuses a part that cannot stand where the placeholder stands, before anything moves: by the type of the slot,
+	 * and an expression by everything `replaceWithExpression()` refuses, a place in a string among it.
+	 */
 	private static function checkPlace(VariableNode $variable, Node $part): void
 	{
 		$parent = $variable->parent;
 		if ($part instanceof DestructuringNode && !self::isTarget($variable)) {
 			throw new \InvalidArgumentException("Placeholder `\$$variable->plainName` is a destructuring, which stands only where a target is written.");
-		} elseif ($parent === null || $parent instanceof NodeList) {
+		} elseif ($parent === null) {
 			return;
 		}
 
-		$slot = (string) $parent->findSlotOf($variable);
-		$type = new \ReflectionProperty($parent, $slot)->getType();
-		$types = $type instanceof \ReflectionUnionType ? $type->getTypes() : [$type];
-		foreach ($types as $type) {
-			if ($type instanceof \ReflectionNamedType && is_a($part, $type->getName())) {
-				return;
+		if (!$parent instanceof NodeList) {
+			$slot = (string) $parent->findSlotOf($variable);
+			$type = new \ReflectionProperty($parent, $slot)->getType();
+			$types = $type instanceof \ReflectionUnionType ? $type->getTypes() : [$type];
+			$fits = array_any($types, fn(?\ReflectionType $type) => $type instanceof \ReflectionNamedType && is_a($part, $type->getName()));
+			if (!$fits) {
+				throw new \InvalidArgumentException("Placeholder `\$$variable->plainName` stands in the slot `$slot` of `" . $parent::class . '`, which does not take `' . $part::class . '`.');
 			}
 		}
 
-		throw new \InvalidArgumentException("Placeholder `\$$variable->plainName` stands in the slot `$slot` of `" . $parent::class . '`, which does not take `' . $part::class . '`.');
+		if ($part instanceof ExpressionNode) {
+			$variable->checkPlaceHolds($part);
+		}
 	}
 
 
