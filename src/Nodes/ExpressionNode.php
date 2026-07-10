@@ -344,4 +344,54 @@ abstract class ExpressionNode extends Node
 
 		return [$result];
 	}
+
+
+	/**
+	 * Replaces this node by the expression the way `replaceWith()` does, in parentheses where the expression
+	 * binds looser than the place asks or is reached into there: what `ParenthesizedNode::isRedundant()`
+	 * does not call needless stays. A place typed narrower, which takes no parentheses, gets the expression bare.
+	 */
+	public function replaceWithExpression(self $expression): void
+	{
+		if ($expression instanceof ParenthesizedNode) {
+			$this->replaceWith($expression);
+			return;
+		}
+
+		$parent = $this->parent ?? throw new \LogicException('A node without a parent cannot be replaced.');
+		if ($expression === $this || !self::canHoldParentheses($parent, $this)) {
+			$this->replaceWith($expression); // which refuses what the slot does not take before it moves anything
+			return;
+		}
+
+		$parent->prepareValue($expression, $this); // the parentheses take the expression from where replaceWith() would take it
+		// the trivia on the edges of the expression stand outside the parentheses, where they stay once those go
+		[$leading, $trailing] = [$expression->leadingTrivia, $expression->trailingTrivia];
+		$parenthesized = new ParenthesizedNode(Token::fromText('('), $expression->setEdgeTrivia([], []), Token::fromText(')'));
+		$parenthesized->setEdgeTrivia($leading, $trailing);
+		$this->replaceWith($parenthesized);
+		if ($parenthesized->isRedundant()) {
+			$parenthesized->replaceWith($expression);
+		}
+	}
+
+
+	/** Whether the place of the child takes an expression in parentheses, which a slot typed narrower does not. */
+	private static function canHoldParentheses(Node $parent, Node $child): bool
+	{
+		$slot = $parent->findSlotOf($child);
+		if ($parent instanceof NodeList || $slot === null) {
+			return true;
+		}
+
+		$type = new \ReflectionProperty($parent, $slot)->getType();
+		$types = $type instanceof \ReflectionUnionType ? $type->getTypes() : [$type];
+		foreach ($types as $type) {
+			if ($type instanceof \ReflectionNamedType && is_a(ParenthesizedNode::class, $type->getName(), allow_string: true)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
 }

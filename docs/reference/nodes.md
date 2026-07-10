@@ -93,6 +93,7 @@ Extends `Node`.
 | `evaluatesToBoolean(): bool` | Whether the expression yields a boolean whatever its operands: a comparison, a logical operation, a negation, `instanceof`, `isset()`, `empty()`, a bool cast or a boolean literal. |
 | `toValue(): mixed` | The value the expression is written as: a scalar, `null`, `true`, `false`, or an array of them. A name standing for a constant is not one, its value being a matter of what the code around it defines. Throws LogicException where the expression is written as no value; `hasValue()` tells beforehand. |
 | `hasValue(): bool` | Whether the expression is written as a value, which is what `toValue()` gives. |
+| `replaceWithExpression(ExpressionNode $expression): void` | Replaces this node by the expression the way `replaceWith()` does, in parentheses where the expression binds looser than the place asks or is reached into there: what `ParenthesizedNode::isRedundant()` does not call needless stays. A place typed narrower, which takes no parentheses, gets the expression bare. |
 | `getFirstToken(): Token` | Narrows the return type of `Node::getFirstToken()`. |
 | `getLastToken(): Token` | Narrows the return type of `Node::getLastToken()`. |
 
