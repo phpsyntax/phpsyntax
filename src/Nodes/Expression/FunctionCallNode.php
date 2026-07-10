@@ -7,6 +7,7 @@
 
 namespace PhpSyntax\Nodes\Expression;
 
+use PhpSyntax\AccessKind;
 use PhpSyntax\Nodes\{ArgumentListNode, ExpressionNode, NameNode};
 
 
@@ -23,5 +24,18 @@ final class FunctionCallNode extends ExpressionNode
 		public NameNode|ExpressionNode $name { set => $this->prepareSlot(__PROPERTY__, $value); },
 		public ArgumentListNode $arguments { set => $this->prepareSlot(__PROPERTY__, $value); },
 	) {
+	}
+
+
+	/** A call of the name, or of the expression, in parentheses where the call would take it for something else. */
+	public static function of(NameNode|ExpressionNode $name, ?ArgumentListNode $arguments = null): self
+	{
+		self::checkDetached($name, $arguments);
+		return new self(
+			$name instanceof ExpressionNode && !$name->isDereferenceable(AccessKind::Call)
+				? ParenthesizedNode::of($name)
+				: $name->setEdgeTrivia([], []),
+			$arguments?->setEdgeTrivia([], []) ?? ArgumentListNode::of(),
+		);
 	}
 }

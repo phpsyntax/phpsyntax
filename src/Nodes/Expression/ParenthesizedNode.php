@@ -9,6 +9,7 @@ namespace PhpSyntax\Nodes\Expression;
 
 use PhpSyntax\{Node, Token, TokenKind};
 use PhpSyntax\Nodes\{ArrayItemNode, ExpressionNode, MatchArmNode, OperatorNode, RightExtendingNode, SeparatedNodeList};
+use function ord;
 
 
 /**
@@ -34,6 +35,18 @@ final class ParenthesizedNode extends ExpressionNode
 		public ExpressionNode $expression { set => $this->prepareSlot(__PROPERTY__, $value); },
 		public Token $closeParen { set => $this->prepareSlot(__PROPERTY__, $value); },
 	) {
+	}
+
+
+	/** The expression in parentheses, without the trivia on its edges. */
+	public static function of(ExpressionNode $expression): self
+	{
+		self::checkDetached($expression);
+		return new self(
+			new Token(ord('('), '('),
+			$expression->setEdgeTrivia([], []),
+			new Token(ord(')'), ')'),
+		);
 	}
 
 

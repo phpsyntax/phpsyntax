@@ -793,6 +793,41 @@ abstract class Node implements \Stringable
 
 
 	/**
+	 * Refuses a node standing in a file before a factory building a new node of it moves anything: the factory
+	 * may take a node out of a subtree without a file, never out of a live tree. A node given twice, or inside
+	 * another one given, would be taken from the place the factory has just put it in, so it is refused too.
+	 */
+	protected static function checkDetached(?self ...$nodes): void
+	{
+		$nodes = array_values(array_filter($nodes));
+		foreach ($nodes as $i => $node) {
+			if ($node->getFile() !== null) {
+				throw self::describeOwned($node);
+			}
+
+			foreach (array_slice($nodes, $i + 1) as $other) {
+				if ($node->contains($other) || $other->contains($node)) {
+					throw new \LogicException('A node cannot be two parts of the node a factory builds; a copy comes from withoutEdgeTrivia().');
+				}
+			}
+		}
+	}
+
+
+	/** Whether the node is this one or stands anywhere inside it. */
+	private function contains(self $node): bool
+	{
+		for ($ancestor = $node; $ancestor !== null; $ancestor = $ancestor->parent) {
+			if ($ancestor === $this) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+
+	/**
 	 * Puts the node under another one, or takes it out of the tree with null.
 	 * @internal only the tree and the parser write the parent
 	 */

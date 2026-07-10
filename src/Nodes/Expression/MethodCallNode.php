@@ -31,6 +31,27 @@ final class MethodCallNode extends ExpressionNode
 	}
 
 
+	/** A call of the method on the object, in parentheses where it could not be reached into bare. */
+	public static function of(
+		ExpressionNode $object,
+		string $name,
+		?ArgumentListNode $arguments = null,
+		bool $nullsafe = false,
+	): self
+	{
+		$identifier = IdentifierNode::fromText($name);
+		self::checkDetached($object, $arguments);
+		return new self(
+			object: $object->isDereferenceable() ? $object->setEdgeTrivia([], []) : ParenthesizedNode::of($object),
+			operator: $nullsafe ? new Token(TokenKind::NullsafeObjectOperator, '?->') : new Token(TokenKind::ObjectOperator, '->'),
+			openBrace: null,
+			name: $identifier,
+			closeBrace: null,
+			arguments: $arguments?->setEdgeTrivia([], []) ?? ArgumentListNode::of(),
+		);
+	}
+
+
 	/** Whether the call is written with `?->`, which skips it when the object is null. */
 	public function isNullsafe(): bool
 	{

@@ -7,7 +7,8 @@
 
 namespace PhpSyntax\Nodes;
 
-use PhpSyntax\{Node, Token};
+use PhpSyntax\{Node, Token, Trivia, TriviaKind};
+use function ord;
 
 
 /**
@@ -25,6 +26,25 @@ final class ArgumentListNode extends Node
 		public SeparatedNodeList $items { set => $this->prepareSlot(__PROPERTY__, $value); },
 		public Token $closeParen { set => $this->prepareSlot(__PROPERTY__, $value); },
 	) {
+	}
+
+
+	/** A one-line list of positional arguments with the values, which lose the trivia on their edges. */
+	public static function of(ExpressionNode ...$values): self
+	{
+		self::checkDetached(...$values);
+		/** @var list<ArgumentNode|VariadicPlaceholderNode|ArgumentPlaceholderNode> $items */
+		$items = [];
+		$separators = [];
+		foreach ($values as $value) {
+			if ($items !== []) {
+				$separators[] = new Token(ord(','), ',')->setTrailingTrivia([new Trivia(TriviaKind::Whitespace, ' ')]);
+			}
+
+			$items[] = new ArgumentNode(name: null, colon: null, ampersand: null, ellipsis: null, value: $value->setEdgeTrivia([], []));
+		}
+
+		return new self(new Token(ord('('), '('), new SeparatedNodeList($items, $separators), new Token(ord(')'), ')'));
 	}
 
 
