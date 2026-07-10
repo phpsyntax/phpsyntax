@@ -46,7 +46,7 @@ final class DestructuringNode extends Node
 	 * The destructuring a target is: a short array written where a place is assigned to means the same as
 	 * `list(...)` and becomes one, its own items included, however deep they nest. Anything else stands as it is,
 	 * a long array among it, which PHP does not take for a target.
-	 * @internal what the parser makes of a target
+	 * @internal what the parser and `Builder::assign()` make of a target
 	 */
 	public static function destructure(ExpressionNode|self $target): ExpressionNode|self
 	{
