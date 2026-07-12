@@ -310,6 +310,58 @@ final class Token implements \Stringable
 	}
 
 
+	/** Whether a comment sits in the leading or trailing trivia of the token. */
+	public function hasComment(): bool
+	{
+		return $this->getComments() !== [];
+	}
+
+
+	/**
+	 * The comments among the trivia of the token, the leading ones first.
+	 * @return list<Trivia>
+	 */
+	public function getComments(): array
+	{
+		$comments = [];
+		foreach ([...$this->leadingTrivia, ...$this->trailingTrivia] as $trivia) {
+			if ($trivia->isComment()) {
+				$comments[] = $trivia;
+			}
+		}
+
+		return $comments;
+	}
+
+
+	/**
+	 * Whether a comment sits anywhere between the text of this token and the text of the given one:
+	 * in the trailing trivia here, the leading trivia there, or around any token between them.
+	 */
+	public function hasCommentUpTo(self $end): bool
+	{
+		for ($token = $this; $token !== null; $token = $token->getNext()) {
+			foreach ($token === $this ? [] : $token->leadingTrivia as $trivia) {
+				if ($trivia->isComment()) {
+					return true;
+				}
+			}
+
+			if ($token === $end) {
+				return false;
+			}
+
+			foreach ($token->trailingTrivia as $trivia) {
+				if ($trivia->isComment()) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+
 	/**
 	 * Sets the number of blank lines before the token, which must start a line; comments before it keep
 	 * their position after the blank lines.

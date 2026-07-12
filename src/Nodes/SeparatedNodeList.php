@@ -259,11 +259,17 @@ final class SeparatedNodeList extends Node implements \Countable, \IteratorAggre
 	}
 
 
+	/**
+	 * A separator modeled on the ones already there, the nearest one first; a comment of a separator is
+	 * content and not formatting, so one carrying it is no model and the next one stands in for it.
+	 */
 	private function deriveSeparator(int $index, Node $neighbor): Token
 	{
-		$model = $this->separators[min($index, count($this->separators)) - 1] ?? $this->separators[0] ?? null;
-		if ($model) {
-			return clone $model;
+		$nearest = $this->separators[min($index, count($this->separators)) - 1] ?? $this->separators[0] ?? null;
+		foreach ([$nearest, ...$this->separators] as $model) {
+			if ($model !== null && !$model->hasComment()) {
+				return clone $model;
+			}
 		}
 
 		$separator = new Token(ord(','), ',');

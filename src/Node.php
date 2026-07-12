@@ -373,6 +373,51 @@ abstract class Node implements \Stringable
 
 
 	/**
+	 * Whether the tokens of both nodes carry the same texts, whatever the whitespace between them.
+	 */
+	public function matches(self $other): bool
+	{
+		return self::collectTexts($this) === self::collectTexts($other);
+	}
+
+
+	/** @return list<string> */
+	private static function collectTexts(self|Token $item): array
+	{
+		if ($item instanceof Token) {
+			return [$item->text];
+		}
+
+		$texts = [];
+		foreach ($item->getChildren() as $child) {
+			foreach (self::collectTexts($child) as $text) {
+				$texts[] = $text;
+			}
+		}
+
+		return $texts;
+	}
+
+
+	/**
+	 * Writes the trivia on the outer edges of the node: before its first token and after its last one.
+	 * A null leaves that edge alone, [] clears it, and a node without tokens takes neither.
+	 * @param  ?list<Trivia>  $leading
+	 * @param  ?list<Trivia>  $trailing
+	 */
+	public function setEdgeTrivia(?array $leading = null, ?array $trailing = null): void
+	{
+		if ($leading !== null && ($first = $this->getFirstToken())) {
+			$first->setLeadingTrivia($leading);
+		}
+
+		if ($trailing !== null && ($last = $this->getLastToken())) {
+			$last->setTrailingTrivia($trailing);
+		}
+	}
+
+
+	/**
 	 * Replaces this node in its parent; the trivia around the old node stay in place around the new one.
 	 */
 	public function replaceWith(self $node): void
@@ -672,24 +717,6 @@ abstract class Node implements \Stringable
 		return new \InvalidArgumentException(
 			($child instanceof Token ? "Token '$child->text'" : $child::class) . ' is not a child of ' . static::class . '.',
 		);
-	}
-
-
-	/**
-	 * Writes the trivia on the outer edges of the node: before its first token and after its last one.
-	 * A null leaves that edge alone, [] clears it, and a node without tokens takes neither.
-	 * @param  ?list<Trivia>  $leading
-	 * @param  ?list<Trivia>  $trailing
-	 */
-	public function setEdgeTrivia(?array $leading = null, ?array $trailing = null): void
-	{
-		if ($leading !== null && ($first = $this->getFirstToken())) {
-			$first->setLeadingTrivia($leading);
-		}
-
-		if ($trailing !== null && ($last = $this->getLastToken())) {
-			$last->setTrailingTrivia($trailing);
-		}
 	}
 
 

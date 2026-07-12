@@ -65,6 +65,18 @@ test('multi-line list: the item inherits the indentation and the separator its l
 });
 
 
+test('a separator carrying a comment models nothing: the comment would be copied', function () {
+	$list = items('<?php [1, /* unique */ 2];');
+	$list->append(item('3'));
+	Assert::same('<?php [1, /* unique */ 2, 3]', (string) $list->parent);
+
+	// another separator stands in for it, with the formatting it has
+	$list = items("<?php [\n\t1, // why\n\t2,\n];");
+	$list->append(item('3'));
+	Assert::same("<?php [\n\t1, // why\n\t2,\n\t3,\n]", (string) $list->parent);
+});
+
+
 test('an explicit separator is used as given', function () {
 	$list = items('<?php [1, 2];');
 	$list->append(item('3'), new PhpSyntax\Token(ord(','), ','));
