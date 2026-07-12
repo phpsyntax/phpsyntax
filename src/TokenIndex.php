@@ -256,15 +256,7 @@ final class TokenIndex
 			$prefix .= $trivia->text;
 		}
 
-		$prefix = preg_replace('~^.*[\r\n]~s', '', $prefix);
-		$column = 0;
-		foreach (preg_split('~(\t)~', $prefix, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY) as $piece) {
-			$column = $piece === "\t"
-				? intdiv($column, $style->tabWidth) * $style->tabWidth + $style->tabWidth
-				: $column + self::countCharacters($piece);
-		}
-
-		return $column + 1;
+		return Indentation::advance(0, (string) preg_replace('~^.*[\r\n]~s', '', $prefix), $style) + 1;
 	}
 
 
