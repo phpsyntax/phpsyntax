@@ -63,6 +63,13 @@ test('startsLine and indentation', function () {
 	$a->setIndentation('');
 	Assert::same("<?php\n\$a; \$b;\n\n  // c\n\t\t\$c;", (string) $file);
 	Assert::exception(fn() => $b->setIndentation("\t"), LogicException::class, "Token '\$b' does not start a line.");
+
+	// the space after an inline comment is not indentation and survives reindenting
+	$file = parse("<?php\n/*enum*/ final class A {}");
+	[$final] = tokens($file);
+	Assert::same('', $final->getIndentation());
+	$final->setIndentation("\t");
+	Assert::same("<?php\n\t/*enum*/ final class A {}", (string) $file);
 });
 
 

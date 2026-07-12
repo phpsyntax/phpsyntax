@@ -182,20 +182,54 @@ final class Token implements \Stringable
 	}
 
 
-	/** Whitespace between the start of the line and the token; empty when the token does not start a line. */
+	/** Indentation of the line the token is on, whether the token starts it or not. */
+	public function getLineIndentation(): string
+	{
+		$token = $this;
+		while (!$token->startsLine()) {
+			$token = $token->getPrevious() ?? throw new \LogicException('A token without a file has no line.');
+		}
+
+		return $token->getIndentation();
+	}
+
+
+	/**
+	 * Whitespace at the start of the token's line, before any comment sitting between it and the token;
+	 * empty when the token does not start a line.
+	 */
 	public function getIndentation(): string
 	{
 		$indentation = '';
-		foreach ($this->leadingTrivia as $trivia) {
-			$indentation = $trivia->kind === TriviaKind::Whitespace ? $indentation . $trivia->text : '';
+		foreach (array_slice($this->leadingTrivia, $this->findLineStart()) as $trivia) {
+			if ($trivia->kind !== TriviaKind::Whitespace) {
+				break;
+			}
+
+			$indentation .= $trivia->text;
 		}
 
 		return $indentation;
 	}
 
 
+	/** Index of the first trivia after the last line ending or open tag. */
+	private function findLineStart(): int
+	{
+		$start = 0;
+		foreach ($this->leadingTrivia as $i => $trivia) {
+			if ($trivia->isEndOfLine() || $trivia->kind === TriviaKind::OpenTag) {
+				$start = $i + 1;
+			}
+		}
+
+		return $start;
+	}
+
+
 	/**
-	 * Replaces the whitespace between the start of the line and the token; the token must start a line.
+	 * Replaces the whitespace at the start of the token's line, leaving a comment sitting between it
+	 * and the token alone; the token must start a line.
 	 */
 	public function setIndentation(string $indentation): void
 	{
@@ -205,15 +239,14 @@ final class Token implements \Stringable
 		}
 
 		$leading = $this->leadingTrivia;
-		while ($leading && end($leading)->kind === TriviaKind::Whitespace) {
-			array_pop($leading);
+		$start = $this->findLineStart();
+		$end = $start;
+		while (($leading[$end] ?? null)?->kind === TriviaKind::Whitespace) {
+			$end++;
 		}
 
-		if ($indentation !== '') {
-			$leading[] = new Trivia(TriviaKind::Whitespace, $indentation);
-		}
-
-		$this->setLeadingTrivia($leading);
+		$replacement = $indentation === '' ? [] : [new Trivia(TriviaKind::Whitespace, $indentation)];
+		$this->setLeadingTrivia([...array_slice($leading, 0, $start), ...$replacement, ...array_slice($leading, $end)]);
 	}
 
 
