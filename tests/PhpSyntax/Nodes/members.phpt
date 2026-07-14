@@ -1,0 +1,150 @@
+<?php declare(strict_types=1);
+
+/**
+ * What the modifiers, the parameters, the arguments, the types and the other constructs say about themselves.
+ */
+
+use PhpSyntax\Node;
+use PhpSyntax\Nodes\ArgumentListNode;
+use PhpSyntax\Nodes\Expression\CastNode;
+use PhpSyntax\Nodes\Expression\FunctionCallNode;
+use PhpSyntax\Nodes\Expression\MethodCallNode;
+use PhpSyntax\Nodes\Expression\PropertyFetchNode;
+use PhpSyntax\Nodes\IdentifierNode;
+use PhpSyntax\Nodes\Member\MethodNode;
+use PhpSyntax\Nodes\Member\PropertyNode;
+use PhpSyntax\Nodes\ParameterNode;
+use PhpSyntax\Nodes\Statement\ClassNode;
+use PhpSyntax\Parser;
+use PhpSyntax\Visibility;
+use Tester\Assert;
+
+require __DIR__ . '/../../bootstrap.php';
+
+
+function parseFile(string $code): PhpSyntax\Nodes\FileNode
+{
+	return (new Parser)->parse("<?php\n$code");
+}
+
+
+test('the visibility and the other modifiers', function () {
+	$file = parseFile('class A { public $a; protected static $b; private final function c(int $f) {} readonly public(set) $d; var $e; }');
+	$members = [];
+	foreach ($file->find(PropertyNode::class) as $property) {
+		$members[] = $property->modifiers;
+	}
+
+	foreach ($file->find(MethodNode::class) as $method) {
+		$members[] = $method->modifiers;
+	}
+
+	[$a, $b, $d, $e, $c] = $members;
+	$f = $file->find(ParameterNode::class)[0]->modifiers; // a parameter that promotes nothing has none
+	Assert::same(Visibility::Public, $a->visibility);
+	Assert::true($a->isPublic());
+	Assert::same(Visibility::Protected, $b->visibility);
+	Assert::true($b->isProtected());
+	Assert::true($b->isStatic());
+	Assert::same(Visibility::Private, $c->visibility);
+	Assert::true($c->isPrivate());
+	Assert::true($c->isFinal());
+	Assert::false($c->isAbstract());
+	Assert::true($d->isReadonly());
+	Assert::same(Visibility::Public, $d->writeVisibility);
+	Assert::same(Visibility::Public, $e->visibility); // var is public
+	Assert::null($f->visibility); // no modifier at all, which is public too
+	Assert::true($f->isPublic());
+	Assert::null($f->writeVisibility);
+	Assert::same('static', $b->findToken(PhpSyntax\TokenKind::Static)?->text);
+	Assert::null($b->findToken(PhpSyntax\TokenKind::Final));
+});
+
+
+test('an identifier takes an identifier and nothing else', function () {
+	$file = parseFile('class A { function b() {} }');
+	$method = $file->find(MethodNode::class)[0];
+	$method->name->text = 'c';
+	Assert::same('c', $method->name->text);
+	Assert::exception(fn() => $method->name->text = 'c d', InvalidArgumentException::class, "'c d' is not an identifier.");
+	Assert::exception(fn() => $method->name->text = '', InvalidArgumentException::class, "'' is not an identifier.");
+	Assert::same('c', $method->name->text);
+
+	Assert::same('d', IdentifierNode::fromText('d')->text);
+	Assert::exception(fn() => IdentifierNode::fromText('d e'), InvalidArgumentException::class, "'d e' is not an identifier.");
+});
+
+
+test('a promoted parameter is the one with modifiers', function () {
+	$file = parseFile('class A { function __construct(private int $a, int $b) {} }');
+	[$a, $b] = $file->find(ParameterNode::class);
+	Assert::true($a->isPromoted());
+	Assert::same(Visibility::Private, $a->modifiers->visibility);
+	Assert::false($b->isPromoted());
+});
+
+
+test('the argument a parameter gets, and the partial application', function () {
+	$file = parseFile('f(1, b: 2, ...$c); g(...); h(1, ?, c: ?); i(...$a); j(...$a, b: 2); k(...$a, c: 3);');
+	[$call, $callable, $partial, $unpacked, $named, $other] = $file->find(ArgumentListNode::class);
+	Assert::false($call->isPartialApplication());
+	Assert::same('1', (string) $call->findArgument('a', 0)?->value);
+	Assert::same('2', (string) $call->findArgument('b', 1)?->value);
+	Assert::same('2', (string) $call->findArgument('b', 9)?->value); // the name wins over the position
+	Assert::null($call->findArgument('z', 9)); // what the unpacked array holds could be it
+
+	Assert::null($unpacked->findArgument('a', 0)); // it stands where the array unpacks
+
+	// an unpacked array takes the answer from the position after it, not from a name written there
+	Assert::same('2', (string) $named->findArgument('b', 0)?->value);
+	Assert::null($other->findArgument('b', 0));
+
+	Assert::true($callable->isPartialApplication());
+	Assert::null($callable->findArgument('a', 0));
+
+	Assert::true($partial->isPartialApplication());
+	Assert::same('1', (string) $partial->findArgument('a', 0)?->value);
+	Assert::null($partial->findArgument('b', 1)); // the placeholder holds the position
+	Assert::null($partial->findArgument('c', 9));
+});
+
+
+test('a nullsafe call and fetch', function () {
+	$file = parseFile('$a?->b(); $c->d(); $e?->f; $g->h;');
+	[$nullsafeCall, $call] = $file->find(MethodCallNode::class);
+	Assert::true($nullsafeCall->isNullsafe());
+	Assert::false($call->isNullsafe());
+	[$nullsafeFetch, $fetch] = $file->find(PropertyFetchNode::class);
+	Assert::true($nullsafeFetch->isNullsafe());
+	Assert::false($fetch->isNullsafe());
+});
+
+
+test('the constructor by its name, whatever its letter case', function () {
+	$file = parseFile('class A { function __CONSTRUCT() {} function b() {} }');
+	Assert::same([true, false], array_map(fn(MethodNode $m) => $m->isConstructor(), $file->find(MethodNode::class)));
+});
+
+
+test('the type of a cast in the name PHP knows it by', function () {
+	$file = parseFile('(int) $a; (integer) $b; (boolean) $c; ( double ) $d; (real) $e; (binary) $f; (object) $g;');
+	Assert::same(
+		['int', 'int', 'bool', 'float', 'float', 'string', 'object'],
+		array_map(fn(CastNode $cast) => $cast->type, $file->find(CastNode::class)),
+	);
+});
+
+
+test('a list is iterated and counted like a list, its items without the separators', function () {
+	$file = parseFile('f(1, 2, 3); class A { public $x; public $y; }');
+	$call = $file->find(FunctionCallNode::class)[0];
+	Assert::same(['1', '2', '3'], array_map(fn(Node $arg) => $arg->text, iterator_to_array($call->arguments->items)));
+	Assert::count(3, $call->arguments->items);
+
+	$class = $file->find(ClassNode::class)[0];
+	Assert::count(2, $class->members);
+
+	$property = $file->find(PropertyNode::class)[0];
+	Assert::count(1, $property->modifiers);
+	Assert::same(['public'], array_map(fn($token) => $token->text, iterator_to_array($property->modifiers)));
+});
