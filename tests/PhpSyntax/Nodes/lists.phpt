@@ -2,10 +2,15 @@
 
 use PhpSyntax\Node;
 use PhpSyntax\Nodes\FileNode;
+use PhpSyntax\Nodes\MemberNode;
 use PhpSyntax\Nodes\ModifiersNode;
 use PhpSyntax\Nodes\NodeList;
 use PhpSyntax\Nodes\SeparatedNodeList;
+use PhpSyntax\Nodes\Statement\BlockNode;
+use PhpSyntax\Nodes\Statement\ClassNode;
+use PhpSyntax\Nodes\Statement\NamespaceNode;
 use PhpSyntax\Nodes\StatementNode;
+use PhpSyntax\Parser;
 use PhpSyntax\Token;
 use PhpSyntax\TokenKind;
 use Tester\Assert;
@@ -66,6 +71,41 @@ test('NodeList: items, parents, iteration, mutation', function () {
 
 	Assert::exception(fn() => $list->append($x), LogicException::class, 'The node already belongs to a tree, clone it first.');
 	Assert::exception(fn() => $list->indexOf($a), InvalidArgumentException::class, 'StubNode is not a child of PhpSyntax\Nodes\NodeList.');
+});
+
+
+test('a statement inserted into a file stands where its neighbor stands', function () {
+	$parser = new Parser;
+
+	// the blank line before the class belongs to the class and stays there
+	$file = $parser->parse("<?php\nnamespace App;\n\nuse App\\Money;\n\nclass X\n{\n}\n");
+	$namespace = $file->find(NamespaceNode::class)[0];
+	$namespace->statements->insert(1, $parser->parseStatement('use App\Currency;'));
+	Assert::same("<?php\nnamespace App;\n\nuse App\\Money;\nuse App\\Currency;\n\nclass X\n{\n}\n", (string) $file);
+
+	// a member takes the indentation of the one above it
+	$file = $parser->parse("<?php\nclass A\n{\n\tpublic function a() {}\n}\n");
+	$file->find(ClassNode::class)[0]->members->append($parser->parseFragment(MemberNode::class, 'public function b() {}'));
+	Assert::same("<?php\nclass A\n{\n\tpublic function a() {}\n\tpublic function b() {}\n}\n", (string) $file);
+
+	// in a list written on one line the neighbor ends with a space, so the new item does too
+	$file = $parser->parse('<?php function f() { a(); b(); }');
+	$file->find(BlockNode::class)[0]->statements->append($parser->parseStatement('c();'));
+	Assert::same('<?php function f() { a(); b(); c(); }', (string) $file);
+
+	// what already ends its line inside its own text is given no line ending on top of it
+	$file = $parser->parse("<?php\n\$a = 1;\n");
+	$closing = $parser->parseStatement('?' . '>');
+	$closing->getLastToken()?->setText("?>\n"); // a close tag keeps the line ending PHP swallows after it
+	$file->statements->append($closing);
+	Assert::same("<?php\n\$a = 1;\n?>\n", (string) $file);
+
+	// an item that carries trivia of its own is taken as it is
+	$file = $parser->parse("<?php\n\$a = 1;\n");
+	$copy = clone $file->statements->getItems()[0];
+	$copy->setEdgeTrivia(leading: []); // the open tag came with the copy
+	$file->statements->append($copy);
+	Assert::same("<?php\n\$a = 1;\n\$a = 1;\n", (string) $file);
 });
 
 

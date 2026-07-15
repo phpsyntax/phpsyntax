@@ -15,7 +15,10 @@ use PhpSyntax\Nodes\Member\MethodNode;
 use PhpSyntax\Nodes\Member\PropertyNode;
 use PhpSyntax\Nodes\ParameterNode;
 use PhpSyntax\Nodes\Statement\ClassNode;
+use PhpSyntax\Nodes\Statement\UseNode;
+use PhpSyntax\Nodes\UseItemNode;
 use PhpSyntax\Parser;
+use PhpSyntax\SymbolKind;
 use PhpSyntax\Visibility;
 use Tester\Assert;
 
@@ -147,4 +150,36 @@ test('a list is iterated and counted like a list, its items without the separato
 	$property = $file->find(PropertyNode::class)[0];
 	Assert::count(1, $property->modifiers);
 	Assert::same(['public'], array_map(fn($token) => $token->text, iterator_to_array($property->modifiers)));
+});
+
+
+test('what a use statement and its items import', function () {
+	$file = parseFile('use A\B; use function C\d; use const E\F; use G\{H, function i, const J}; use \K\L as M;');
+	$items = $file->find(UseItemNode::class);
+	Assert::same(
+		[SymbolKind::ClassLike, SymbolKind::Function, SymbolKind::Constant, SymbolKind::ClassLike, SymbolKind::Function, SymbolKind::Constant, SymbolKind::ClassLike],
+		array_map(fn(UseItemNode $item) => $item->kind, $items),
+	);
+
+	// the statement says what an item without a type of its own imports
+	Assert::same(
+		[SymbolKind::ClassLike, SymbolKind::Function, SymbolKind::Constant, SymbolKind::ClassLike, SymbolKind::ClassLike],
+		array_map(fn(UseNode $stmt) => $stmt->kind, $file->find(UseNode::class)),
+	);
+
+	// the prefix of a group belongs to the name every item of it imports, and no leading backslash does
+	Assert::same(
+		['A\B', 'C\d', 'E\F', 'G\H', 'G\i', 'G\J', 'K\L'],
+		array_map(fn(UseItemNode $item) => $item->fullName, $items),
+	);
+	Assert::same(
+		[false, false, false, true, true, true, false],
+		array_map(fn(UseItemNode $item) => $item->getStatement()?->isGroup(), $items),
+	);
+
+	// an item outside a statement, as a fragment is, knows only what is written in it
+	$item = (new Parser)->parseFragment(UseItemNode::class, 'A\B as C');
+	Assert::null($item->getStatement());
+	Assert::same('A\B', $item->fullName);
+	Assert::same(SymbolKind::ClassLike, $item->kind);
 });
