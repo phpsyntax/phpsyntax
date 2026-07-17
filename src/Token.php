@@ -90,6 +90,17 @@ final class Token implements \Stringable
 	}
 
 
+	private function isStringContent(): bool
+	{
+		return $this->kind === TokenKind::EncapsedAndWhitespace
+			|| $this->kind === TokenKind::ConstantEncapsedString
+			|| $this->kind === TokenKind::InlineHtml
+			|| $this->kind === TokenKind::NumericString
+			|| $this->kind === TokenKind::StringVariableName
+			|| $this->kind === TokenKind::HaltCompilerData;
+	}
+
+
 	/** A semicolon or a close tag standing in for it. */
 	public function isSemicolon(): bool
 	{
@@ -516,16 +527,5 @@ final class Token implements \Stringable
 				throw new \LogicException("Token '$this->text' is inside string interpolation; its whitespace cannot be changed.");
 			}
 		}
-	}
-
-
-	private function isStringContent(): bool
-	{
-		return $this->kind === TokenKind::EncapsedAndWhitespace
-			|| $this->kind === TokenKind::ConstantEncapsedString
-			|| $this->kind === TokenKind::InlineHtml
-			|| $this->kind === TokenKind::NumericString
-			|| $this->kind === TokenKind::StringVariableName
-			|| $this->kind === TokenKind::HaltCompilerData;
 	}
 }
