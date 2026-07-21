@@ -49,6 +49,23 @@ enum SymbolKind
 
 
 /**
+ * What is written after an expression and reaches into it: `ExpressionNode::getAccessKind()` says which
+ * of the three the parent is, `isDereferenceable()` what may stand there bare, which differs by the kind.
+ */
+enum AccessKind
+{
+	/** -> or ?-> a property, [ ] an element: they take any expression */
+	case Member;
+
+	/** ( ) a call, which takes a name or a member written before it for its own */
+	case Call;
+
+	/** :: a constant, a static member or class, which takes the name of a class on its left */
+	case ClassName;
+}
+
+
+/**
  * What a slot is to the indentation of the lines its node spreads over, relative to the line the node
  * begins on; the level each role stands for is the business of the style.
  */
