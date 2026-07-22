@@ -374,6 +374,22 @@ abstract class Node implements \Stringable
 
 
 	/**
+	 * Whether the tokens of both nodes carry the same texts, whatever the whitespace between them.
+	 */
+	public function matches(self $other): bool
+	{
+		return self::collectTexts($this) === self::collectTexts($other);
+	}
+
+
+	/** @return list<string> */
+	private static function collectTexts(self $node): array
+	{
+		return array_map(fn(Token $token) => $token->text, $node->getTokens());
+	}
+
+
+	/**
 	 * Whether a comment sits anywhere between the first and the last token of the node; the trivia
 	 * on its outer edges do not count.
 	 */
