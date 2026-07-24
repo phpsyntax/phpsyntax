@@ -402,6 +402,46 @@ final class Token implements \Stringable
 
 
 	/**
+	 * Removes one trivia of the token, tidying the whitespace around it: a comment alone on its line
+	 * takes the line with it, an inline one takes one adjacent space.
+	 */
+	public function removeTrivia(Trivia $trivia): void
+	{
+		if ($trivia->inInterpolation) {
+			throw new \LogicException('Trivia inside string interpolation cannot be removed.');
+		}
+
+		foreach ([true, false] as $isLeading) {
+			$list = $isLeading ? $this->leadingTrivia : $this->trailingTrivia;
+			$index = array_search($trivia, $list, strict: true);
+			if ($index === false) {
+				continue;
+			}
+
+			$from = $to = $index;
+			$before = $list[$index - 1] ?? null;
+			if ($before?->kind === TriviaKind::Whitespace) {
+				$from = $index - 1;
+				$before = $list[$index - 2] ?? null;
+			}
+
+			$next = $list[$index + 1] ?? null;
+			if ($isLeading && ($before === null || $before->isEndOfLine()) && $next?->kind === TriviaKind::EndOfLine) {
+				$to = $index + 1; // alone on its line: the indentation and the line ending go too
+			} elseif ($from === $index && $next?->kind === TriviaKind::Whitespace) {
+				$to = $index + 1; // no space before, take the one after
+			}
+
+			$result = [...array_slice($list, 0, $from), ...array_slice($list, $to + 1)];
+			$isLeading ? $this->setLeadingTrivia($result) : $this->setTrailingTrivia($result);
+			return;
+		}
+
+		throw new \LogicException('The trivia does not belong to the token.');
+	}
+
+
+	/**
 	 * Sets the number of blank lines before the token, which must start a line; comments before it keep
 	 * their position after the blank lines.
 	 */

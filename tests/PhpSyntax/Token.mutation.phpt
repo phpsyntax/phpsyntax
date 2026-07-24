@@ -79,6 +79,8 @@ test('ensureLeadingNewline and removeTrailingWhitespace', function () {
 	Assert::same([2, 3], [$b->getLine(), $d->getLine()]);
 	$b->ensureLeadingNewline();
 	Assert::same("<?php\n\$a;\n\$b; // c  \n\$d;  ", (string) $file);
+	Assert::same(TriviaKind::EndOfLine, $semicolonA->trailingTrivia[count($semicolonA->trailingTrivia) - 1]->kind); // where the lexer would put it
+	Assert::same([], $b->leadingTrivia);
 	Assert::same([3, 4], [$b->getLine(), $d->getLine()]); // the lines counted before follow the line ending
 	$b->ensureLeadingNewline("\r\n");
 	Assert::same("<?php\n\$a;\n\$b; // c  \n\$d;  ", (string) $file);
@@ -88,6 +90,29 @@ test('ensureLeadingNewline and removeTrailingWhitespace', function () {
 	$semicolonD->removeTrailingWhitespace();
 	Assert::same("<?php\n\$a;\n\$b; // c\n\$d;", (string) $file);
 	Assert::same(3, $b->getLine());
+});
+
+
+test('removeTrivia tidies the line around a comment', function () {
+	$file = parse("<?php\n// a\n\$a;  // b\n\t// c\n\$d = /* i */ 1;\n");
+	[$a, $semicolonA, $d, $equals] = tokens($file);
+
+	$a->removeTrivia($a->leadingTrivia[1]); // its own line after the open tag
+	Assert::same("<?php\n\$a;  // b\n\t// c\n\$d = /* i */ 1;\n", (string) $file);
+
+	$semicolonA->removeTrivia($semicolonA->trailingTrivia[1]); // after code, takes the space before
+	Assert::same("<?php\n\$a;\n\t// c\n\$d = /* i */ 1;\n", (string) $file);
+
+	$d->removeTrivia($d->leadingTrivia[1]); // alone on its indented line
+	Assert::same("<?php\n\$a;\n\$d = /* i */ 1;\n", (string) $file);
+
+	$equals->removeTrivia($equals->trailingTrivia[1]); // inline, takes one adjacent space
+	Assert::same("<?php\n\$a;\n\$d = 1;\n", (string) $file);
+
+	Assert::exception(
+		fn() => $d->removeTrivia(new Trivia(TriviaKind::Comment, '// x')),
+		LogicException::class,
+	);
 });
 
 
