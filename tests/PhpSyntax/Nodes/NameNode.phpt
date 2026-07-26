@@ -111,3 +111,32 @@ test('keywords accepted as names', function () {
 	$names = $file->find(NameNode::class);
 	Assert::same(['array', 'callable', 'readonly'], array_map(fn(NameNode $n) => $n->text, array_values(array_filter($names, fn(NameNode $n) => $n->isKeyword()))));
 });
+
+
+test('role by the place in the tree', function () {
+	$file = (new Parser)->parse('<?php namespace A; use B\C; use function D; f(E); new F; G::h(); function i(J $j): K {} $l instanceof M; #[N] class O extends P implements Q {} try {} catch (R $e) {}');
+	$roles = $declarations = [];
+	foreach ($file->find(NameNode::class) as $name) {
+		$roles[$name->text] = $name->role->name;
+		$declarations[$name->text] = $name->isDeclaration();
+	}
+
+	Assert::same([
+		'A' => 'ClassLike',
+		'B\C' => 'ClassLike',
+		'D' => 'Function',
+		'f' => 'Function',
+		'E' => 'Constant',
+		'F' => 'ClassLike',
+		'G' => 'ClassLike',
+		'J' => 'ClassLike',
+		'K' => 'ClassLike',
+		'M' => 'ClassLike',
+		'N' => 'ClassLike',
+		'P' => 'ClassLike',
+		'Q' => 'ClassLike',
+		'R' => 'ClassLike',
+	], $roles);
+
+	Assert::same(['A', 'B\C', 'D'], array_keys(array_filter($declarations)));
+});

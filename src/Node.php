@@ -19,9 +19,7 @@ abstract class Node implements \Stringable
 	public private(set) ?Node $parent = null;
 
 	/**
-	 * The node as it is written, without the trivia on its outer edges: what stands between its tokens
-	 * belongs to it, what stands before the first and after the last one belongs to the file around it.
-	 * Printing the node writes those edges too, which is what the round trip needs and a report does not.
+	 * The node as it is written, without the trivia on its outer edges, which printing it writes too.
 	 */
 	public string $text {
 		get {
@@ -270,45 +268,77 @@ abstract class Node implements \Stringable
 	 */
 	public function getDocComment(): ?Trivia
 	{
-		return $this->locateDocComment()[1] ?? null;
-	}
-
-
-	/** Replaces the doc comment of the node (see getDocComment()) with the trivia given. */
-	public function replaceDocComment(Trivia $docComment): void
-	{
-		[$owner, $old] = $this->locateDocComment() ?? throw new \LogicException('The node has no doc comment.');
-		$owner->replaceTrivia($old, $docComment);
-	}
-
-
-	/** Removes the doc comment of the node (see getDocComment()) together with the line it stands on. */
-	public function removeDocComment(): void
-	{
-		[$owner, $old] = $this->locateDocComment() ?? throw new \LogicException('The node has no doc comment.');
-		$owner->removeTrivia($old);
-	}
-
-
-	/** @return ?array{Token, Trivia}  the token holding the doc comment among its trivia, and the doc comment */
-	private function locateDocComment(): ?array
-	{
 		$token = $this->getFirstToken();
 		if (!$token) {
 			return null;
 		}
 
 		$previous = $token->getPrevious();
-		foreach ([[$token, $token->leadingTrivia], [$previous, $previous->trailingTrivia ?? []]] as [$owner, $trivias]) {
+		foreach ([$token->leadingTrivia, $previous->trailingTrivia ?? []] as $trivias) {
 			for ($i = count($trivias) - 1; $i >= 0; $i--) {
 				if ($trivias[$i]->kind === TriviaKind::DocComment) {
-					assert($owner !== null);
-					return [$owner, $trivias[$i]];
+					return $trivias[$i];
 				}
 			}
 		}
 
 		return null;
+	}
+
+
+	/** Replaces one trivia of the node, wherever among its tokens it stands, with another in place. */
+	public function replaceTrivia(Trivia $old, Trivia $new): void
+	{
+		$this->findTriviaOwner($old)->replaceTrivia($old, $new);
+	}
+
+
+	/**
+	 * Removes one trivia of the node, wherever among its tokens it stands, tidying the whitespace around it
+	 * the way Token::removeTrivia() does.
+	 */
+	public function removeTrivia(Trivia $trivia): void
+	{
+		$this->findTriviaOwner($trivia)->removeTrivia($trivia);
+	}
+
+
+	/** Replaces the doc comment of the node (see getDocComment()) with the trivia given. */
+	public function replaceDocComment(Trivia $docComment): void
+	{
+		$this->replaceTrivia($this->getDocComment() ?? throw new \LogicException('The node has no doc comment.'), $docComment);
+	}
+
+
+	/** Removes the doc comment of the node (see getDocComment()) together with the line it stands on. */
+	public function removeDocComment(): void
+	{
+		$this->removeTrivia($this->getDocComment() ?? throw new \LogicException('The node has no doc comment.'));
+	}
+
+
+	/**
+	 * The token carrying the trivia, found by identity: one of the node, or the one before it, where
+	 * a doc comment of the node may stand.
+	 */
+	private function findTriviaOwner(Trivia $trivia): Token
+	{
+		$tokens = $this->getTokens();
+		$previous = ($tokens[0] ?? null)?->getPrevious();
+		if ($previous !== null) {
+			$tokens[] = $previous;
+		}
+
+		foreach ($tokens as $token) {
+			if (
+				in_array($trivia, $token->leadingTrivia, strict: true)
+				|| in_array($trivia, $token->trailingTrivia, strict: true)
+			) {
+				return $token;
+			}
+		}
+
+		throw new \LogicException('The trivia does not belong to the node.');
 	}
 
 
@@ -425,6 +455,68 @@ abstract class Node implements \Stringable
 
 
 	/**
+	 * Whether a comment sits anywhere between the first and the last token of the node; the trivia
+	 * on its outer edges do not count.
+	 */
+	public function hasComment(): bool
+	{
+		foreach ($this->walkInnerTrivia() as $trivia) {
+			if ($trivia->isComment()) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+
+	/**
+	 * The comments inside the node, in source order; those on its outer edges are not among them,
+	 * the same way hasComment() does not count them.
+	 * @return list<Trivia>
+	 */
+	public function getComments(): array
+	{
+		$comments = [];
+		foreach ($this->walkInnerTrivia() as $trivia) {
+			if ($trivia->isComment()) {
+				$comments[] = $trivia;
+			}
+		}
+
+		return $comments;
+	}
+
+
+	/**
+	 * The trivia between the first and the last token of the node, in source order; the edges are left out.
+	 * @return \Generator<Trivia>
+	 */
+	private function walkInnerTrivia(): \Generator
+	{
+		$previous = null;
+		$stack = [$this];
+		while ($stack) {
+			$node = array_pop($stack);
+			if ($node instanceof Token) {
+				if ($previous !== null) { // what stands between two tokens, so the edges never come up
+					yield from $previous->trailingTrivia;
+					yield from $node->leadingTrivia;
+				}
+
+				$previous = $node;
+				continue;
+			}
+
+			$children = $node->getChildren();
+			for ($i = count($children) - 1; $i >= 0; $i--) {
+				$stack[] = $children[$i];
+			}
+		}
+	}
+
+
+	/**
 	 * Writes the trivia on the outer edges of the node: before its first token and after its last one.
 	 * A null leaves that edge alone, [] clears it, and a node without tokens takes neither.
 	 * @param  ?list<Trivia>  $leading
@@ -490,14 +582,18 @@ abstract class Node implements \Stringable
 		$last = $tokens[count($tokens) - 1] ?? null;
 		$previous = $first?->getPrevious();
 		$next = $last?->getNext();
-		[$leading, $moved] = self::splitComments($first->leadingTrivia ?? []);
+		[$leading, $moved] = self::splitComments($first->leadingTrivia ?? [], $first?->startsLine() ?? false);
 		foreach ($tokens as $token) {
-			foreach ([$token === $first ? [] : $token->leadingTrivia, $token === $last ? [] : $token->trailingTrivia] as $trivias) {
-				$moved = [...$moved, ...self::splitComments($trivias)[1]];
+			if ($token !== $first) {
+				$moved = [...$moved, ...self::splitComments($token->leadingTrivia, $token->startsLine())[1]];
+			}
+
+			if ($token !== $last) {
+				$moved = [...$moved, ...self::splitComments($token->trailingTrivia, atLineStart: false)[1]];
 			}
 		}
 
-		[$trailing, $trailingComments] = self::splitComments($last->trailingTrivia ?? []);
+		[$trailing, $trailingComments] = self::splitComments($last->trailingTrivia ?? [], atLineStart: false);
 		$moved = [...$moved, ...$trailingComments];
 		if ($separatorAfter) { // the gap the separator opened goes with it, the line ending of the item stays
 			$trailing = array_values(array_filter($trailing, fn(Trivia $trivia) => $trivia->isEndOfLine()));
@@ -545,7 +641,7 @@ abstract class Node implements \Stringable
 
 	/**
 	 * Deep copy without a parent; the copy takes the children the slots name, never what a property
-	 * computes from the tokens, which is work nobody asked for and which a heredoc refuses to do.
+	 * computes from the tokens, which a heredoc refuses to do.
 	 */
 	public function __clone()
 	{
@@ -559,8 +655,7 @@ abstract class Node implements \Stringable
 
 
 	/**
-	 * Copies of the children of a list, adopted by the copy; a list has no slots to copy by and holds
-	 * its children in an array of its own.
+	 * Copies of the children of a list, adopted by the copy; a list has no slots to copy by.
 	 * @template C of self|Token
 	 * @param  list<C>  $children
 	 * @return list<C>
@@ -685,7 +780,7 @@ abstract class Node implements \Stringable
 
 	/**
 	 * Gives the node the leading indentation of the model, where the model starts a line and the node
-	 * carries no leading trivia of its own; an item added to a list stands where its neighbor stands.
+	 * carries no leading trivia of its own.
 	 */
 	protected static function indentLike(self $node, self $model): void
 	{
@@ -750,13 +845,20 @@ abstract class Node implements \Stringable
 	 * @param  list<Trivia>  $trivias
 	 * @return array{list<Trivia>, list<Trivia>}  [rest, comments]
 	 */
-	private static function splitComments(array $trivias): array
+	private static function splitComments(array $trivias, bool $atLineStart): array
 	{
 		$rest = $comments = [];
 		foreach ($trivias as $i => $trivia) {
+			$before = $trivias[$i - 1] ?? null;
 			if ($trivia->isComment()) {
+				$opensLine = ($trivias[$i - 2] ?? null)?->isEndOfLine() ?? $atLineStart;
+				if ($opensLine && $before?->kind === TriviaKind::Whitespace) {
+					array_pop($rest); // the comment stands at the start of a line and the whitespace indents it
+					$comments[] = $before;
+				}
+
 				$comments[] = $trivia;
-			} elseif ($trivia->kind === TriviaKind::EndOfLine && $i > 0 && $trivias[$i - 1]->isComment()) {
+			} elseif ($trivia->kind === TriviaKind::EndOfLine && $before?->isComment()) {
 				$comments[] = $trivia;
 			} else {
 				$rest[] = $trivia;

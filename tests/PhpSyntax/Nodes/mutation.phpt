@@ -190,6 +190,16 @@ test('comments of a removed node follow the policy', function () {
 	$file = parse("<?php\n\$a; /* x */ \$b; \$c;");
 	stmts($file)[1]->remove(CommentPolicy::MoveToPreviousToken);
 	Assert::same("<?php\n\$a; /* x */  \$c;", (string) $file);
+
+	// a comment on a line of its own keeps the indentation of that line wherever it goes
+	$indented = "<?php\nfunction f()\n{\n\t// note\n\t\$b = 1;\n\n\treturn 1;\n}\n";
+	$file = parse($indented);
+	$file->find(ExpressionStatementNode::class)[0]->remove(CommentPolicy::Drop);
+	Assert::same("<?php\nfunction f()\n{\n\n\treturn 1;\n}\n", (string) $file);
+
+	$file = parse($indented);
+	$file->find(ExpressionStatementNode::class)[0]->remove(CommentPolicy::MoveToPreviousToken);
+	Assert::same("<?php\nfunction f()\n{\n\t// note\n\n\treturn 1;\n}\n", (string) $file);
 });
 
 
