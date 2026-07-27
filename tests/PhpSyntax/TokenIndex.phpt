@@ -1,6 +1,7 @@
 <?php declare(strict_types=1);
 
 use PhpSyntax\Nodes\ArgumentNode;
+use PhpSyntax\Nodes\ArrayItemNode;
 use PhpSyntax\Nodes\Expression\ArrayNode;
 use PhpSyntax\Nodes\Expression\BinaryOpNode;
 use PhpSyntax\Nodes\Statement\BlockNode;
@@ -190,4 +191,21 @@ test('a node moved into the subtree that replaced it stands in the order once', 
 		Assert::same($i, $index->getIndex($token));
 		Assert::same($index->getTokens()[$i - 1] ?? null, $token->getPrevious());
 	}
+});
+
+
+test('line width counts the indentation visually and drops trailing whitespace', function () {
+	$file = (new Parser)->parse("<?php\n\tif (\$a) { // c   \n\t\t\$bb = 'ěšč';\t\n\t}\n");
+	$style = new Style(tabWidth: 4);
+	$if = $file->statements->getItems()[0];
+	Assert::same(strlen('    if ($a) { // c'), $if->getFirstToken()?->getLineWidth($style));
+	$assign = $file->find(ExpressionStatementNode::class)[0];
+	Assert::same(strlen('        $bb = ') + 5 + 1, $assign->semicolon->getLineWidth($style));
+	Assert::same(5, $file->getLastToken()?->getPrevious()?->getLineWidth($style));
+
+	// a tab inside the line moves to the next stop as well, which is what the editor shows
+	$file = (new Parser)->parse("<?php\n\$a = [\n\t'xy'\t=> 1,\n];\n");
+	$item = $file->find(ArrayItemNode::class)[0];
+	Assert::same(strlen("    'xy'    => 1,"), $item->getFirstToken()?->getLineWidth($style));
+	Assert::same(strlen("    'xy'    ") + 1, $item->doubleArrow?->getVisualColumn($style));
 });

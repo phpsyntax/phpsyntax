@@ -170,6 +170,43 @@ final class Token implements \Stringable
 	}
 
 
+	/**
+	 * Visual width of the line the token is on, up to the last character that is not whitespace; a tab
+	 * counts to the next stop of the style wherever on the line it stands, as the reader sees it.
+	 */
+	public function getLineWidth(Style $style): int
+	{
+		$start = $this;
+		while (!$start->startsLine() && ($previous = $start->getPrevious()) !== null) {
+			$start = $previous;
+		}
+
+		$width = $column = Indentation::advance(0, $start->getIndentation(), $style);
+		for ($token = $start; $token !== null; $token = $token->getNext()) {
+			if ($token !== $start && preg_match('~^[\r\n]~', $token->text)) {
+				break;
+			}
+
+			$width = $column = Indentation::advance($column, $token->text, $style);
+			if (preg_match('~[\r\n]$~', $token->text)) {
+				return $width;
+			}
+
+			foreach ($token->trailingTrivia as $trivia) {
+				if ($trivia->isEndOfLine()) {
+					return $width;
+				}
+
+				// whitespace counts only where something follows it, so that the line does not end in it
+				$column = Indentation::advance($column, $trivia->isWhitespace() ? $trivia->text : rtrim($trivia->text), $style);
+				$width = $trivia->isWhitespace() ? $width : $column;
+			}
+		}
+
+		return $width;
+	}
+
+
 	/** Whether the token is the first on its line. */
 	public function startsLine(): bool
 	{
