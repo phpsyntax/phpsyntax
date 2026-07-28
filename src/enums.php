@@ -49,6 +49,23 @@ enum SymbolKind
 
 
 /**
+ * What an unqualified name reaches where it stands, `NameResolver::getUnqualifiedResolution()`: PHP looks a function
+ * or a constant up in the namespace first and falls back to the global one, which a file alone cannot tell apart.
+ */
+enum UnqualifiedResolution
+{
+	/** a symbol of the global namespace for certain: in the global namespace, through an import of a global name, or where the namespace is known not to declare the name */
+	case Global;
+
+	/** the global symbol, unless the namespace declares one of the name outside the file */
+	case Uncertain;
+
+	/** a symbol of a namespace for certain: one the namespace declares, one an import brings in, or a class, which does not fall back */
+	case Namespaced;
+}
+
+
+/**
  * What is written after an expression and reaches into it: `ExpressionNode::getAccessKind()` says which
  * of the three the parent is, `isDereferenceable()` what may stand there bare, which differs by the kind.
  */

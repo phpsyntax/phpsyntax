@@ -49,6 +49,19 @@ test('the short name, the qualification and the special class names', function (
 });
 
 
+test('equals() ignores the letter case except for a constant', function () {
+	$file = (new Parser)->parse('<?php use const A\BAR; use A\Baz; f(); FOO;');
+	[$importedConstant, $importedClass, $function, $constant] = $file->find(NameNode::class);
+	Assert::true($function->equals('F'));
+	Assert::true($constant->equals('FOO'));
+	Assert::false($constant->equals('foo'));
+
+	Assert::true($importedConstant->equals('A\BAR'));
+	Assert::false($importedConstant->equals('A\bar'));
+	Assert::true($importedClass->equals('a\baz'));
+});
+
+
 test('writing a name replaces the token with the one it is written as', function () {
 	$name = name('Foo');
 	$name->text = 'Bar\Baz';
@@ -97,4 +110,33 @@ test('keywords accepted as names', function () {
 	$file = (new Parser)->parse('<?php function f(array $a, callable $c) {} exit(); readonly();');
 	$names = $file->find(NameNode::class);
 	Assert::same(['array', 'callable', 'readonly'], array_map(fn(NameNode $n) => $n->text, array_values(array_filter($names, fn(NameNode $n) => $n->isKeyword()))));
+});
+
+
+test('role by the place in the tree', function () {
+	$file = (new Parser)->parse('<?php namespace A; use B\C; use function D; f(E); new F; G::h(); function i(J $j): K {} $l instanceof M; #[N] class O extends P implements Q {} try {} catch (R $e) {}');
+	$roles = $declarations = [];
+	foreach ($file->find(NameNode::class) as $name) {
+		$roles[$name->text] = $name->role->name;
+		$declarations[$name->text] = $name->isDeclaration();
+	}
+
+	Assert::same([
+		'A' => 'ClassLike',
+		'B\C' => 'ClassLike',
+		'D' => 'Function',
+		'f' => 'Function',
+		'E' => 'Constant',
+		'F' => 'ClassLike',
+		'G' => 'ClassLike',
+		'J' => 'ClassLike',
+		'K' => 'ClassLike',
+		'M' => 'ClassLike',
+		'N' => 'ClassLike',
+		'P' => 'ClassLike',
+		'Q' => 'ClassLike',
+		'R' => 'ClassLike',
+	], $roles);
+
+	Assert::same(['A', 'B\C', 'D'], array_keys(array_filter($declarations)));
 });
