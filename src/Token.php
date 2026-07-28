@@ -441,6 +441,25 @@ final class Token implements \Stringable
 	}
 
 
+	/** Replaces one trivia of the token with another in place. */
+	public function replaceTrivia(Trivia $old, Trivia $new): void
+	{
+		foreach ([true, false] as $isLeading) {
+			$list = $isLeading ? $this->leadingTrivia : $this->trailingTrivia;
+			$index = array_search($old, $list, strict: true);
+			if ($index === false) {
+				continue;
+			}
+
+			$list[$index] = $new;
+			$isLeading ? $this->setLeadingTrivia($list) : $this->setTrailingTrivia($list);
+			return;
+		}
+
+		throw new \LogicException('The trivia does not belong to the token.');
+	}
+
+
 	/**
 	 * Sets the number of blank lines before the token, which must start a line; comments before it keep
 	 * their position after the blank lines.

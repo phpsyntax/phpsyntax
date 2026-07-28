@@ -270,15 +270,40 @@ abstract class Node implements \Stringable
 	 */
 	public function getDocComment(): ?Trivia
 	{
+		return $this->locateDocComment()[1] ?? null;
+	}
+
+
+	/** Replaces the doc comment of the node (see getDocComment()) with the trivia given. */
+	public function replaceDocComment(Trivia $docComment): void
+	{
+		[$owner, $old] = $this->locateDocComment() ?? throw new \LogicException('The node has no doc comment.');
+		$owner->replaceTrivia($old, $docComment);
+	}
+
+
+	/** Removes the doc comment of the node (see getDocComment()) together with the line it stands on. */
+	public function removeDocComment(): void
+	{
+		[$owner, $old] = $this->locateDocComment() ?? throw new \LogicException('The node has no doc comment.');
+		$owner->removeTrivia($old);
+	}
+
+
+	/** @return ?array{Token, Trivia}  the token holding the doc comment among its trivia, and the doc comment */
+	private function locateDocComment(): ?array
+	{
 		$token = $this->getFirstToken();
 		if (!$token) {
 			return null;
 		}
 
-		foreach ([$token->leadingTrivia, $token->getPrevious()->trailingTrivia ?? []] as $trivias) {
+		$previous = $token->getPrevious();
+		foreach ([[$token, $token->leadingTrivia], [$previous, $previous->trailingTrivia ?? []]] as [$owner, $trivias]) {
 			for ($i = count($trivias) - 1; $i >= 0; $i--) {
 				if ($trivias[$i]->kind === TriviaKind::DocComment) {
-					return $trivias[$i];
+					assert($owner !== null);
+					return [$owner, $trivias[$i]];
 				}
 			}
 		}
