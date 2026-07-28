@@ -16,6 +16,8 @@ use PhpSyntax\Nodes\Member\PropertyNode;
 use PhpSyntax\Nodes\ParameterNode;
 use PhpSyntax\Nodes\Statement\ClassNode;
 use PhpSyntax\Nodes\Statement\UseNode;
+use PhpSyntax\Nodes\Type\NamedTypeNode;
+use PhpSyntax\Nodes\TypeNode;
 use PhpSyntax\Nodes\UseItemNode;
 use PhpSyntax\Parser;
 use PhpSyntax\SymbolKind;
@@ -120,6 +122,20 @@ test('a nullsafe call and fetch', function () {
 	[$nullsafeFetch, $fetch] = $file->find(PropertyFetchNode::class);
 	Assert::true($nullsafeFetch->isNullsafe());
 	Assert::false($fetch->isNullsafe());
+});
+
+
+test('a builtin type and a type that accepts null', function () {
+	$file = parseFile('function f(int $a, ?Foo $b, self $c, Foo|null $d, mixed $e, Foo $f, Foo&Bar $g) {}');
+	$types = array_map(fn(ParameterNode $param) => $param->type, $file->find(ParameterNode::class));
+	Assert::same([true, false, true, false, true, false, false], array_map(
+		fn(?TypeNode $type) => $type instanceof NamedTypeNode && $type->isBuiltin(),
+		$types,
+	));
+	Assert::same([false, true, false, true, true, false, false], array_map(
+		fn(?TypeNode $type) => $type?->allowsNull() ?? false,
+		$types,
+	));
 });
 
 

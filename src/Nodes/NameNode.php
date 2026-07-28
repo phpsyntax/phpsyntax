@@ -5,6 +5,7 @@ namespace PhpSyntax\Nodes;
 use PhpSyntax\Lexer\Lexer;
 use PhpSyntax\NameKind;
 use PhpSyntax\Node;
+use PhpSyntax\SymbolKind;
 use PhpSyntax\Token;
 use PhpSyntax\TokenKind;
 use function count, in_array, strlen;
@@ -67,6 +68,24 @@ final class NameNode extends Node
 		}
 	}
 
+	/**
+	 * Which table of names the name belongs to: functions when called, constants when fetched, what a use item
+	 * imports, otherwise classes, a namespace among them. It follows the place in the tree, so moving the node
+	 * changes it, and it says nothing about whether the name refers to a symbol or declares one, which is
+	 * isDeclaration(): whoever resolves names asks that first.
+	 */
+	public SymbolKind $role {
+		get {
+			$parent = $this->parent;
+			return match (true) {
+				$parent instanceof UseItemNode => $parent->kind,
+				$parent instanceof Expression\FunctionCallNode => SymbolKind::Function,
+				$parent instanceof Expression\ConstantFetchNode => SymbolKind::Constant,
+				default => SymbolKind::ClassLike,
+			};
+		}
+	}
+
 
 	/** @internal */
 	public function __construct(
@@ -106,6 +125,42 @@ final class NameNode extends Node
 	{
 		return $this->kind === NameKind::Unqualified
 			&& in_array(strtolower($this->token->text), ['self', 'static', 'parent'], true);
+	}
+
+
+	/** Whether the name declares or imports a symbol instead of referring to one: a namespace statement or a use. */
+	public function isDeclaration(): bool
+	{
+		return $this->parent instanceof UseItemNode
+			|| $this->parent instanceof Statement\UseNode
+			|| $this->parent instanceof Statement\NamespaceNode;
+	}
+
+
+	/**
+	 * Whether the name refers to a symbol of its table, one the resolver looks up: not the name a use or a namespace
+	 * statement introduces, not self, static or parent where a class is named, which stand for one only where they
+	 * are written, and not a builtin type where a type is written. A keyword read as a name refers where it stands
+	 * for a symbol, as readonly(...) calls a function of that name, and so does self() or the constant parent.
+	 */
+	public function isReference(): bool
+	{
+		return !$this->isDeclaration()
+			&& !($this->role === SymbolKind::ClassLike && $this->isSpecialClass())
+			&& !($this->parent instanceof Type\NamedTypeNode && $this->parent->isBuiltin());
+	}
+
+
+	/**
+	 * Whether the name is written the same, letter case aside where PHP ignores it: a constant is compared
+	 * exactly, a class, a function and a namespace are not. The leading backslash is part of the writing
+	 * and so part of the comparison; whether two names mean the same class is what NameResolver answers.
+	 */
+	public function equals(string $name): bool
+	{
+		return $this->role === SymbolKind::Constant
+			? $this->token->text === $name
+			: strcasecmp($this->token->text, $name) === 0;
 	}
 
 
