@@ -3,13 +3,14 @@
 namespace PhpSyntax\Nodes\Expression;
 
 use PhpSyntax\Nodes\ExpressionNode;
+use PhpSyntax\Nodes\OperatorNode;
 use PhpSyntax\Token;
 
 
 /**
  * Type cast; the cast token keeps its spelling including inner whitespace: ( int ).
  */
-final class CastNode extends ExpressionNode
+final class CastNode extends ExpressionNode implements OperatorNode
 {
 	public const Slots = ['cast', 'expression'];
 
@@ -33,5 +34,11 @@ final class CastNode extends ExpressionNode
 		public Token $cast { set => $this->prepareSlot(__PROPERTY__, $value); },
 		public ExpressionNode $expression { set => $this->prepareSlot(__PROPERTY__, $value); },
 	) {
+	}
+
+
+	public function getPrecedence(): array
+	{
+		return [240, self::RightAssociative];
 	}
 }

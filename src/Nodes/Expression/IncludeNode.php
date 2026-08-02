@@ -3,13 +3,14 @@
 namespace PhpSyntax\Nodes\Expression;
 
 use PhpSyntax\Nodes\ExpressionNode;
+use PhpSyntax\Nodes\OperatorNode;
 use PhpSyntax\Token;
 
 
 /**
  * include, include_once, require or require_once; the keyword token tells which.
  */
-final class IncludeNode extends ExpressionNode
+final class IncludeNode extends ExpressionNode implements OperatorNode
 {
 	public const Slots = ['includeKeyword', 'expression'];
 
@@ -19,5 +20,11 @@ final class IncludeNode extends ExpressionNode
 		public Token $includeKeyword { set => $this->prepareSlot(__PROPERTY__, $value); },
 		public ExpressionNode $expression { set => $this->prepareSlot(__PROPERTY__, $value); },
 	) {
+	}
+
+
+	public function getPrecedence(): array
+	{
+		return [20, self::LeftAssociative];
 	}
 }

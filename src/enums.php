@@ -49,6 +49,23 @@ enum SymbolKind
 
 
 /**
+ * What is written after an expression and reaches into it: `ExpressionNode::getAccessKind()` says which
+ * of the three the parent is, `isDereferenceable()` what may stand there bare, which differs by the kind.
+ */
+enum AccessKind
+{
+	/** -> or ?-> a property, [ ] an element: they take any expression */
+	case Member;
+
+	/** ( ) a call, which takes a name or a member written before it for its own */
+	case Call;
+
+	/** :: a constant, a static member or class, which takes the name of a class on its left */
+	case ClassName;
+}
+
+
+/**
  * What happens to the comments inside a removed subtree.
  */
 enum CommentPolicy

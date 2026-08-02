@@ -3,13 +3,14 @@
 namespace PhpSyntax\Nodes\Expression;
 
 use PhpSyntax\Nodes\ExpressionNode;
+use PhpSyntax\Nodes\OperatorNode;
 use PhpSyntax\Token;
 
 
 /**
  * clone expression; clone(...) with arguments is a function call.
  */
-final class CloneNode extends ExpressionNode
+final class CloneNode extends ExpressionNode implements OperatorNode
 {
 	public const Slots = ['cloneKeyword', 'expression'];
 
@@ -19,5 +20,11 @@ final class CloneNode extends ExpressionNode
 		public Token $cloneKeyword { set => $this->prepareSlot(__PROPERTY__, $value); },
 		public ExpressionNode $expression { set => $this->prepareSlot(__PROPERTY__, $value); },
 	) {
+	}
+
+
+	public function getPrecedence(): array
+	{
+		return [270, self::NonAssociative];
 	}
 }

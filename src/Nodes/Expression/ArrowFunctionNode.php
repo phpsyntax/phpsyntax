@@ -6,6 +6,7 @@ use PhpSyntax\Nodes\AttributeGroupNode;
 use PhpSyntax\Nodes\ExpressionNode;
 use PhpSyntax\Nodes\FunctionLikeNode;
 use PhpSyntax\Nodes\NodeList;
+use PhpSyntax\Nodes\OperatorNode;
 use PhpSyntax\Nodes\ParameterNode;
 use PhpSyntax\Nodes\SeparatedNodeList;
 use PhpSyntax\Nodes\TypeNode;
@@ -15,7 +16,7 @@ use PhpSyntax\Token;
 /**
  * Arrow function fn(...) => expr, optionally static.
  */
-final class ArrowFunctionNode extends ExpressionNode implements FunctionLikeNode
+final class ArrowFunctionNode extends ExpressionNode implements FunctionLikeNode, OperatorNode
 {
 	public const Slots = ['attributes', 'staticKeyword', 'fnKeyword', 'ampersand', 'openParen', 'parameters', 'closeParen', 'colon', 'returnType', 'doubleArrow', 'expression'];
 
@@ -36,5 +37,11 @@ final class ArrowFunctionNode extends ExpressionNode implements FunctionLikeNode
 		public Token $doubleArrow { set => $this->prepareSlot(__PROPERTY__, $value); },
 		public ExpressionNode $expression { set => $this->prepareSlot(__PROPERTY__, $value); },
 	) {
+	}
+
+
+	public function getPrecedence(): array
+	{
+		return [10, self::RightAssociative];
 	}
 }
