@@ -2,7 +2,7 @@
 
 namespace PhpSyntax;
 
-use function is_int, ord;
+use function count, is_int, ord;
 
 
 final class Token implements \Stringable
@@ -186,6 +186,167 @@ final class Token implements \Stringable
 	}
 
 
+	/**
+	 * Whitespace between the token and the next one on the same line ('' when they touch); null when a line
+	 * ending or a comment follows, when the whitespace belongs to a string, when the token ends its line
+	 * inside its own text (a close tag, a heredoc start) or when the next token opens with a line ending
+	 * of its own (inline HTML, __halt_compiler() data).
+	 */
+	public function getTrailingSpace(): ?string
+	{
+		$space = '';
+		foreach ($this->trailingTrivia as $trivia) {
+			if ($trivia->kind !== TriviaKind::Whitespace || $trivia->inInterpolation) {
+				return null;
+			}
+
+			$space .= $trivia->text;
+		}
+
+		if (self::endsWithLineEnding($this->text)) {
+			return null;
+		}
+
+		$next = $this->getNext();
+		return $next !== null && $next->text !== '' && ($next->text[0] === "\n" || $next->text[0] === "\r") ? null : $space;
+	}
+
+
+	/**
+	 * Replaces the whitespace between the token and the next one; only where getTrailingSpace() is not null.
+	 */
+	public function setTrailingSpace(string $space): void
+	{
+		if ($this->getTrailingSpace() === null) {
+			throw new \LogicException("Token '$this->text' is followed by a line ending or a comment.");
+		}
+
+		$this->setTrailingTrivia($space === '' ? [] : [new Trivia(TriviaKind::Whitespace, $space)]);
+	}
+
+
+	/** Indentation of the line the token is on, whether the token starts it or not. */
+	public function getLineIndentation(): string
+	{
+		$token = $this;
+		while (!$token->startsLine()) {
+			$token = $token->getPrevious() ?? throw new \LogicException('A token without a file has no line.');
+		}
+
+		return $token->getIndentation();
+	}
+
+
+	/**
+	 * Whitespace at the start of the token's line, before any comment sitting between it and the token;
+	 * empty when the token does not start a line.
+	 */
+	public function getIndentation(): string
+	{
+		$indentation = '';
+		foreach (array_slice($this->leadingTrivia, $this->findLineStart()) as $trivia) {
+			if ($trivia->kind !== TriviaKind::Whitespace) {
+				break;
+			}
+
+			$indentation .= $trivia->text;
+		}
+
+		return $indentation;
+	}
+
+
+	/** Index of the first trivia after the last line ending or open tag. */
+	private function findLineStart(): int
+	{
+		$start = 0;
+		foreach ($this->leadingTrivia as $i => $trivia) {
+			if ($trivia->isEndOfLine() || $trivia->kind === TriviaKind::OpenTag) {
+				$start = $i + 1;
+			}
+		}
+
+		return $start;
+	}
+
+
+	/**
+	 * Replaces the whitespace at the start of the token's line, leaving a comment sitting between it
+	 * and the token alone; the token must start a line.
+	 */
+	public function setIndentation(string $indentation): void
+	{
+		$this->refuseInterpolation();
+		if (!$this->startsLine()) {
+			throw new \LogicException("Token '$this->text' does not start a line.");
+		}
+
+		$leading = $this->leadingTrivia;
+		$start = $this->findLineStart();
+		$end = $start;
+		while (($leading[$end] ?? null)?->kind === TriviaKind::Whitespace) {
+			$end++;
+		}
+
+		$replacement = $indentation === '' ? [] : [new Trivia(TriviaKind::Whitespace, $indentation)];
+		$this->setLeadingTrivia([...array_slice($leading, 0, $start), ...$replacement, ...array_slice($leading, $end)]);
+	}
+
+
+	/**
+	 * Moves the token to its own line unless it already starts one; the indentation stays as it was.
+	 * The line ending goes to the trailing trivia of the previous token, where the lexer would put it.
+	 */
+	public function ensureLeadingNewline(string $eol = "\n"): void
+	{
+		$this->refuseInterpolation();
+		if ($this->startsLine()) {
+			return;
+		}
+
+		$previous = $this->getPrevious();
+		if ($previous === null) {
+			$this->setLeadingTrivia([new Trivia(TriviaKind::EndOfLine, $eol), ...$this->leadingTrivia]);
+			return;
+		}
+
+		$previous->removeTrailingWhitespace();
+		$previous->setTrailingTrivia([...$previous->trailingTrivia, new Trivia(TriviaKind::EndOfLine, $eol)]);
+	}
+
+
+	/**
+	 * Removes whitespace at the end of the line the token ends, keeping comments and the line ending;
+	 * whitespace ending a single-line comment counts as well, since the tokenizer makes it part of the comment.
+	 */
+	public function removeTrailingWhitespace(): void
+	{
+		$this->refuseInterpolation();
+		$trailing = [];
+		$whitespace = [];
+		foreach ($this->trailingTrivia as $trivia) {
+			if ($trivia->kind === TriviaKind::Whitespace) {
+				$whitespace[] = $trivia;
+			} elseif ($trivia->kind === TriviaKind::EndOfLine) {
+				$trailing[] = $trivia;
+				$whitespace = [];
+			} else {
+				$trailing = [...$trailing, ...$whitespace, $trivia];
+				$whitespace = [];
+			}
+		}
+
+		$last = $trailing ? $trailing[count($trailing) - 1] : null;
+		$comment = $last?->isLineComment() ? $last : ($trailing[count($trailing) - 2] ?? null);
+		if ($comment?->isLineComment() && rtrim($comment->text) !== $comment->text) {
+			$trimmed = new Trivia(TriviaKind::Comment, rtrim($comment->text), $comment->inInterpolation);
+			$trailing = array_map(fn(Trivia $trivia) => $trivia === $comment ? $trimmed : $trivia, $trailing);
+		}
+
+		$this->setTrailingTrivia($trailing);
+	}
+
+
 	/** Whether a comment sits in the leading or trailing trivia of the token. */
 	public function hasComment(): bool
 	{
@@ -239,6 +400,29 @@ final class Token implements \Stringable
 
 
 	/**
+	 * Sets the number of blank lines before the token, which must start a line; comments before it keep
+	 * their position after the blank lines.
+	 */
+	public function setBlankLinesBefore(int $count, string $eol = "\n"): void
+	{
+		$this->refuseInterpolation();
+		if (!$this->startsLine()) {
+			throw new \LogicException("Token '$this->text' does not start a line.");
+		}
+
+		$leading = $this->leadingTrivia;
+		$start = $leading && $leading[0]->kind === TriviaKind::OpenTag ? 1 : 0;
+		$end = $start;
+		while ($end < count($leading) && $leading[$end]->kind === TriviaKind::EndOfLine) {
+			$end++;
+		}
+
+		$blank = array_fill(0, $count, new Trivia(TriviaKind::EndOfLine, $eol));
+		$this->setLeadingTrivia([...array_slice($leading, 0, $start), ...$blank, ...array_slice($leading, $end)]);
+	}
+
+
+	/**
 	 * Puts the token under the node, or takes it out of the tree with null.
 	 * @internal called by Node::adopt() and Node::release()
 	 */
@@ -260,5 +444,16 @@ final class Token implements \Stringable
 		return implode('', array_map(fn(Trivia $trivia) => $trivia->text, $this->leadingTrivia))
 			. $this->text
 			. implode('', array_map(fn(Trivia $trivia) => $trivia->text, $this->trailingTrivia));
+	}
+
+
+	/** Whitespace inside string interpolation is part of the string value and must not be reformatted. */
+	private function refuseInterpolation(): void
+	{
+		foreach ([...$this->leadingTrivia, ...$this->trailingTrivia] as $trivia) {
+			if ($trivia->inInterpolation) {
+				throw new \LogicException("Token '$this->text' is inside string interpolation; its whitespace cannot be changed.");
+			}
+		}
 	}
 }
