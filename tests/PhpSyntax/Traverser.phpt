@@ -3,6 +3,7 @@
 use PhpSyntax\Node;
 use PhpSyntax\Nodes\Expression\FunctionCallNode;
 use PhpSyntax\Nodes\Expression\VariableNode;
+use PhpSyntax\Nodes\Statement\ExpressionStatementNode;
 use PhpSyntax\Parser;
 use PhpSyntax\Token;
 use PhpSyntax\Traverser;
@@ -29,6 +30,66 @@ test('pre-order with enter and leave', function () {
 		'>FileNode', '>NodeList', '>ExpressionStatementNode', '>VariableNode', ">'\$a'", "<'\$a'", '<VariableNode',
 		">';'", "<';'", '<ExpressionStatementNode', '<NodeList', ">''", "<''", '<FileNode',
 	], $log);
+});
+
+
+test('a replaced node is not descended into, but is left like any other', function () {
+	$file = (new Parser)->parse('<?php $a; $b;');
+	$log = [];
+	new Traverser()->traverse(
+		$file,
+		function (Node|Token $node) use (&$log) {
+			$log[] = '>' . label($node);
+			if ($node instanceof VariableNode && $node->name instanceof Token && $node->name->text === '$a') {
+				$node->replaceWith((new Parser)->parseExpression('$x'));
+			}
+		},
+		function (Node|Token $node) use (&$log) { $log[] = '<' . label($node); },
+	);
+	Assert::same('<?php $x; $b;', (string) $file);
+	Assert::same([
+		'>FileNode', '>NodeList', '>ExpressionStatementNode', '>VariableNode', '<VariableNode',
+		">';'", "<';'", '<ExpressionStatementNode',
+		'>ExpressionStatementNode', '>VariableNode', ">'\$b'", "<'\$b'", '<VariableNode', ">';'", "<';'", '<ExpressionStatementNode',
+		'<NodeList', ">''", "<''", '<FileNode',
+	], $log);
+});
+
+
+test('a callback keeping a state of its own sees a leave for every enter', function () {
+	$file = (new Parser)->parse('<?php $a; $b;');
+	$depth = 0;
+	$deepest = 0;
+	new Traverser()->traverse(
+		$file,
+		function (Node|Token $node) use (&$depth, &$deepest) {
+			$deepest = max($deepest, ++$depth);
+			if ($node instanceof VariableNode) {
+				$node->replaceWith((new Parser)->parseExpression('f()'));
+			}
+		},
+		function () use (&$depth) { $depth--; },
+	);
+	Assert::same('<?php f(); f();', (string) $file);
+	Assert::same(0, $depth); // every enter was paid back
+	Assert::same(4, $deepest);
+});
+
+
+test('siblings removed meanwhile are skipped, inserted ones wait for the next walk', function () {
+	$file = (new Parser)->parse('<?php $a; $b; $c;');
+	$visited = [];
+	new Traverser()->traverse($file, function (Node|Token $node) use (&$visited, $file) {
+		if ($node instanceof ExpressionStatementNode) {
+			$visited[] = $name = $node->expression->getFirstToken()?->text;
+			if ($name === '$a') {
+				$file->statements->getItems()[1]->remove();
+				$file->statements->append((new Parser)->parseStatement('$d;'));
+			}
+		}
+	});
+	Assert::same(['$a', '$c'], $visited);
+	Assert::same('<?php $a;  $c;$d;', (string) $file);
 });
 
 

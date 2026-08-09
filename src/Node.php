@@ -3,6 +3,8 @@
 namespace PhpSyntax;
 
 use PhpSyntax\Nodes\FileNode;
+use PhpSyntax\Nodes\NodeList;
+use PhpSyntax\Nodes\SeparatedNodeList;
 use function count;
 
 
@@ -525,6 +527,105 @@ abstract class Node implements \Stringable
 	}
 
 
+	/**
+	 * Replaces this node in its parent; the trivia around the old node stay in place around the new one.
+	 */
+	public function replaceWith(self $node): void
+	{
+		$parent = $this->parent ?? throw new \LogicException('Cannot replace a node without a parent.');
+		$parent->replaceChild($this, $node); // the parent takes the node before the trivia move, so a refused one leaves them where they stand
+		if ($first = $this->getFirstToken()) {
+			$leading = $first->leadingTrivia;
+			$first->setLeadingTrivia([]);
+			if ($target = $node->getFirstToken()) {
+				$target->setLeadingTrivia([...$leading, ...$target->leadingTrivia]);
+			}
+		}
+
+		if ($last = $this->getLastToken()) {
+			$trailing = $last->trailingTrivia;
+			$last->setTrailingTrivia([]);
+			if ($target = $node->getLastToken()) {
+				$target->setTrailingTrivia([...$target->trailingTrivia, ...$trailing]);
+			}
+		}
+	}
+
+
+	/**
+	 * Removes this node from its list. A node alone on its lines takes the lines with it (indentation and
+	 * line ending), otherwise the whitespace around stays; comments inside, each with the line ending that
+	 * follows it, go where the policy says.
+	 */
+	public function remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken): void
+	{
+		$parent = $this->parent;
+		if (!$parent instanceof NodeList && !$parent instanceof SeparatedNodeList) {
+			throw new \LogicException('Only an item of a list can be removed; use the setter of the slot instead.');
+		}
+
+		$tokens = $this->getTokens();
+		$separatorAfter = false;
+		if ($parent instanceof SeparatedNodeList && ($separator = $parent->findSeparatorOf($this)) !== null) {
+			$separatorAfter = $separator !== ($tokens[0] ?? null)?->getPrevious(); // the last item has it before
+			$tokens = $separatorAfter ? [...$tokens, $separator] : [$separator, ...$tokens];
+		}
+
+		$first = $tokens[0] ?? null;
+		$last = $tokens[count($tokens) - 1] ?? null;
+		$previous = $first?->getPrevious();
+		$next = $last?->getNext();
+		[$leading, $moved] = self::splitComments($first->leadingTrivia ?? [], $first?->startsLine() ?? false);
+		foreach ($tokens as $token) {
+			if ($token !== $first) {
+				$moved = [...$moved, ...self::splitComments($token->leadingTrivia, $token->startsLine())[1]];
+			}
+
+			if ($token !== $last) {
+				$moved = [...$moved, ...self::splitComments($token->trailingTrivia, atLineStart: false)[1]];
+			}
+		}
+
+		[$trailing, $trailingComments] = self::splitComments($last->trailingTrivia ?? [], atLineStart: false);
+		$moved = [...$moved, ...$trailingComments];
+		if ($separatorAfter) { // the gap the separator opened goes with it, the line ending of the item stays
+			$trailing = array_values(array_filter($trailing, fn(Trivia $trivia) => $trivia->isEndOfLine()));
+		}
+
+		if (self::standsAlone($first->leadingTrivia ?? [], $last->trailingTrivia ?? [], $previous, $next)) {
+			if ($leading && end($leading)->kind === TriviaKind::Whitespace) {
+				array_pop($leading);
+			}
+
+			$trailing = [];
+		}
+
+		$before = $after = [];
+		if ($comments === CommentPolicy::MoveToPreviousToken && $previous) {
+			$before = $moved;
+		} elseif ($comments !== CommentPolicy::Drop) {
+			$after = $moved;
+		}
+
+		if ($previous) {
+			$previous->setTrailingTrivia([...$previous->trailingTrivia, ...$before, ...$trailing]);
+			$trailing = [];
+			$ends = $previous->trailingTrivia; // a copy: a hooked property takes no indirect change
+			if ($ends && end($ends)->isEndOfLine()) {
+				$previous->removeTrailingWhitespace(); // the line ends here now, so nothing dangles before it
+			}
+		}
+
+		if ($next) {
+			$next->setLeadingTrivia([...$leading, ...$after, ...$trailing, ...$next->leadingTrivia]);
+		} elseif ($previous) {
+			$previous->setTrailingTrivia([...$previous->trailingTrivia, ...$leading, ...$after]);
+		}
+
+		$parent->removeItem($this);
+	}
+
+
 	public function __toString(): string
 	{
 		return Printer::print($this);
@@ -729,5 +830,75 @@ abstract class Node implements \Stringable
 		return new \InvalidArgumentException(
 			($child instanceof Token ? "Token '$child->text'" : $child::class) . ' is not a child of ' . static::class . '.',
 		);
+	}
+
+
+	/**
+	 * Separates comments, each with the line ending directly after it, from the rest of the trivia.
+	 * @param  list<Trivia>  $trivias
+	 * @return array{list<Trivia>, list<Trivia>}  [rest, comments]
+	 */
+	private static function splitComments(array $trivias, bool $atLineStart): array
+	{
+		$rest = $comments = [];
+		foreach ($trivias as $i => $trivia) {
+			$before = $trivias[$i - 1] ?? null;
+			if ($trivia->isComment()) {
+				$opensLine = ($trivias[$i - 2] ?? null)?->isEndOfLine() ?? $atLineStart;
+				if ($opensLine && $before?->kind === TriviaKind::Whitespace) {
+					array_pop($rest); // the comment stands at the start of a line and the whitespace indents it
+					$comments[] = $before;
+				}
+
+				$comments[] = $trivia;
+			} elseif ($trivia->kind === TriviaKind::EndOfLine && $before?->isComment()) {
+				$comments[] = $trivia;
+			} else {
+				$rest[] = $trivia;
+			}
+		}
+
+		return [$rest, $comments];
+	}
+
+
+	/**
+	 * Whether nothing but whitespace and comments shares the lines of the node.
+	 * @param list<Trivia> $leading
+	 * @param list<Trivia> $trailing
+	 */
+	private static function standsAlone(array $leading, array $trailing, ?Token $previous, ?Token $next): bool
+	{
+		$startsLine = false;
+		for ($i = count($leading) - 1; $i >= 0; $i--) {
+			if ($leading[$i]->isEndOfLine()) {
+				$startsLine = true;
+				break;
+			} elseif ($leading[$i]->kind !== TriviaKind::Whitespace && !$leading[$i]->isComment()) {
+				return false;
+			}
+		}
+
+		if (!$startsLine) {
+			$before = $previous->trailingTrivia ?? [];
+			$startsLine = !$previous || ($before && end($before)->isEndOfLine());
+		}
+
+		$endsLine = false;
+		foreach ($trailing as $trivia) {
+			if ($trivia->isEndOfLine()) {
+				$endsLine = true;
+				break;
+			} elseif ($trivia->kind !== TriviaKind::Whitespace && !$trivia->isComment()) {
+				return false;
+			}
+		}
+
+		if (!$endsLine) {
+			$after = $next->leadingTrivia ?? [];
+			$endsLine = !$next || $next->kind === TokenKind::EndOfFile || ($after && $after[0]->isEndOfLine());
+		}
+
+		return $startsLine && $endsLine;
 	}
 }

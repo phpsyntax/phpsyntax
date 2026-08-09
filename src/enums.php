@@ -83,6 +83,17 @@ enum AccessKind
 
 
 /**
+ * What happens to the comments inside a removed subtree.
+ */
+enum CommentPolicy
+{
+	case MoveToNextToken;
+	case MoveToPreviousToken;
+	case Drop;
+}
+
+
+/**
  * What a slot is to the indentation of the lines its node spreads over, relative to the line the node
  * begins on; the level each role stands for is the business of the style.
  */
