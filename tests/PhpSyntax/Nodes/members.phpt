@@ -199,3 +199,43 @@ test('what a use statement and its items import', function () {
 	Assert::same('A\B', $item->fullName);
 	Assert::same(SymbolKind::ClassLike, $item->kind);
 });
+
+
+test('an import is added the way the statement writes its items', function () {
+	$add = function (string $code, string $name, ?string $alias = null, ?int $index = null): string {
+		$file = parseFile($code);
+		$file->getIndex()->getTokens(); // the index is there, so the write has to keep it right
+		$file->find(UseNode::class)[0]->addImport($name, $alias, $index);
+		return substr((string) $file, strlen("<?php\n"));
+	};
+
+	// a plain import takes the whole name, without a leading backslash of its own
+	Assert::same('use App\Money, App\Order;', $add('use App\Money;', 'App\Order'));
+	Assert::same('use App\Money, Shop\Invoice as Doc;', $add('use App\Money;', '\Shop\Invoice', 'Doc'));
+
+	// a group writes the name under its prefix, and refuses one standing outside it
+	Assert::same('use Shop\{Invoice, App\Money};', $add('use Shop\{Invoice};', 'Shop\App\Money'));
+	Assert::exception(
+		fn() => $add('use Shop\{Invoice};', 'App\Money'),
+		InvalidArgumentException::class,
+		"The name 'App\\Money' does not stand under the prefix of the group.",
+	);
+
+	// the index says where among the items, and the item takes the place of its neighbor in the lines
+	Assert::same('use E\F, A\B, C\D;', $add('use A\B, C\D;', 'E\F', null, 0));
+	Assert::same(
+		"use App\\{\n\tMoney,\n\tOrder,\n};\n",
+		$add("use App\\{\n\tMoney,\n};\n", 'App\Order'),
+	);
+
+	// the item imports what the statement imports, and the name it stands for is the one given
+	$file = parseFile('use function A\b;');
+	$item = $file->find(UseNode::class)[0]->addImport('A\c');
+	Assert::same(SymbolKind::Function, $item->kind);
+	Assert::same('A\c', $item->fullName);
+	Assert::same("<?php\nuse function A\\b, A\\c;", (string) $file);
+
+	// neither the name nor the alias may be anything but the one token it is written as
+	Assert::exception(fn() => $add('use A\B;', 'C\D as E'), InvalidArgumentException::class, "'C\\D as E' is not a name.");
+	Assert::exception(fn() => $add('use A\B;', 'C\D', 'e f'), InvalidArgumentException::class, "'e f' is not an identifier.");
+});
