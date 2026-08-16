@@ -237,6 +237,27 @@ final class TokenIndex
 	}
 
 
+	/**
+	 * Column with tabs expanded to the next multiple of the tab width, 1-based.
+	 */
+	public function getVisualColumn(Token $token, Style $style): int
+	{
+		$prefix = '';
+		for ($i = $this->getIndex($token) - 1; $i >= 0; $i--) {
+			$prefix = $this->tokens[$i] . $prefix;
+			if (preg_match('~[\r\n]~', $prefix)) {
+				break;
+			}
+		}
+
+		foreach ($token->leadingTrivia as $trivia) {
+			$prefix .= $trivia->text;
+		}
+
+		return Indentation::advance(0, (string) preg_replace('~^.*[\r\n]~s', '', $prefix), $style) + 1;
+	}
+
+
 	/** Number of line endings ("\n", "\r\n" or a lone "\r") in the text. */
 	public static function countLineEndings(string $text): int
 	{
