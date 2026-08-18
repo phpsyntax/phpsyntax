@@ -9,6 +9,7 @@ imports: {groupUse: required}
 paths:
 	- src
 	- tests
+	- bin/phpsyntax
 	- docs/reference/generate.php
 
 excludePaths:
