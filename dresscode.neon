@@ -8,6 +8,7 @@ paths:
 	- src
 	- grammar
 	- tests
+	- bin/phpsyntax
 	- docs/reference/generate.php
 
 excludePaths:
