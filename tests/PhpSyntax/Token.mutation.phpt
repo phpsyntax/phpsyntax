@@ -48,6 +48,31 @@ test('setText and trivia setters record a non-structural mutation', function () 
 });
 
 
+test('startsLine and indentation', function () {
+	$file = parse("<?php\n\t\$a; \$b;\n\n  // c\n    \$c;");
+	[$a, , $b, , $c] = tokens($file);
+	Assert::true($a->startsLine());
+	Assert::false($b->startsLine());
+	Assert::true($c->startsLine());
+	Assert::same("\t", $a->getIndentation());
+	Assert::same('', $b->getIndentation());
+	Assert::same('    ', $c->getIndentation());
+
+	$c->setIndentation("\t\t");
+	Assert::same("<?php\n\t\$a; \$b;\n\n  // c\n\t\t\$c;", (string) $file);
+	$a->setIndentation('');
+	Assert::same("<?php\n\$a; \$b;\n\n  // c\n\t\t\$c;", (string) $file);
+	Assert::exception(fn() => $b->setIndentation("\t"), LogicException::class, "Token '\$b' does not start a line.");
+
+	// the space after an inline comment is not indentation and survives reindenting
+	$file = parse("<?php\n/*enum*/ final class A {}");
+	[$final] = tokens($file);
+	Assert::same('', $final->getIndentation());
+	$final->setIndentation("\t");
+	Assert::same("<?php\n\t/*enum*/ final class A {}", (string) $file);
+});
+
+
 test('ensureLeadingNewline and removeTrailingWhitespace', function () {
 	$file = parse("<?php\n\$a;  \$b; // c  \n\$d;  ");
 	[$a, $semicolonA, $b, $semicolonB, $d, $semicolonD] = tokens($file);
