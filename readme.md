@@ -285,7 +285,7 @@ Documentation
 
 - [examples/](examples) - runnable programs, one idea each; start with [parsing](examples/parsing) and
   then [mutation](examples/mutation)
-- [docs/reference/nodes.md](docs/reference/nodes.md) - every node class with its slots, generated
+- [docs/reference/nodes.md](docs/reference/nodes.md) - every node class with its slots, properties and methods, generated
 - [docs/internals.md](docs/internals.md) - the trivia rules, the mutation protocol, the index
 
  <!---->
