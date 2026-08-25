@@ -18,7 +18,7 @@ The lexer (`PhpSyntax\Lexer\Lexer`) turns `PhpToken::tokenize()` output into sig
 
 ## Round trip
 
-`Printer::print(new Parser()->parse($code)) === $code` byte for byte for any input PHP accepts, including BOM, hashbang, CR/CRLF, close tags, inline HTML and `__halt_compiler()` data. It is the invariant every change to the lexer, the grammar, the nodes or the printer must keep; the tests run it over the committed corpus (`tests/corpus/`) and, with `PHPSYNTAX_CORPUS` set, over an external tree. The printer is a concatenation and has no logic of its own, so what a tool changes in the trivia and the nodes is exactly what the text gets.
+`Printer::print(new Parser()->parse($code)) === $code` byte for byte for any input PHP accepts, including BOM, hashbang, CR/CRLF, close tags, inline HTML and `__halt_compiler()` data. It is the invariant every change to the lexer, the grammar, the nodes or the printer must keep; the tests run it over the committed corpus (`tests/corpus/`) and, with `PHPSYNTAX_CORPUS` set, over an external tree. The printer is a concatenation and has no logic of its own, so what a tool changes in the trivia and the nodes is exactly what the text gets. `Printer::print()` and `Printer::printText()` (the text without the outer edges, which `Node::$text` reads) take a substitute, `fn(Token): ?string`, printed in place of the text of a token while the trivia and the tree stay as they are: how a tool shows code with changes it has not made to the tree.
 
 ## Parser and generated files
 
