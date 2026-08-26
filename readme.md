@@ -286,6 +286,7 @@ Documentation
 - [examples/](examples) - runnable programs, one idea each; start with [parsing](examples/parsing) and
   then [mutation](examples/mutation)
 - [docs/reference/nodes.md](docs/reference/nodes.md) - every node class with its slots, properties and methods, generated
+- [docs/migrating-from-php-parser.md](docs/migrating-from-php-parser.md) - moving a tool off nikic/php-parser: what maps onto what
 - [docs/internals.md](docs/internals.md) - the trivia rules, the mutation protocol, the index
 
  <!---->
