@@ -7,8 +7,9 @@
 
 namespace PhpSyntax\Nodes\Expression;
 
-use PhpSyntax\{Associativity, Token};
+use PhpSyntax\{Associativity, Helpers, Lexer, Token};
 use PhpSyntax\Nodes\{ExpressionNode, OperatorNode};
+use function in_array;
 
 
 /**
@@ -30,5 +31,24 @@ final class UnaryOpNode extends ExpressionNode implements OperatorNode
 	{
 		$this->operator = $operator;
 		$this->expression = $expression;
+	}
+
+
+	/**
+	 * Replaces the operator by another unary one, the trivia around it staying, and puts the operand and the
+	 * operation itself in parentheses where the new precedence asks, `!` binding looser than the rest.
+	 * @throws \InvalidArgumentException  for what is no unary operator
+	 */
+	public function replaceOperator(string $operator): void
+	{
+		if (!in_array($operator, ['+', '-', '!', '~', '@'], true)) {
+			throw new \InvalidArgumentException(Helpers::formatCode($operator) . ' is not a unary operator.');
+		} elseif ($operator === $this->operator->text) {
+			return;
+		}
+
+		$this->operator->replaceWith(Lexer::readToken($operator) ?? throw new \LogicException);
+		ParenthesizedNode::fit($this->expression);
+		ParenthesizedNode::fit($this);
 	}
 }

@@ -7,7 +7,7 @@
 
 namespace PhpSyntax\Nodes\Expression;
 
-use PhpSyntax\{Associativity, Helpers, Token};
+use PhpSyntax\{Associativity, Helpers, Lexer, Token};
 use PhpSyntax\Nodes\{ExpressionNode, OperatorNode};
 
 
@@ -35,6 +35,25 @@ final class BinaryOpNode extends ExpressionNode implements OperatorNode
 	}
 
 
+	/**
+	 * Replaces the operator by another binary one, the trivia around it staying, and puts the operands and the
+	 * operation itself in parentheses where the new precedence asks, taking away those it makes needless.
+	 * @throws \InvalidArgumentException  for what is no binary operator
+	 */
+	public function replaceOperator(string $operator): void
+	{
+		self::resolvePrecedence($operator);
+		if ($operator === $this->operator->text) {
+			return;
+		}
+
+		$this->operator->replaceWith(Lexer::readToken($operator) ?? throw new \LogicException);
+		ParenthesizedNode::fit($this->left);
+		ParenthesizedNode::fit($this->right);
+		ParenthesizedNode::fit($this);
+	}
+
+
 	/** @return array{int, Associativity} */
 	private static function resolvePrecedence(string $operator): array
 	{
@@ -56,7 +75,7 @@ final class BinaryOpNode extends ExpressionNode implements OperatorNode
 			'and' => [50, Associativity::Left],
 			'xor' => [40, Associativity::Left],
 			'or' => [30, Associativity::Left],
-			default => throw new \LogicException(Helpers::formatCode($operator) . ' is not a binary operator.'),
+			default => throw new \InvalidArgumentException(Helpers::formatCode($operator) . ' is not a binary operator.'),
 		};
 	}
 

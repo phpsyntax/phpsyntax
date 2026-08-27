@@ -8,7 +8,7 @@
 namespace PhpSyntax\Nodes\Expression;
 
 use PhpSyntax\{Associativity, Node, Token};
-use PhpSyntax\Nodes\{ArrayItemNode, ExpressionNode, MatchArmNode, OperatorNode, RightExtendingNode, SeparatedNodeList};
+use PhpSyntax\Nodes\{ArrayItemNode, ExpressionNode, MatchArmNode, NameNode, OperatorNode, RightExtendingNode, SeparatedNodeList};
 
 
 /**
@@ -38,6 +38,37 @@ final class ParenthesizedNode extends ExpressionNode
 		$this->openParen = $openParen;
 		$this->expression = $expression;
 		$this->closeParen = $closeParen;
+	}
+
+
+	/**
+	 * Puts the expression in parentheses where its place needs them and takes away those it does not need, so that
+	 * it reads as the parser reads it; what an operator asks of its operands and of itself once it has changed.
+	 * @internal
+	 */
+	public static function fit(ExpressionNode $node): void
+	{
+		if ($node->parent === null) {
+			return;
+		} elseif ($node instanceof self) {
+			if ($node->isRedundant()) {
+				$node->replaceWith($node->expression);
+			}
+
+			return;
+
+		} elseif ($node->parent instanceof self) {
+			self::fit($node->parent);
+			return;
+		}
+
+		$placeholder = new ConstantFetchNode(NameNode::fromText('X')); // holds the place while the node goes into parentheses
+		$node->replaceWith($placeholder);
+		$parenthesized = new self(Token::fromText('('), $node, Token::fromText(')'));
+		$placeholder->replaceWith($parenthesized);
+		if ($parenthesized->isRedundant()) {
+			$parenthesized->replaceWith($node);
+		}
 	}
 
 
