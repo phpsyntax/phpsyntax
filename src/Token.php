@@ -22,6 +22,17 @@ final class Token extends \PhpToken implements \Stringable
 {
 	use TokenData;
 
+	/** kinds whose text only the code around them tells apart, the content of a string, a heredoc or a file */
+	private const ContentKinds = [
+		self::EncapsedAndWhitespace => true,
+		self::InlineHtml => true,
+		self::HaltCompilerData => true,
+		self::StartHeredoc => true,
+		self::EndHeredoc => true,
+		self::NumericString => true,
+		self::StringVariableName => true,
+	];
+
 	/** The node the token belongs to; only the tree writes it, public so that a node writes it without a call. */
 	public ?Node $parent = null;
 
@@ -57,8 +68,10 @@ final class Token extends \PhpToken implements \Stringable
 
 
 	/**
-	 * Replaces the text of the token, the trivia around it untouched; the file learns how many line endings
-	 * the token gained or lost, so that the lines after it stay right.
+	 * Replaces the text of the token by another writing of the same kind, the trivia around it untouched: a keyword
+	 * in another letter case, `(integer)` as `(int)`, another number, string or name. A text the token would be read
+	 * as another kind for is refused, `replaceWith()` putting such a token in its place. The file learns how many
+	 * line endings the token gained or lost, so that the lines after it stay right.
 	 */
 	public function setText(string $text): static
 	{
@@ -66,11 +79,33 @@ final class Token extends \PhpToken implements \Stringable
 			return $this;
 		}
 
+		$this->checkSpelling($text);
 		$file = $this->getFile();
 		$lineEndings = $file ? TokenIndex::countLineEndings($text) - TokenIndex::countLineEndings($this->text) : 0;
 		$this->text = $text;
 		$file?->tokenChanged($this, $lineEndings, leading: false);
 		return $this;
+	}
+
+
+	/**
+	 * Refuses a text the lexer reads as another kind than the token has. What only the code around tells, the
+	 * content of a string and the like, takes any text, and an identifier any name, a keyword among them, as it
+	 * stands after `->`; another letter case is the same kind whatever the token.
+	 */
+	private function checkSpelling(string $text): void
+	{
+		if (
+			isset(self::ContentKinds[$this->id])
+			|| strcasecmp($text, $this->text) === 0
+			|| ($this->id === self::Identifier && preg_match('~^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*$~D', $text))
+		) {
+			return;
+		}
+
+		if (Lexer::readToken($text)?->id !== $this->id) {
+			throw new \InvalidArgumentException('Token ' . Helpers::formatCode($this->text) . ' cannot be written as ' . Helpers::formatCode($text) . ', which is another kind of token; `replaceWith()` puts one in its place.');
+		}
 	}
 
 
