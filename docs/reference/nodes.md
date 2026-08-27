@@ -966,6 +966,7 @@ Extends `ExpressionNode`. Implements `OperatorNode`.
 |---|---|
 | `$precedence: int` |  |
 | `$associativity: Associativity` |  |
+| `replaceOperator(string $operator): void` | Replaces the operator by another combined assignment one, the trivia around it staying; every one binds alike, so no parentheses change. Throws InvalidArgumentException for what is no combined assignment operator. |
 
 ### Expression\AssignmentByReferenceNode
 
@@ -1001,6 +1002,7 @@ Extends `ExpressionNode`. Implements `OperatorNode`.
 |---|---|
 | `$precedence: int` |  |
 | `$associativity: Associativity` |  |
+| `replaceOperator(string $operator): void` | Replaces the operator by another binary one, the trivia around it staying, and puts the operands and the operation itself in parentheses where the new precedence asks, taking away those it makes needless. Throws InvalidArgumentException for what is no binary operator. |
 | `isLogical(): bool` | Whether the operator is `&&`, `\|\|`, `and`, `or` or `xor`, the operators the parts of a condition are chained with. |
 
 ### Expression\UnaryOpNode
@@ -1018,6 +1020,7 @@ Extends `ExpressionNode`. Implements `OperatorNode`.
 |---|---|
 | `$precedence: int` |  |
 | `$associativity: Associativity` |  |
+| `replaceOperator(string $operator): void` | Replaces the operator by another unary one, the trivia around it staying, and puts the operand and the operation itself in parentheses where the new precedence asks, `!` binding looser than the rest. Throws InvalidArgumentException for what is no unary operator. |
 
 ### Expression\PrefixOpNode
 
@@ -1067,6 +1070,7 @@ Extends `ExpressionNode`. Implements `OperatorNode`.
 | `$typeName: string` | The type the cast converts to, in the name PHP knows it by: (integer) is int, (double) and (real) are float. |
 | `$precedence: int` |  |
 | `$associativity: Associativity` |  |
+| `replaceOperator(string $operator): void` | Replaces the cast by another one, `(int)` by `(string)` for instance, the trivia around it staying; every cast binds alike, so no parentheses change. Another spelling of the same cast is `setText()` of the operator. Throws InvalidArgumentException for what is no cast. |
 
 ### Expression\TernaryNode
 

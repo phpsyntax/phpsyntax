@@ -7,7 +7,7 @@
 
 namespace PhpSyntax\Nodes\Expression;
 
-use PhpSyntax\{Associativity, Token};
+use PhpSyntax\{Associativity, Helpers, Lexer, Token};
 use PhpSyntax\Nodes\{ExpressionNode, OperatorNode};
 
 
@@ -44,5 +44,24 @@ final class CastNode extends ExpressionNode implements OperatorNode
 	{
 		$this->operator = $operator;
 		$this->expression = $expression;
+	}
+
+
+	/**
+	 * Replaces the cast by another one, `(int)` by `(string)` for instance, the trivia around it staying; every cast
+	 * binds alike, so no parentheses change. Another spelling of the same cast is `setText()` of the operator.
+	 * @throws \InvalidArgumentException  for what is no cast
+	 */
+	public function replaceOperator(string $operator): void
+	{
+		$token = Lexer::readToken($operator);
+		if (!$token?->is([
+			Token::IntCast, Token::FloatCast, Token::StringCast, Token::ArrayCast, Token::ObjectCast, Token::BoolCast, Token::UnsetCast,
+			Token::VoidCast,
+		])) {
+			throw new \InvalidArgumentException(Helpers::formatCode($operator) . ' is not a cast.');
+		} elseif ($operator !== $this->operator->text) {
+			$this->operator->replaceWith($token);
+		}
 	}
 }

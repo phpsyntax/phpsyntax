@@ -73,13 +73,20 @@ test('writing what a place already holds changes nothing', function () {
 	Assert::same($revision, $file->revision);
 	Assert::same($binary, $binary->left->parent);
 
-	// the text and the trivia a token has, a name and the whitespace there already
+	// the text and the trivia a token has, a name, an operator and the whitespace there already
 	$code = "<?php\nif (\$a) {\n\n\t\$x = -(int) \$b . foo();\n\t\$y .= 'z';\n}\n";
 	$file = parse($code);
 	$x = $file->findFirst(PhpSyntax\Nodes\Expression\VariableNode::class, fn($variable) => $variable->plainName === 'x')?->getFirstToken() ?? throw new LogicException;
 	$x->setText($x->text)->setLeadingTrivia($x->leadingTrivia)->setTrailingTrivia($x->trailingTrivia);
 	$x->setTrailingSpace(' ')->setIndentation("\t")->setBlankLinesBefore(1, "\n")->ensureStartsLine("\n");
 	PhpSyntax\Indentation::set($x, "\t", "\t");
+	foreach ($file->find(PhpSyntax\Nodes\Expression\BinaryOpNode::class) as $node) {
+		$node->replaceOperator($node->operator->text);
+	}
+
+	$file->findFirst(PhpSyntax\Nodes\Expression\UnaryOpNode::class)?->replaceOperator('-');
+	$file->findFirst(PhpSyntax\Nodes\Expression\CastNode::class)?->replaceOperator('(int)');
+	$file->findFirst(PhpSyntax\Nodes\Expression\CombinedAssignmentNode::class)?->replaceOperator('.=');
 	$name = $file->findFirst(FunctionCallNode::class)?->name;
 	Assert::type(PhpSyntax\Nodes\NameNode::class, $name);
 	$name->text = 'foo';
