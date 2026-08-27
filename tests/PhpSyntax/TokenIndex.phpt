@@ -58,7 +58,9 @@ test('a tree built by hand: order, navigation, lines and offsets follow the triv
 
 
 test('a change of text or trivia moves what follows, a structural change also the order', function () {
-	$a = word('$a', [new Trivia(Trivia::OpenTag, "<?php\n")]);
+	$a = new Token(Token::ConstantEncapsedString, "'a'");
+	$a->setLeadingTrivia([new Trivia(Trivia::OpenTag, "<?php\n")]);
+	$a->setTrailingTrivia([new Trivia(Trivia::LineEnding, "\n")]);
 	$b = word('$b');
 	$eof = new Token(Token::EndOfFile, '');
 	$first = statement($a);
@@ -66,7 +68,7 @@ test('a change of text or trivia moves what follows, a structural change also th
 	Assert::same(3, $b->currentLine);
 	Assert::same(0, $file->revision);
 
-	$a->setText("\$aa\n");
+	$a->setText("'a\n'"); // a string holding a line ending
 	Assert::same(4, $b->currentLine);
 	Assert::same(11, $b->currentOffset);
 	$b->setLeadingTrivia([new Trivia(Trivia::LineEnding, "\n")]);
