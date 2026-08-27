@@ -7,7 +7,7 @@
 
 namespace PhpSyntax\Nodes\Expression;
 
-use PhpSyntax\{Associativity, Token};
+use PhpSyntax\{Associativity, Helpers, Lexer, Token};
 use PhpSyntax\Nodes\{ExpressionNode, OperatorNode};
 
 
@@ -17,6 +17,8 @@ use PhpSyntax\Nodes\{ExpressionNode, OperatorNode};
 final class CombinedAssignmentNode extends ExpressionNode implements OperatorNode
 {
 	public const Slots = ['target', 'operator', 'expression'];
+
+	private const Operators = ['+=', '-=', '*=', '/=', '.=', '%=', '**=', '&=', '|=', '^=', '<<=', '>>=', '??='];
 
 	public ExpressionNode $target { set => $this->prepareSlot(__PROPERTY__, $value); }
 	public Token $operator { set => $this->prepareSlot(__PROPERTY__, $value); }
@@ -32,5 +34,20 @@ final class CombinedAssignmentNode extends ExpressionNode implements OperatorNod
 		$this->target = $target;
 		$this->operator = $operator;
 		$this->expression = $expression;
+	}
+
+
+	/**
+	 * Replaces the operator by another combined assignment one, the trivia around it staying; every one binds alike,
+	 * so no parentheses change.
+	 * @throws \InvalidArgumentException  for what is no combined assignment operator
+	 */
+	public function replaceOperator(string $operator): void
+	{
+		if (!in_array($operator, self::Operators, true)) {
+			throw new \InvalidArgumentException(Helpers::formatCode($operator) . ' is not a combined assignment operator.');
+		} elseif ($operator !== $this->operator->text) {
+			$this->operator->replaceWith(Lexer::readToken($operator) ?? throw new \LogicException);
+		}
 	}
 }
