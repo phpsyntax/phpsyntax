@@ -72,6 +72,41 @@ final class Lexer
 
 
 	/**
+	 * Whether two pieces of code, a token each or more, may be written with nothing between them: not where
+	 * that reads as something else than the two read apart, the number `.1`, the name `returnFOO`, the
+	 * decrement `--`, and a space between them prevents it. Two pieces of a string, which no space would
+	 * help, may.
+	 */
+	public function canAdjoin(string $left, string $right): bool
+	{
+		$together = $this->readTexts($left . $right);
+		if ($together === [$left, $right]) {
+			return true;
+		}
+
+		$apart = [...$this->readTexts($left) ?? [], ...$this->readTexts($right) ?? []];
+		return $together === $apart || $this->readTexts("$left $right") !== $apart;
+	}
+
+
+	/**
+	 * The texts of the tokens the code, written without an open tag, is read as; null for code the lexer refuses.
+	 * @return ?list<string>
+	 */
+	private function readTexts(string $code): ?array
+	{
+		try {
+			$tokens = $this->tokenize('<?php ' . $code, withPositions: false);
+		} catch (ParseException) {
+			return null;
+		}
+
+		array_pop($tokens); // the end of the file
+		return array_map(fn(Token $token) => $token->text, $tokens);
+	}
+
+
+	/**
 	 * Tokens with host ids replaced by TokenKind; whitespace and comments are still tokens.
 	 * @return list<Token>
 	 */

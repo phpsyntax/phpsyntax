@@ -46,6 +46,35 @@ test('replaceWith keeps the surrounding trivia and the parent invariant', functi
 });
 
 
+test('replaceWith keeps apart the tokens that would be read together', function () {
+	$replace = function (string $code, string $find, string $with): string {
+		$file = parse("<?php\n$code\n");
+		$node = $file->findFirst(PhpSyntax\Nodes\ExpressionNode::class, fn($node) => $node->text === $find);
+		Assert::type(PhpSyntax\Nodes\ExpressionNode::class, $node);
+		$node->replaceWith((new Parser)->parseExpression($with));
+		Assert::same((string) $file, (string) parse((string) $file));
+		return substr((string) $file, 6, -1);
+	};
+
+	Assert::same("\$x = 'a'. 119 + 1;", $replace("\$x = 'a'.f();", 'f()', '119 + 1')); // .119 is a number
+	Assert::same("\$x = 4 .'s';", $replace("\$x = f().'s';", 'f()', '4')); // and so is 4.
+	Assert::same('return FOO;', $replace('return(1);', '(1)', 'FOO'));
+	Assert::same('$x = - -$a;', $replace('$x = -f();', 'f()', '-$a'));
+
+	// what reads the same either way stays as it was
+	Assert::same("\$x = 'a'.\$b;", $replace("\$x = 'a'.f();", 'f()', '$b'));
+	Assert::same('$x = !$b;', $replace('$x = !f();', 'f()', '$b'));
+	Assert::same('$x = "a{$b}c";', $replace('$x = "a{$a}c";', '$a', '$b'));
+	Assert::same('$x = "a{$b[1]}";', $replace('$x = "a{$b[0]}";', '0', '1'));
+
+	// in a tree without a file too
+	$negation = (new Parser)->parseExpression('-0');
+	Assert::type(PhpSyntax\Nodes\Expression\UnaryOpNode::class, $negation);
+	$negation->expression->replaceWith((new Parser)->parseExpression('-$a'));
+	Assert::same('- -$a', (string) $negation);
+});
+
+
 test('a node is lifted out of the one it replaces, and only out of that one', function () {
 	$file = parse("<?php\n\$a = (\$b + 1);\n\$c = \$c + \$d;\n\nreturn \$c;\n");
 	$file->getIndex(); // the index is built first, so that the lift has to keep it right

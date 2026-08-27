@@ -505,7 +505,9 @@ abstract class Node implements \Stringable
 
 
 	/**
-	 * Replaces this node in its parent; the trivia around the old node stay in place around the new one.
+	 * Replaces this node in its parent; the trivia around the old node stay in place around the new one, and
+	 * where the new one then stands right against a token it would be read together with, `.` against `1` or
+	 * `return` against `FOO`, a space keeps the two apart.
 	 */
 	public function replaceWith(self $node): void
 	{
@@ -526,6 +528,47 @@ abstract class Node implements \Stringable
 				$target->setTrailingTrivia([...$target->trailingTrivia, ...$trailing]);
 			}
 		}
+
+		if (($first = $node->getFirstToken()) && ($last = $node->getLastToken())) {
+			self::keepApart(self::findNeighbor($first, -1), $first);
+			self::keepApart($last, self::findNeighbor($last, 1));
+		}
+	}
+
+
+	/** Puts a space between two tokens standing right against each other that the lexer would not read as the two. */
+	private static function keepApart(?Token $left, ?Token $right): void
+	{
+		static $lexer = new Lexer\Lexer;
+		if (
+			$left === null
+			|| $right === null
+			|| $right->text === ''
+			|| $left->trailingTrivia
+			|| $right->leadingTrivia
+			|| $left->is(TokenKind::EncapsedAndWhitespace, TokenKind::InlineHtml)
+			|| $right->is(TokenKind::EncapsedAndWhitespace, TokenKind::InlineHtml)
+		) {
+			return;
+		}
+
+		if (!$lexer->canAdjoin($left->text, $right->text)) {
+			$left->setTrailingTrivia([new Trivia(TriviaKind::Whitespace, ' ')]);
+		}
+	}
+
+
+	/** The token before or after the given one, in a subtree without a file as well, where no index answers. */
+	private static function findNeighbor(Token $token, int $step): ?Token
+	{
+		if ($token->getFile() !== null) {
+			return $step < 0 ? $token->getPrevious() : $token->getNext();
+		}
+
+		for ($root = $token->parent; $root?->parent !== null; $root = $root->parent);
+		$tokens = $root?->getTokens() ?? [];
+		$index = array_search($token, $tokens, true);
+		return $index === false ? null : $tokens[$index + $step] ?? null;
 	}
 
 
