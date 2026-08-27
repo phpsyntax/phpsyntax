@@ -29,7 +29,11 @@ final class IdentifierNode extends Node
 		get => $this->token->text;
 		set {
 			self::checkText($value);
-			$this->token->setText($value);
+			if ($this->token->is(Token::Identifier) || strcasecmp($value, $this->token->text) === 0) {
+				$this->token->setText($value);
+			} else { // a keyword standing as an identifier, a method named list() for instance, has its own kind
+				$this->token->replaceWith(new Token(Token::Identifier, $value, $this->token->line, $this->token->pos));
+			}
 		}
 	}
 

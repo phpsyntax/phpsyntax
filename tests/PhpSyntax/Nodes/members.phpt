@@ -78,6 +78,21 @@ test('an identifier takes an identifier and nothing else', function () {
 });
 
 
+test('writing the text of an identifier or a name keeps where the token stood in the source', function () {
+	$file = parseFile("class A {\n\tfunction list() {}\n\tfunction b(): C {}\n}");
+	[$list, $b] = $file->find(MethodNode::class);
+	$type = $b->returnType;
+	Assert::type(PhpSyntax\Nodes\Type\NamedTypeNode::class, $type);
+	$tokens = fn() => [$list->name->token, $b->name->token, $type->name->token];
+	$positions = array_map(fn($token) => [$token->line, $token->pos], $tokens());
+	$list->name->text = 'items'; // a keyword standing as an identifier is a token of another kind
+	$b->name->text = 'c';
+	$type->name->text = 'D\E';
+	Assert::same($positions, array_map(fn($token) => [$token->line, $token->pos], $tokens()));
+	Assert::same([[3, 26], [4, 46], [4, 51]], $positions);
+});
+
+
 test('a promoted parameter is the one with modifiers', function () {
 	$file = parseFile('class A { function __construct(private int $a, int $b) {} }');
 	[$a, $b] = $file->find(ParameterNode::class);
