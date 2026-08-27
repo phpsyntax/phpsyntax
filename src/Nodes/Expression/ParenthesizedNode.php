@@ -2,6 +2,7 @@
 
 namespace PhpSyntax\Nodes\Expression;
 
+use PhpSyntax\Node;
 use PhpSyntax\Nodes\ArrayItemNode;
 use PhpSyntax\Nodes\ExpressionNode;
 use PhpSyntax\Nodes\MatchArmNode;
@@ -9,6 +10,7 @@ use PhpSyntax\Nodes\OperatorNode;
 use PhpSyntax\Nodes\RightExtendingNode;
 use PhpSyntax\Nodes\SeparatedNodeList;
 use PhpSyntax\Token;
+use PhpSyntax\TokenKind;
 
 
 /**
@@ -58,25 +60,76 @@ final class ParenthesizedNode extends ExpressionNode
 		}
 
 		$asked = $this->askedFor();
-		return $asked !== null && $this->bindsAs() >= $asked;
+		return $asked !== null && $this->bindsAs() >= $asked && !$this->wouldTakeWhatFollows();
 	}
 
 
 	/**
-	 * How tightly what stands in the parentheses binds, seen from where they stand: an operator with no
-	 * left operand captures nothing before itself, so where nothing follows the parentheses it reaches
-	 * over whatever stands around them.
+	 * How tightly what stands in the parentheses binds, seen from the left of where they stand: an operator
+	 * with no left operand captures nothing before itself, however loosely it binds.
 	 */
 	private function bindsAs(): int
 	{
-		if (!$this->expression instanceof OperatorNode) {
-			return self::Tightest;
+		$expression = $this->expression;
+		return match (true) {
+			!$expression instanceof OperatorNode, self::hasNoLeftOperand($expression) => self::Tightest,
+			default => $expression->getPrecedence()[0],
+		};
+	}
+
+
+	/**
+	 * Whether an operator ending what stands in the parentheses, the expression itself or the last operand
+	 * down it, would take what follows them for its own: any operator at all where its operand reaches as far
+	 * as the code lets it, otherwise one binding tighter than itself, and the => of a pair for a yield with none.
+	 */
+	private function wouldTakeWhatFollows(): bool
+	{
+		$followed = $this->findFollowedAncestor();
+		$isPair = $followed instanceof ArrayItemNode || $followed instanceof MatchArmNode;
+		if (!$followed instanceof OperatorNode && !$isPair) {
+			return false;
 		}
 
-		$siblings = $this->parent?->getChildren() ?? [];
-		return $this->expression instanceof RightExtendingNode && $this === end($siblings)
-			? self::Tightest
-			: $this->expression->getPrecedence()[0];
+		$node = $this->expression;
+		while ($node instanceof OperatorNode) {
+			$takes = match (true) {
+				$isPair => $node instanceof YieldNode && $node->doubleArrow === null,
+				$node instanceof RightExtendingNode => true,
+				default => $followed->getPrecedence()[0] > $node->getPrecedence()[0],
+			};
+			if ($takes) {
+				return true;
+			}
+
+			$children = $node->getChildren();
+			$node = end($children);
+		}
+
+		return false;
+	}
+
+
+	private static function hasNoLeftOperand(OperatorNode $operator): bool
+	{
+		return $operator instanceof RightExtendingNode
+			|| $operator instanceof UnaryOpNode
+			|| $operator instanceof CastNode
+			|| $operator instanceof PrefixOpNode;
+	}
+
+
+	/** The nearest ancestor the parentheses do not end, so that what follows them is a token of its own; null where the code ends. */
+	private function findFollowedAncestor(): ?Node
+	{
+		for ($node = $this; $node->parent !== null; $node = $node->parent) {
+			$siblings = $node->parent->getChildren();
+			if ($node !== end($siblings)) {
+				return $node->parent;
+			}
+		}
+
+		return null;
 	}
 
 
@@ -100,6 +153,9 @@ final class ParenthesizedNode extends ExpressionNode
 			// the key and the value of a yield stand on the two sides of a => that is an operator
 			$parent instanceof YieldNode && $parent->key === $this => self::PairPrecedence + 1,
 			$parent instanceof YieldNode && $parent->doubleArrow !== null => self::PairPrecedence,
+
+			// a pipe takes an arrow function in parentheses only
+			$parent instanceof BinaryOpNode && $parent->operator->is(TokenKind::Pipe) && $this->expression instanceof ArrowFunctionNode => null,
 
 			// what takes a variable and nothing else takes it without parentheses too
 			$parent instanceof PrefixOpNode, $parent instanceof PostfixOpNode => self::Tightest,

@@ -381,10 +381,37 @@ test('whether parentheses may go', function () {
 	Assert::false($redundant('$x = (fn() => 1) ? 2 : 3;'));
 	Assert::false($redundant('$x = $a ? (fn() => 1) : 2;'));
 	Assert::false($redundant('$x = (print 1) . "s";'));
+	// what follows may stand further up than beside them
+	Assert::false($redundant('$x = $a + (yield $b) + 1;'));
+	Assert::true($redundant('$x = [$a + (yield $b), 1];'));
+	Assert::false($redundant('$x = [yield $a => (yield $b) => 1];')); // the => would become the inner yield's own
+	Assert::true($redundant('$x = [yield $a => (yield $b => $c) => 1];'));
+	Assert::false($redundant('$x = $a |> (fn($b) => $b);')); // a pipe takes an arrow function in parentheses only
+
+	// a prefix operator is the same, save that it takes only what binds tighter than itself
+	Assert::true($redundant('$x = (bool) (!$a);'));
+	Assert::true($redundant('$x = (bool) (!$a) && $b;'));
+	Assert::true($redundant('$x = (!$a) + 1;'));
+	Assert::true($redundant('$x = $a ** (-$b);'));
+	Assert::true($redundant('$x = (int) (-$a);'));
+	Assert::false($redundant('$x = (bool) (!$a) instanceof B;'));
+	Assert::false($redundant('$x = (!$a) instanceof B;'));
+	Assert::false($redundant('$x = (int) (-$a) ** 2;'));
+	// and so is whatever ends with such an operator, which takes what follows from inside
+	Assert::false($redundant('$x = (@include $a) !== false;'));
+	Assert::false($redundant('$x = ($a + yield $b) + 1;'));
+	Assert::false($redundant('$x = ($a ** !$b) instanceof C;'));
+	Assert::true($redundant('$x = ($a * !$b) * $c;')); // ! binds tighter than the product, so it takes nothing of it
+	Assert::true($redundant('$x = [($a + yield $b), 1];'));
 
 	// where a class is named, only a variable and what is read out of one stands there bare
 	Assert::true($redundant('$x = new ($a)();'));
 	Assert::true($redundant('$x = $a instanceof ($a->b);'));
+	Assert::true($redundant('$x = new ($a->b[0]::$c)();'));
+	Assert::true($redundant('$x = new (A::$b[0])();'));
+	// all the way down: new f()->b would instantiate f, and new A::B[0] is no code
+	Assert::false($redundant('$x = new (f()->b)();'));
+	Assert::false($redundant('$x = new (A::B[0])();'));
 	Assert::false($redundant('$x = new ("str")();'));
 	Assert::false($redundant('$x = $a instanceof (A::B);'));
 	// a pair of parentheses stands for whatever it holds, so a second pair around it adds nothing

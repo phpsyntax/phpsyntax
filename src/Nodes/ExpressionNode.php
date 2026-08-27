@@ -75,14 +75,25 @@ abstract class ExpressionNode extends Node
 	}
 
 
-	/** Whether the expression may stand where a class is named: a variable and what is read out of one. */
+	/**
+	 * Whether the expression may stand where a class is named: a variable and what is read out of one all
+	 * the way down, a property or an element, since `new f()->b` instantiates f and `new A::B[0]` is no code.
+	 */
 	public function canNameClass(): bool
 	{
-		return $this instanceof VariableNode
-			|| $this instanceof PropertyFetchNode
-			|| $this instanceof StaticPropertyFetchNode
-			|| $this instanceof ArrayAccessNode
-			|| $this instanceof ParenthesizedNode;
+		return match (true) {
+			$this instanceof VariableNode, $this instanceof ParenthesizedNode => true,
+			$this instanceof PropertyFetchNode => self::isReadOutOfVariable($this->object),
+			$this instanceof ArrayAccessNode => self::isReadOutOfVariable($this->expression),
+			$this instanceof StaticPropertyFetchNode => $this->class instanceof NameNode || self::isReadOutOfVariable($this->class),
+			default => false,
+		};
+	}
+
+
+	private static function isReadOutOfVariable(self $expression): bool
+	{
+		return !$expression instanceof ParenthesizedNode && $expression->canNameClass();
 	}
 
 
