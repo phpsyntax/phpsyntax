@@ -86,6 +86,63 @@ test('replaceWith keeps apart the tokens that would be read together', function 
 });
 
 
+test('replaceWithExpression keeps the parentheses the place asks for', function () {
+	$replace = function (string $code, string $find, string $with): string {
+		$file = parse("<?php\n$code\n");
+		$node = $file->findFirst(PhpSyntax\Nodes\ExpressionNode::class, fn($node) => $node->text === $find);
+		Assert::type(PhpSyntax\Nodes\ExpressionNode::class, $node);
+		$node->replaceWithExpression((new Parser)->parseExpression($with));
+		Assert::same((string) $file, (string) parse((string) $file));
+		return substr((string) $file, 6, -1);
+	};
+
+	// an operator looser than the place
+	Assert::same('$x = ($a ?? $b) . "x";', $replace('$x = f() . "x";', 'f()', '$a ?? $b'));
+	Assert::same('$x = $a ?? $b;', $replace('$x = f();', 'f()', '$a ?? $b'));
+	Assert::same('g($a ?? $b, 1);', $replace('g(f(), 1);', 'f()', '$a ?? $b'));
+	Assert::same('$x = $a * $b + 1;', $replace('$x = f() + 1;', 'f()', '$a * $b'));
+	Assert::same('$x = ($a + $b) * 2;', $replace('$x = f() * 2;', 'f()', '$a + $b'));
+	Assert::same('$x = 1 - ($a - $b);', $replace('$x = 1 - f();', 'f()', '$a - $b'));
+	Assert::same('$x = $a - $b - 1;', $replace('$x = f() - 1;', 'f()', '$a - $b'));
+	Assert::same('$x = (bool) !$a;', $replace('$x = (bool) f();', 'f()', '!$a'));
+	Assert::same('$x = ($a = 1) ? 2 : 3;', $replace('$x = f() ? 2 : 3;', 'f()', '$a = 1'));
+
+	// what is reached into
+	Assert::same('(new Foo)->bar();', $replace('f()->bar();', 'f()', 'new Foo'));
+	Assert::same('$a->b->bar();', $replace('f()->bar();', 'f()', '$a->b'));
+	Assert::same('($a ?: $b)[0];', $replace('f()[0];', 'f()', '$a ?: $b'));
+	Assert::same('($a->b)();', $replace('f()();', 'f()', '$a->b'));
+
+	// parentheses given are kept, and ones around the place make no second pair
+	Assert::same('$x = ($a);', $replace('$x = f();', 'f()', '($a)'));
+	Assert::same('$x = ($a ?? $b) . "x";', $replace('$x = (f()) . "x";', 'f()', '$a ?? $b'));
+});
+
+
+test('replaceWithExpression keeps the trivia around the replaced node', function () {
+	$file = parse("<?php\n\$x = /* a */ f() /* b */ . 'x'; // c\n");
+	$call = $file->findFirst(FunctionCallNode::class);
+	Assert::type(FunctionCallNode::class, $call);
+	$call->replaceWithExpression((new Parser)->parseExpression('$a ?? $b'));
+	Assert::same("<?php\n\$x = /* a */ (\$a ?? \$b) /* b */ . 'x'; // c\n", (string) $file);
+
+	$file = parse("<?php\n\$x = /* a */ f() /* b */; // c\n");
+	$call = $file->findFirst(FunctionCallNode::class);
+	Assert::type(FunctionCallNode::class, $call);
+	$call->replaceWithExpression((new Parser)->parseExpression('$a ?? $b'));
+	Assert::same("<?php\n\$x = /* a */ \$a ?? \$b /* b */; // c\n", (string) $file);
+
+	// the trivia the expression brings on its own edges stand outside the parentheses
+	$file = parse("<?php\n\$x = f() . 'x';\n");
+	$call = $file->findFirst(FunctionCallNode::class);
+	$own = parse("<?php\ng(\$a ?? \$b /* own */);")->findFirst(BinaryOpNode::class);
+	Assert::type(FunctionCallNode::class, $call);
+	Assert::type(BinaryOpNode::class, $own);
+	$call->replaceWithExpression(clone $own);
+	Assert::same("<?php\n\$x = (\$a ?? \$b) /* own */ . 'x';\n", (string) $file);
+});
+
+
 test('a node is lifted out of the one it replaces, and only out of that one', function () {
 	$file = parse("<?php\n\$a = (\$b + 1);\n\$c = \$c + \$d;\n\nreturn \$c;\n");
 	$file->getIndex(); // the index is built first, so that the lift has to keep it right

@@ -65,6 +65,7 @@ Extends `Node`.
 | `isRepeatableRead(): bool` | Whether reading the expression again gives the same value with no side effects: variables, property, constant and offset fetches and literals, nothing that runs code of its own. The answer is syntactic, so what the language runs behind such a read is out of sight and does not count: a magic getter or a property hook behind a fetch, an ArrayAccess behind an offset, a __toString() behind a string that interpolates. Whoever cannot assume that much has to know the types, which a syntax tree does not. |
 | `toValue(): mixed` | The value the expression is written as: a scalar, null, true, false, or an array of them. A name standing for a constant is not one, its value being a matter of what the code around it defines. |
 | `hasValue(): bool` | Whether the expression is written as a value, which is what toValue() gives. |
+| `replaceWithExpression(ExpressionNode $expression): void` | Replaces this node by the expression the way replaceWith() does, in parentheses where the expression binds looser than the place asks or is reached into there: what ParenthesizedNode::isRedundant() does not call needless stays. |
 
 ### FunctionLikeNode
 
@@ -181,6 +182,7 @@ Extends `Node`.
 
 | Member | Description |
 |---|---|
+| `static of(ExpressionNode ...$values): ArgumentListNode` | A one-line list of positional arguments with the values, which lose the trivia on their edges. |
 | `isPartialApplication(): bool` | Whether the list leaves parameters unbound with ? or ..., which makes a closure of the call instead of calling it. |
 | `findArgument(string $name, int $position): ?ArgumentNode` | The argument the parameter of the name and the position gets: the one written with the name, else the one standing at the position, so that get_class(object: $o) reads as the call get_class($o) is. Null where the parameter gets none, and where the call does not say which it gets: a ? placeholder holds a place without being an argument, and an unpacked array stands for as many arguments as it holds, so it takes the answer from a position after it, never from a name, which stands for itself. |
 
@@ -676,6 +678,10 @@ Extends `ExpressionNode`.
 | `name` | `NameNode\|ExpressionNode` | Content |
 | `arguments` | `ArgumentListNode` | Content |
 
+| Member | Description |
+|---|---|
+| `static of(NameNode\|ExpressionNode $name, ?ArgumentListNode $arguments = null): Expression\FunctionCallNode` | A call of the name, or of the expression, in parentheses where the call would take it for something else. |
+
 ### Expression\MethodCallNode
 
 Method call with -> or ?->.
@@ -693,6 +699,7 @@ Extends `ExpressionNode`.
 
 | Member | Description |
 |---|---|
+| `static of(ExpressionNode $object, string $name, ?ArgumentListNode $arguments = null, bool $nullsafe = false): Expression\MethodCallNode` | A call of the method on the object, in parentheses where it could not be reached into bare. |
 | `isNullsafe(): bool` | Whether the call is written with ?->, which skips it when the object is null. |
 
 ### Expression\StaticMethodCallNode
@@ -710,6 +717,10 @@ Extends `ExpressionNode`.
 | `closeBrace` | `?Token` | Closes |
 | `arguments` | `ArgumentListNode` | Content |
 
+| Member | Description |
+|---|---|
+| `static of(NameNode\|ExpressionNode $class, string $name, ?ArgumentListNode $arguments = null): Expression\StaticMethodCallNode` | A call of the static method of the class, an expression in parentheses where :: could not follow it bare. |
+
 ### Expression\NewNode
 
 Instantiation of a named, dynamic or anonymous class.
@@ -724,6 +735,7 @@ Extends `ExpressionNode`. Implements `OperatorNode`.
 
 | Member | Description |
 |---|---|
+| `static of(NameNode\|ExpressionNode $class, ?ArgumentListNode $arguments = null): Expression\NewNode` | An instantiation of the class, an expression in parentheses where it could not name one bare; no list is written where none is given. |
 | `getPrecedence(): array` |  |
 
 ### Expression\ArrayNode
@@ -815,6 +827,7 @@ Extends `ExpressionNode`. Implements `OperatorNode`.
 
 | Member | Description |
 |---|---|
+| `static of(ExpressionNode $left, string $operator, ExpressionNode $right): Expression\BinaryOpNode` | The operation on the two operands, each in parentheses where it binds looser than its side of the operator takes. |
 | `getPrecedence(): array` |  |
 
 ### Expression\UnaryOpNode
@@ -926,6 +939,7 @@ Extends `ExpressionNode`.
 
 | Member | Description |
 |---|---|
+| `static of(ExpressionNode $expression): Expression\ParenthesizedNode` | The expression in parentheses. |
 | `isRedundant(): bool` | Whether the parentheses may go without the code coming to mean anything else: what stands in them binds at least as tightly as the place they stand in asks, and nothing reaches into them. Where the answer is not certain it is no. |
 
 ### Expression\IssetNode

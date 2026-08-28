@@ -2,9 +2,12 @@
 
 namespace PhpSyntax\Nodes\Expression;
 
+use PhpSyntax\Lexer\Lexer;
 use PhpSyntax\Nodes\ExpressionNode;
 use PhpSyntax\Nodes\OperatorNode;
 use PhpSyntax\Token;
+use PhpSyntax\Trivia;
+use PhpSyntax\TriviaKind;
 
 
 /**
@@ -21,6 +24,34 @@ final class BinaryOpNode extends ExpressionNode implements OperatorNode
 		public Token $operator { set => $this->prepareSlot(__PROPERTY__, $value); },
 		public ExpressionNode $right { set => $this->prepareSlot(__PROPERTY__, $value); },
 	) {
+	}
+
+
+	/**
+	 * The operation on the two operands, each in parentheses where it binds looser than its side of the operator takes.
+	 * @throws \InvalidArgumentException  for what is no binary operator
+	 */
+	public static function of(ExpressionNode $left, string $operator, ExpressionNode $right): self
+	{
+		static $lexer = new Lexer;
+		$space = [new Trivia(TriviaKind::Whitespace, ' ')];
+		$token = new Token($lexer->tokenize('<?php ' . $operator, withPositions: false)[0]->kind, $operator);
+		$token->setTrailingTrivia($space);
+		$node = new self(ParenthesizedNode::of($left), $token, ParenthesizedNode::of($right));
+		try {
+			$node->getPrecedence();
+		} catch (\LogicException $e) {
+			throw new \InvalidArgumentException($e->getMessage());
+		}
+
+		foreach ([$node->left, $node->right] as $operand) {
+			if ($operand instanceof ParenthesizedNode && $operand->isRedundant()) {
+				$operand->replaceWith($operand->expression);
+			}
+		}
+
+		$node->left->setEdgeTrivia(trailing: $space);
+		return $node;
 	}
 
 

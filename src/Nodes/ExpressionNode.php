@@ -273,4 +273,27 @@ abstract class ExpressionNode extends Node
 
 		return [$result];
 	}
+
+
+	/**
+	 * Replaces this node by the expression the way replaceWith() does, in parentheses where the expression
+	 * binds looser than the place asks or is reached into there: what ParenthesizedNode::isRedundant()
+	 * does not call needless stays.
+	 */
+	public function replaceWithExpression(self $expression): void
+	{
+		if ($expression instanceof ParenthesizedNode) {
+			$this->replaceWith($expression);
+			return;
+		}
+
+		// the trivia on the edges of the expression stand outside the parentheses, where they stay once those go
+		[$leading, $trailing] = [$expression->leadingTrivia, $expression->trailingTrivia];
+		$parenthesized = ParenthesizedNode::of($expression);
+		$parenthesized->setEdgeTrivia($leading, $trailing);
+		$this->replaceWith($parenthesized);
+		if ($parenthesized->isRedundant()) {
+			$parenthesized->replaceWith($expression);
+		}
+	}
 }

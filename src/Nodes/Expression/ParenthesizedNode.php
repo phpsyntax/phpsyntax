@@ -11,6 +11,7 @@ use PhpSyntax\Nodes\RightExtendingNode;
 use PhpSyntax\Nodes\SeparatedNodeList;
 use PhpSyntax\Token;
 use PhpSyntax\TokenKind;
+use function ord;
 
 
 /**
@@ -36,6 +37,14 @@ final class ParenthesizedNode extends ExpressionNode
 		public ExpressionNode $expression { set => $this->prepareSlot(__PROPERTY__, $value); },
 		public Token $closeParen { set => $this->prepareSlot(__PROPERTY__, $value); },
 	) {
+	}
+
+
+	/** The expression in parentheses. */
+	public static function of(ExpressionNode $expression): self
+	{
+		$expression->setEdgeTrivia([], []);
+		return new self(new Token(ord('('), '('), $expression, new Token(ord(')'), ')'));
 	}
 
 
