@@ -37,6 +37,7 @@ Node of the concrete syntax tree; every token of the source is reachable through
 | `hasComment(): bool` | Whether a comment sits anywhere between the first and the last token of the node; the trivia on its outer edges do not count. |
 | `getComments(): array` | The comments inside the node, in source order; those on its outer edges are not among them, the same way hasComment() does not count them. |
 | `setEdgeTrivia(?array $leading = null, ?array $trailing = null): void` | Writes the trivia on the outer edges of the node: before its first token and after its last one. A null leaves that edge alone, [] clears it, and a node without tokens takes neither. |
+| `withoutEdgeTrivia(): static` | A deep copy without a parent and without the trivia on its outer edges, which belong to the place it was copied from. |
 | `replaceWith(Node $node): void` | Replaces this node in its parent; the trivia around the old node stay in place around the new one, and where the new one then stands right against a token it would be read together with, `.` against `1` or `return` against `FOO`, a space keeps the two apart. |
 | `remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken): void` | Removes this node from its list. A node alone on its lines takes the lines with it (indentation and line ending), otherwise the whitespace around stays; comments inside, each with the line ending that follows it, go where the policy says. |
 | `__toString(): string` | The node printed back to source, the trivia on its outer edges included; $text leaves them out. |

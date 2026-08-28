@@ -46,6 +46,17 @@ test('replaceWith keeps the surrounding trivia and the parent invariant', functi
 });
 
 
+test('withoutEdgeTrivia() copies a node for another place', function () {
+	$file = parse("<?php\n// note\n\$a = f( \$b /* in */ ); // tail\n");
+	$stmt = stmts($file)[0];
+	$copy = $stmt->withoutEdgeTrivia();
+	Assert::same('$a = f( $b /* in */ );', (string) $copy);
+	Assert::null($copy->parent);
+	Assert::type($stmt::class, $copy);
+	Assert::same("<?php\n// note\n\$a = f( \$b /* in */ ); // tail\n", (string) $file);
+});
+
+
 test('replaceWith keeps apart the tokens that would be read together', function () {
 	$replace = function (string $code, string $find, string $with): string {
 		$file = parse("<?php\n$code\n");

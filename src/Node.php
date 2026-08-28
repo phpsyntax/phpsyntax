@@ -504,6 +504,15 @@ abstract class Node implements \Stringable
 	}
 
 
+	/** A deep copy without a parent and without the trivia on its outer edges, which belong to the place it was copied from. */
+	public function withoutEdgeTrivia(): static
+	{
+		$copy = clone $this;
+		$copy->setEdgeTrivia([], []);
+		return $copy;
+	}
+
+
 	/**
 	 * Replaces this node in its parent; the trivia around the old node stay in place around the new one, and
 	 * where the new one then stands right against a token it would be read together with, `.` against `1` or
