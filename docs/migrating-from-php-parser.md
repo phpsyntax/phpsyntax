@@ -25,9 +25,12 @@ leaves `namespacedName` attributes behind, so name resolution is a pass you run 
 an order you have to respect. Here `Analyses\NameResolver` is an object you query, the tree is untouched,
 and there is no order to get wrong.
 
-**Parentheses are nodes.** php-parser drops them; `(1 + 2) * 3` and the tree of `1 + 2 * 3` differ only in
-shape. Here `($a)` is a `ParenthesizedNode` with `isRedundant()` to ask whether it may go. Code that assumed
-an expression is never wrapped will find a wrapper.
+**Parentheses are nodes, and writing them is your job.** php-parser drops them; `(1 + 2) * 3` and the tree
+of `1 + 2 * 3` differ only in shape, and the pretty printer puts back whatever the grammar needs. Here `($a)`
+is a `ParenthesizedNode` with `isRedundant()` to ask whether it may go, printing adds nothing, and an
+expression written into an operand slot is written as it stands. Code that assumed an expression is never
+wrapped will find a wrapper, and code that leaned on the printer for precedence has a method to lean on
+instead, see [Changing code](#changing-code).
 
 ## What PhpSyntax does not do
 
@@ -45,6 +48,9 @@ Stated as facts, so nobody discovers them at the wrong moment.
   plus what you changed. There is no `prettyPrint()`, no `prettyPrintFile()`, no `printFormatPreserving()`.
 - **No builders.** `BuilderFactory` and the `Builder\*` classes have no counterpart. A new node is made by
   parsing its text: `parseExpression()`, `parseStatement()`, `parseType()`, `parseName()`, `parseFragment()`.
+  What is put together out of nodes you are already holding, which no text can carry, has a factory `of()`
+  on the class: `FunctionCallNode`, `MethodCallNode`, `StaticMethodCallNode`, `NewNode`, `ArgumentListNode`
+  and `ParenthesizedNode`.
 - **No node dumper.** There is no `NodeDumper`, and no JSON serialization of a tree.
 - **Constant expressions are read only where they are written as values.** `ExpressionNode::toValue()` reads
   literals, arrays of literals, a parenthesized literal and a sign in front of a number.
@@ -360,6 +366,47 @@ separator that went with it.
 `$file->revision` counts the changes, so a tool can write the file only when it touched it. And when you want
 the source untouched, do not mutate at all: collect a replacement per token and hand it to
 `Printer::printText()`. That keeps every analysis reading the file as it was parsed.
+
+### Building the replacement
+
+`new Node\Expr\MethodCall($conn, 'query', [new Node\Arg($sql)])` has two counterparts here, and which one
+you want depends on where the pieces come from. Text you write yourself is a fragment,
+`parseExpression('$db->query($sql)')`. Pieces that are already nodes, because you took them out of the code
+you are rewriting, go to a factory, because no string can hold a node:
+
+```php
+MethodCallNode::of($conn->withoutEdgeTrivia(), 'query', ArgumentListNode::of($sql->withoutEdgeTrivia()));
+```
+
+`withoutEdgeTrivia()` has no php-parser counterpart, and it is the habit to acquire. In an AST a node carries
+no whitespace, so it may be written anywhere; here it carries the whitespace of the place it was written in,
+and that whitespace belongs to the place, not to the node. A plain `clone` brings the indentation of the old
+line along, and for the first statement of a file it brings the `<?php` tag, which is then printed twice.
+
+### Precedence, which the pretty printer used to hide
+
+Building the tree you mean was enough in php-parser: the printer wrote something that parses back to it.
+Printing here is concatenation, so the expression you write into an operand slot is the expression that
+stands there.
+
+```php
+// $s = ucfirst($a ?? $b) . 'x';   and the call is to go, its argument staying
+$call->replaceWith($argument);            // $s = $a ?? $b . 'x';     another program
+$call->replaceWithExpression($argument);  // $s = ($a ?? $b) . 'x';   what you meant
+```
+
+`replaceWithExpression()` writes the expression in parentheses and takes them away again where
+`isRedundant()` calls them needless, which is as close as this library comes to what the printer did for you.
+Reach for `replaceWith()` where the place is fenced by delimiters, an argument, a match arm, the operand of
+a `return`, and for `replaceWithExpression()` wherever the place is an operand of an operator or is reached
+into by `->`, `[]`, `()` or `::`. The `of()` factories apply the same rule to what a call is made on, so one
+handed a `new Foo` writes `(new Foo)->bar()`. Parentheses you want for the reader rather than for the grammar
+are written on purpose, with `ParenthesizedNode::of()`.
+
+One more seam is handled for you: after the swap `replaceWith()` asks the lexer whether the tokens it has
+brought together may stand side by side and puts a space where they may not, `.` against `119` otherwise
+being the number `0.119`. `Lexer::canAdjoin()` is that question for when you are the one taking whitespace
+away.
 
 Questions worth asking before a rewrite, none of which php-parser answers:
 
