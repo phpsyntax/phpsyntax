@@ -8,7 +8,7 @@ a reviewer who has better things to do than diff whitespace.
 
 - how the pieces from the earlier chapters combine into one working migration
 - how a codemod decides what it must refuse to touch
-- why a moved node needs its edge trivia cleared, and where whitespace really belongs
+- why a node written into a new place leaves its edge trivia behind, and where whitespace belongs
 - how to steer a traversal, and what happens to a node you rewrite mid-walk
 
 ```shell
@@ -53,12 +53,15 @@ so neither is which argument is which. One has a comment between the arguments, 
 the call onto a single line, so `hasComment()` decides against it. A tool that rewrites what it does not
 understand is worse than no tool.
 
-**Building the replacement** is a fragment, `$db->query($sql)`, with the real expressions written into
-its slots, the receiver into `object` and the query into the argument's `value`. Both are cloned, because
-the old call stays where it is until the replacement takes its place, and both have their edge trivia
-cleared, because they carry the whitespace of the place they came from. That one call,
-`setEdgeTrivia([], [])`, is the thing to remember from this chapter: **whitespace belongs to a place,
-not to a node.**
+**Building the replacement** is `MethodCallNode::of()`. The call is made of two expressions that are
+already in the tree, the receiver and the query, and no text template can hold a node, so a factory takes
+them directly. They go in as `withoutEdgeTrivia()` copies, and that method is the thing to remember from
+this chapter: a node carries the whitespace of the place it came from, and the new place already has its
+own, in the tokens around it. **Whitespace belongs to a place, not to a node.**
+
+The factory also writes the parentheses a receiver needs to be reached into at all, so a codemod that
+hands it `new Mailer` gets `(new Mailer)->send()` without knowing that rule. What comes out is the tree
+the parser would return for the same text.
 
 **Reporting** uses `originalLine`, not `getStartLine()`. The message is about the file on disk, and by
 the time the refused calls are examined, two rewrites have already moved the lines of the tree. Both

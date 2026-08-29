@@ -119,6 +119,17 @@ $parser->parseFragment(ParameterNode::class, "private string \$currency = 'EUR'"
 $parser->parseFragment(ArrayItemNode::class, "'port' => 3306");
 ```
 
+What a rewrite puts together out of nodes it is already holding cannot be written as text, so those have
+a factory instead. It makes the operator and delimiter tokens, and the parentheses without which the
+result would not read back the same way:
+
+```php
+FunctionCallNode::of(NameNode::fromText('count'), ArgumentListNode::of($value->withoutEdgeTrivia()));
+MethodCallNode::of($object, 'query', ArgumentListNode::of($sql));
+NewNode::of(NameNode::fromText('DateTime'));                     // new DateTime
+MethodCallNode::of($parser->parseExpression('new Foo'), 'bar');  // (new Foo)->bar()
+```
+
  <!---->
 
 The syntax tree: nodes, named slots and tokens
@@ -194,6 +205,13 @@ the new value comes from.
 $parenthesized->replaceWith($parenthesized->expression);
 $assign->expression = $binary->right;
 ```
+
+An expression written where operators stand around it is the one place a verbatim write quietly gets
+wrong. `replaceWithExpression()` writes it in parentheses and takes them away again where `isRedundant()`
+calls them needless, so lifting the argument out of `ucfirst($a ?? $b) . 'x'` gives `($a ?? $b) . 'x'`
+and not an expression that means something else. `replaceWith()` guards the other seam by itself: where
+the new node ends up against a token the lexer would read it together with, `.` against `119`, a space
+goes in between. `Lexer::canAdjoin()` is that question, for when you are the one taking whitespace away.
 
 Before rewriting, the questions worth asking are methods rather than heuristics you write again:
 

@@ -7,6 +7,7 @@ contains your change and nothing else.
 **You will learn:**
 
 - how to write text, slots and whole subtrees, and which level of the API to use for what
+- how to write an expression into a place that has operators around it without changing what the code means
 - how a list keeps its separators, its indentation and its trailing comma
 - which questions to ask before a rewrite so it stays correct
 - why a tool built this way produces diffs a human will actually approve
@@ -14,6 +15,7 @@ contains your change and nothing else.
 ```shell
 php examples/mutation/text.php
 php examples/mutation/replace.php
+php examples/mutation/expressions.php
 php examples/mutation/lists.php
 php examples/mutation/safety.php
 ```
@@ -70,10 +72,10 @@ The comment sitting after the opening brace, with its three spaces of alignment,
 that nobody touched, so it is exactly where its author left it.
 
 **`replaceWith()`** does the same from the child's side and carries the trivia of the old node onto the
-new one, which is what you want when the node you are replacing is a whole subexpression. A node cloned
+new one, which is what you want when the node you are replacing is a whole subexpression. A node copied
 from elsewhere in the same file arrives with the trivia of *its* old place, and for the first statement
-of a file that includes the `<?php` tag, so clear its edges (`setEdgeTrivia([], [])`) before inserting
-it. A fragment from the parser has no edges to clear, which is why these examples reach for one.
+of a file that includes the `<?php` tag, so take the copy with `withoutEdgeTrivia()` rather than with
+`clone`. A fragment from the parser has no edges to clear, which is why these examples reach for one.
 
 **`remove()`** takes a list item out. A node alone on its lines takes the lines with it; a node sharing
 a line leaves the spacing around it alone. And the comment above the removed statement is not
@@ -86,6 +88,51 @@ exactly this purpose, and it needs the old tree, the old tokens and a cloned new
 best-effort basis. Here there is no second tree and no effort: the comment aligned three spaces after
 the brace did not survive the rewrite, it was never involved in it. It belongs to a token nobody
 touched.
+
+## Writing an expression where operators stand around it (expressions.php)
+
+```
+replaceWith()
+...
+- 	$title = legacy_str($row['title'] ?? '') . ' - ' . $name;
++ 	$title = $row['title'] ?? '' . ' - ' . $name;
+- 	$tag = 'v'.legacy_str(119);
++ 	$tag = 'v'. 119;
+
+replaceWithExpression()
+...
+- 	$title = legacy_str($row['title'] ?? '') . ' - ' . $name;
++ 	$title = ($row['title'] ?? '') . ' - ' . $name;
+...
+left     right   together   written as
+.        119     no         . 119
+.        'x'     yes        .'x'
+-        -       no         - -
+return   FOO     no         return FOO
+]        [       yes        ][
+```
+
+The codemod drops a wrapper function and keeps its argument, which is about as simple as a rewrite gets.
+Read the middle line of the first diff: the argument came out exactly right and the statement now means
+something else. `??` binds looser than `.`, so `$row['title'] ?? '' . ' - ' . $name` is
+`$row['title'] ?? ('' . ' - ' . $name)`. The file parses, the tests on the happy path pass, and the bug
+ships.
+
+**`replaceWithExpression()`** is `replaceWith()` for exactly that case. It writes the expression in
+parentheses and takes them away again wherever `isRedundant()` calls them needless, so the first line
+loses them and the second keeps them, and the precedence rule is nowhere in the rewrite.
+
+Which of the two to reach for: `replaceWith()` where the place is fenced by delimiters, an argument, a
+match arm, the operand of a `return`. `replaceWithExpression()` wherever the place is an operand of an
+operator or is reached into by `->`, `[]`, `()` or `::`. It answers about the place the node stands in,
+so it works in a detached fragment too, which is where a template of an operator holds its operand.
+
+The last line of both diffs is a hazard of another kind, and `replaceWith()` handles it alone.
+`'v'.legacy_str(119)` has no space around the `.`, and `.119` is not a dot followed by a number, it is
+the number `0.119`. So after the swap `replaceWith()` asks the lexer about both seams it has just made
+and puts a space where the pair would be read as one thing. The table is that same question asked
+directly: **`Lexer::canAdjoin()`**, which is what you call when you are the one taking whitespace away.
+A formatter that squeezes `- -$a` into `--$a` has written a decrement, and what comes out still compiles.
 
 ## Lists: separators, indentation and the trailing comma (lists.php)
 
@@ -190,7 +237,10 @@ count on it.
 
 1. In `text.php`, write `$name->text = 'Mailer'` and confirm the token kind changes with the name.
 2. In `lists.php`, insert the array item at index 0 and watch the indentation follow the first item.
-3. Write the `+=` rewrite for real: when `safety.php` says "rewrite", set the assignment operator to
+3. In `expressions.php`, wrap the lifted expression in a call instead of writing it bare:
+   `FunctionCallNode::of(NameNode::fromText('strval'), ArgumentListNode::of($value))`, and see which of
+   the three places still needs parentheses.
+4. Write the `+=` rewrite for real: when `safety.php` says "rewrite", set the assignment operator to
    `+=` and give the assignment the right-hand operand. The operand goes over as it is: what the write
    releases is where it comes from.
 

@@ -4,14 +4,14 @@
  * A complete codemod: migrate calls of a deprecated function to the method that replaced it,
  * report what could not be migrated, and leave the rest of the file alone.
  *
- * Demonstrates: find() + NameResolver + fragments + slot writes + hasComment(), all together
+ * Demonstrates: find() + NameResolver + node factories + hasComment(), all together
  * Usage:        php examples/codemod/deprecated-api.php
  */
 
 require __DIR__ . '/../bootstrap.php';
 
 use PhpSyntax\Analyses\NameResolver;
-use PhpSyntax\Nodes\ArgumentNode;
+use PhpSyntax\Nodes\ArgumentListNode;
 use PhpSyntax\Nodes\Expression\FunctionCallNode;
 use PhpSyntax\Nodes\Expression\MethodCallNode;
 use PhpSyntax\Parser;
@@ -70,21 +70,14 @@ foreach ($file->find(FunctionCallNode::class) as $call) {
 		continue;
 	}
 
-	// replace the call first, then take from it what the replacement needs: what is left of the old
-	// call is out of the tree, so its arguments may be moved instead of copied. They carry the trivia
-	// of the place they came from, so clear their edges: the whitespace of the new place is already
-	// there, in the tokens around it.
-	$replacement = $parser->parseExpression('$db->query($sql)');
-	assert($replacement instanceof MethodCallNode);
-	$call->replaceWith($replacement);
-
-	$connection->value->setEdgeTrivia([], []);
-	$replacement->object = $connection->value;
-
-	$query->value->setEdgeTrivia([], []);
-	$argument = $replacement->arguments->items->getItems()[0];
-	assert($argument instanceof ArgumentNode);
-	$argument->value = $query->value;
+	// the method call is built from the two expressions the old call already holds, which no text
+	// template could carry. withoutEdgeTrivia() takes them without the whitespace of the place they
+	// came from: the whitespace of the new place is already there, in the tokens around it.
+	$call->replaceWith(MethodCallNode::of(
+		$connection->value->withoutEdgeTrivia(),
+		'query',
+		ArgumentListNode::of($query->value->withoutEdgeTrivia()),
+	));
 
 	$migrated++;
 }
