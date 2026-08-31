@@ -59,9 +59,11 @@ final class ArgumentListNode extends Node
 	 * one standing at the position, so that get_class(object: $o) reads as the call get_class($o) is. Null
 	 * where the parameter gets none, and where the call does not say which it gets: a ? placeholder holds a
 	 * place without being an argument, and an unpacked array stands for as many arguments as it holds, so
-	 * it takes the answer from a position after it, never from a name, which stands for itself.
+	 * it takes the answer from a position after it, never from a name, which stands for itself. Whoever
+	 * knows only one of the two asks with null for the other: the position alone finds no argument written
+	 * with a name, the name alone none that is not.
 	 */
-	public function findArgument(string $name, int $position): ?ArgumentNode
+	public function findArgument(?string $name, ?int $position): ?ArgumentNode
 	{
 		$positional = null;
 		$index = 0;
@@ -69,7 +71,7 @@ final class ArgumentListNode extends Node
 		foreach ($this->items as $argument) {
 			if ($argument instanceof VariadicPlaceholderNode) {
 				continue;
-			} elseif ($argument->name?->text === $name) {
+			} elseif ($name !== null && $argument->name?->text === $name) {
 				return $argument instanceof ArgumentNode ? $argument : null;
 			} elseif ($argument instanceof ArgumentNode && $argument->ellipsis !== null) {
 				$unpacked = true; // what it unpacks is unknown, so no position after it has an answer

@@ -98,6 +98,13 @@ test('the argument a parameter gets, and the partial application', function () {
 	Assert::same('2', (string) $call->findArgument('b', 9)?->value); // the name wins over the position
 	Assert::null($call->findArgument('z', 9)); // what the unpacked array holds could be it
 
+	// whoever knows the position alone, or the name alone
+	Assert::same('1', (string) $call->findArgument(null, 0)?->value);
+	Assert::null($call->findArgument(null, 1)); // written with a name, which the position does not say
+	Assert::same('2', (string) $call->findArgument('b', null)?->value);
+	Assert::null($call->findArgument('a', null));
+	Assert::null($call->findArgument(null, null));
+
 	Assert::null($unpacked->findArgument('a', 0)); // it stands where the array unpacks
 
 	// an unpacked array takes the answer from the position after it, not from a name written there

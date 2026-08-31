@@ -184,7 +184,7 @@ Extends `Node`.
 |---|---|
 | `static of(ExpressionNode ...$values): ArgumentListNode` | A one-line list of positional arguments with the values, which lose the trivia on their edges. |
 | `isPartialApplication(): bool` | Whether the list leaves parameters unbound with ? or ..., which makes a closure of the call instead of calling it. |
-| `findArgument(string $name, int $position): ?ArgumentNode` | The argument the parameter of the name and the position gets: the one written with the name, else the one standing at the position, so that get_class(object: $o) reads as the call get_class($o) is. Null where the parameter gets none, and where the call does not say which it gets: a ? placeholder holds a place without being an argument, and an unpacked array stands for as many arguments as it holds, so it takes the answer from a position after it, never from a name, which stands for itself. |
+| `findArgument(?string $name, ?int $position): ?ArgumentNode` | The argument the parameter of the name and the position gets: the one written with the name, else the one standing at the position, so that get_class(object: $o) reads as the call get_class($o) is. Null where the parameter gets none, and where the call does not say which it gets: a ? placeholder holds a place without being an argument, and an unpacked array stands for as many arguments as it holds, so it takes the answer from a position after it, never from a name, which stands for itself. Whoever knows only one of the two asks with null for the other: the position alone finds no argument written with a name, the name alone none that is not. |
 
 ### ArgumentNode
 
