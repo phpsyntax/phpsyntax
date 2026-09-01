@@ -69,7 +69,7 @@ test('NodeList: items, parents, iteration, mutation', function () {
 	Assert::same($list, $x->parent);
 	Assert::same(1, $list->indexOf($x));
 
-	Assert::exception(fn() => $list->append($x), LogicException::class, 'The node already belongs to a tree, clone it first.');
+	Assert::exception(fn() => $list->append($x), LogicException::class, 'The node already belongs to a tree, write a copy of it: withoutEdgeTrivia(), or a clone to keep the trivia on its edges.');
 	Assert::exception(fn() => $list->indexOf($a), InvalidArgumentException::class, 'StubNode is not a child of PhpSyntax\Nodes\NodeList.');
 });
 

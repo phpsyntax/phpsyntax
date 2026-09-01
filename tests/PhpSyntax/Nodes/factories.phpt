@@ -176,7 +176,7 @@ test('a factory takes a list out of a tree without a file and refuses one of a l
 	Assert::exception(
 		fn() => FunctionCallNode::of(NameNode::fromText('f'), $live->arguments),
 		LogicException::class,
-		'The node already belongs to a tree, clone it first.',
+		'The node already belongs to a tree, write a copy of it: withoutEdgeTrivia(), or a clone to keep the trivia on its edges.',
 	);
 });
 

@@ -720,7 +720,7 @@ abstract class Node implements \Stringable
 		}
 
 		if ($value->parent !== null && !$this->canLift($value, $leaving)) {
-			throw new \LogicException('The node already belongs to a tree, clone it first.');
+			throw self::describeOwned($value);
 		}
 	}
 
@@ -765,7 +765,7 @@ abstract class Node implements \Stringable
 	{
 		$this->liftFrom($child, null);
 		if ($child->parent) {
-			throw new \LogicException('The node already belongs to a tree, clone it first.');
+			throw self::describeOwned($child);
 		}
 
 		$child->attachTo($this);
@@ -860,6 +860,14 @@ abstract class Node implements \Stringable
 		return new \InvalidArgumentException(
 			($child instanceof Token ? "Token '$child->text'" : $child::class) . ' is not a child of ' . static::class . '.',
 		);
+	}
+
+
+	private static function describeOwned(self|Token $value): \LogicException
+	{
+		return new \LogicException($value instanceof Token
+			? 'The token already belongs to a tree, clone it first.'
+			: 'The node already belongs to a tree, write a copy of it: withoutEdgeTrivia(), or a clone to keep the trivia on its edges.');
 	}
 
 

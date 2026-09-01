@@ -42,7 +42,7 @@ test('replaceWith keeps the surrounding trivia and the parent invariant', functi
 	Assert::same($file->statements, $replacement->parent);
 	Assert::true($file->revision > 0);
 	Assert::same(2, $replacement->getStartLine());
-	Assert::exception(fn() => $replacement->replaceWith(stmts($file)[1]), LogicException::class, 'The node already belongs to a tree, clone it first.');
+	Assert::exception(fn() => $replacement->replaceWith(stmts($file)[1]), LogicException::class, 'The node already belongs to a tree, write a copy of it: withoutEdgeTrivia(), or a clone to keep the trivia on its edges.');
 });
 
 
@@ -172,7 +172,7 @@ test('a node is lifted out of the one it replaces, and only out of that one', fu
 	Assert::exception(
 		fn() => $assign->expression = $file->find(AssignmentNode::class)[0]->expression,
 		LogicException::class,
-		'The node already belongs to a tree, clone it first.',
+		'The node already belongs to a tree, write a copy of it: withoutEdgeTrivia(), or a clone to keep the trivia on its edges.',
 	);
 });
 
@@ -213,7 +213,7 @@ test('a node is taken out of a subtree without a file, which nothing indexes', f
 	Assert::exception(
 		fn() => $list->append($first),
 		LogicException::class,
-		'The node already belongs to a tree, clone it first.',
+		'The node already belongs to a tree, write a copy of it: withoutEdgeTrivia(), or a clone to keep the trivia on its edges.',
 	);
 });
 
@@ -326,7 +326,7 @@ test('a refused write leaves the tree as it stood', function () {
 		Assert::exception(
 			fn() => $items->replaceChild($first, $second),
 			LogicException::class,
-			'The node already belongs to a tree, clone it first.',
+			'The node already belongs to a tree, write a copy of it: withoutEdgeTrivia(), or a clone to keep the trivia on its edges.',
 		);
 		Assert::same($items, $first->parent);
 		Assert::same([$first, $second], $items->getItems());
@@ -338,7 +338,7 @@ test('a refused write leaves the tree as it stood', function () {
 	Assert::exception(
 		fn() => $file->statements->append($file->statements->getItems()[1]),
 		LogicException::class,
-		'The node already belongs to a tree, clone it first.',
+		'The node already belongs to a tree, write a copy of it: withoutEdgeTrivia(), or a clone to keep the trivia on its edges.',
 	);
 	Assert::same("<?php\n\$a;\n\$b;\n", (string) $file);
 });
@@ -358,7 +358,7 @@ test('an insertion of an item and a separator checks both before either moves', 
 	Assert::exception(
 		fn() => $items->append($item, $items->getSeparators()[0]),
 		LogicException::class,
-		'The node already belongs to a tree, clone it first.',
+		'The token already belongs to a tree, clone it first.',
 	);
 	Assert::same($fragment->arguments->items, $item->parent);
 	Assert::same('g($c)', (string) $fragment);

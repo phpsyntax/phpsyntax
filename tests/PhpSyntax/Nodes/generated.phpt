@@ -56,7 +56,7 @@ test('setters keep parents and count mutations through the file', function () {
 	$ternary->else = $other = variable('$c');
 	Assert::null($else->parent);
 	Assert::same($ternary, $other->parent);
-	Assert::exception(fn() => $ternary->condition = $other, LogicException::class, 'The node already belongs to a tree, clone it first.');
+	Assert::exception(fn() => $ternary->condition = $other, LogicException::class, 'The node already belongs to a tree, write a copy of it: withoutEdgeTrivia(), or a clone to keep the trivia on its edges.');
 
 	$ternary->then = null;
 	Assert::null($if->parent);
