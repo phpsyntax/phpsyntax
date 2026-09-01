@@ -9,6 +9,7 @@ rules:
 paths:
 	- src
 	- tests
+	- docs/reference/generate.php
 
 excludePaths:
 	- fixtures
