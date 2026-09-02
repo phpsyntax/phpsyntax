@@ -7,7 +7,7 @@
 
 namespace PhpSyntax\Nodes;
 
-use PhpSyntax\{Node, Token};
+use PhpSyntax\{Node, Surgery, Token};
 use PhpSyntax\Nodes\Expression\VariableNode;
 use PhpSyntax\Nodes\Member\PropertyHookNode;
 
@@ -71,5 +71,16 @@ final class ParameterNode extends Node implements AttributeAwareNode
 		$openBrace === null || $this->openBrace = $openBrace;
 		$hooks === null || $this->hooks = $hooks;
 		$closeBrace === null || $this->closeBrace = $closeBrace;
+	}
+
+
+	/**
+	 * Writes the type before the variable with one space after it, or removes it with its space, its comments
+	 * staying; a type standing in a tree comes as a copy without the trivia on its edges.
+	 */
+	public function setType(?TypeNode $type): static
+	{
+		Surgery::writeType($this, $type);
+		return $this;
 	}
 }

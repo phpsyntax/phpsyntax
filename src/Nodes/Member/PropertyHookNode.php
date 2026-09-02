@@ -72,4 +72,11 @@ final class PropertyHookNode extends Node implements FunctionLikeNode
 		$expression === null || $this->expression = $expression;
 		$semicolon === null || $this->semicolon = $semicolon;
 	}
+
+
+	/** @throws \LogicException  always, a property hook has no return type */
+	public function setReturnType(?TypeNode $type): static
+	{
+		throw new \LogicException('A property hook has no return type.');
+	}
 }

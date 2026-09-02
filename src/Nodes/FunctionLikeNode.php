@@ -27,4 +27,12 @@ interface FunctionLikeNode extends AttributeAwareNode
 
 	/** The return type declared; null where none is, a property hook having none to declare. */
 	public ?TypeNode $returnType { get; }
+
+	/**
+	 * Writes the return type together with its colon, or removes both, their comments staying after the closing
+	 * parenthesis; the gap before the body stays where it was, and a type standing in a tree comes as a copy without
+	 * the trivia on its edges.
+	 * @throws \LogicException  for a property hook, which has no return type
+	 */
+	function setReturnType(?TypeNode $type): static;
 }

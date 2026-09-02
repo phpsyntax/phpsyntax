@@ -41,7 +41,7 @@ final class Builder
 	{
 		self::checkInputs($value);
 		return match (true) {
-			$value instanceof ExpressionNode => self::take($value),
+			$value instanceof ExpressionNode => Surgery::take($value),
 			is_int($value), is_float($value) => $this->parser->parseFragment(ExpressionNode::class, var_export($value, return: true)),
 			is_bool($value) => $this->parser->parseFragment(ExpressionNode::class, $value ? 'true' : 'false'),
 			$value === null => $this->parser->parseFragment(ExpressionNode::class, 'null'),
@@ -92,7 +92,7 @@ final class Builder
 			throw new \InvalidArgumentException(Helpers::formatCode($name->text) . ' is a literal, which `value()` writes.');
 		}
 
-		return new ConstantFetchNode(self::take($name));
+		return new ConstantFetchNode(Surgery::take($name));
 	}
 
 
@@ -133,7 +133,7 @@ final class Builder
 		}
 
 		$node = $this->compose(ClassConstantFetchNode::class, '$c::N', ['c' => $class]);
-		$node->name = self::take($name);
+		$node->name = Surgery::take($name);
 		return $node;
 	}
 
@@ -226,7 +226,7 @@ final class Builder
 	{
 		self::checkInputs($arguments);
 		if ($arguments instanceof ArgumentListNode) {
-			return self::take($arguments);
+			return Surgery::take($arguments);
 		}
 
 		foreach ($arguments as $key => $argument) {
@@ -253,7 +253,7 @@ final class Builder
 		$call = $this->compose(FunctionCallNode::class, 'f(' . implode(', ', $items) . ')', $parts);
 		$list = $call->arguments;
 		foreach ($given as $i => $argument) {
-			$list->items[$i]->replaceWith(self::take($argument));
+			$list->items[$i]->replaceWith(Surgery::take($argument));
 		}
 
 		$call->dismantle();
@@ -491,7 +491,7 @@ final class Builder
 
 		$copies = [];
 		foreach ($parts as $name => $part) {
-			$part = self::take($part);
+			$part = Surgery::take($part);
 			$copies[$name] = [$part];
 			for ($i = 1; $i < $uses[$name]; $i++) {
 				$copies[$name][] = clone $part;
@@ -544,18 +544,6 @@ final class Builder
 		return ($parent instanceof AssignmentNode && $parent->target === $variable)
 			|| ($parent instanceof ForeachNode && $parent->value === $variable)
 			|| ($parent instanceof ArrayItemNode && $parent->value === $variable && $parent->parent?->parent instanceof DestructuringNode);
-	}
-
-
-	/**
-	 * A node standing in a tree as a copy without the trivia on its edges, a detached one as it is with its edges cleared.
-	 * @template T of Node
-	 * @param  T  $node
-	 * @return T
-	 */
-	private static function take(Node $node): Node
-	{
-		return $node->parent !== null ? $node->withoutEdgeTrivia() : $node->setEdgeTrivia([], []);
 	}
 
 
