@@ -12,7 +12,7 @@ use PhpSyntax\Nodes\{
 	ModifiersNode, ParameterNode, PlainNodeList, SeparatedNodeList, TypeNode,
 };
 use PhpSyntax\Nodes\Statement\BlockNode;
-use PhpSyntax\Token;
+use PhpSyntax\{Surgery, Token};
 
 
 /**
@@ -75,6 +75,14 @@ final class MethodNode extends MemberNode implements FunctionLikeNode
 		$returnType === null || $this->returnType = $returnType;
 		$body === null || $this->body = $body;
 		$semicolon === null || $this->semicolon = $semicolon;
+	}
+
+
+	/** Writes the return type with its colon, or removes both, as `FunctionLikeNode::setReturnType()` says. */
+	public function setReturnType(?TypeNode $type): static
+	{
+		Surgery::writeReturnType($this, $this->closeParen, $type);
+		return $this;
 	}
 
 

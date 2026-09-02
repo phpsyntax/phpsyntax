@@ -7,7 +7,7 @@
 
 namespace PhpSyntax\Nodes\Expression;
 
-use PhpSyntax\{Associativity, Token};
+use PhpSyntax\{Associativity, Surgery, Token};
 use PhpSyntax\Nodes\{
 	AnonymousFunctionNode, AttributeGroupNode, ExpressionNode, ParameterNode,
 	PlainNodeList, RightExtendingNode, SeparatedNodeList, TypeNode,
@@ -72,5 +72,13 @@ final class ArrowFunctionNode extends ExpressionNode implements AnonymousFunctio
 		$returnType === null || $this->returnType = $returnType;
 		$this->doubleArrow = $doubleArrow;
 		$this->expression = $expression;
+	}
+
+
+	/** Writes the return type with its colon, or removes both, as `FunctionLikeNode::setReturnType()` says. */
+	public function setReturnType(?TypeNode $type): static
+	{
+		Surgery::writeReturnType($this, $this->closeParen, $type);
+		return $this;
 	}
 }
