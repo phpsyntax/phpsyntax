@@ -8,7 +8,7 @@
 namespace PhpSyntax\Nodes\Statement;
 
 use PhpSyntax\Nodes\{AttributeGroupNode, FunctionLikeNode, IdentifierNode, ParameterNode, PlainNodeList, SeparatedNodeList, StatementNode, TypeNode};
-use PhpSyntax\Token;
+use PhpSyntax\{Surgery, Token};
 
 
 /**
@@ -60,5 +60,13 @@ final class FunctionNode extends StatementNode implements FunctionLikeNode
 		$colon === null || $this->colon = $colon;
 		$returnType === null || $this->returnType = $returnType;
 		$this->body = $body;
+	}
+
+
+	/** Writes the return type with its colon, or removes both, as `FunctionLikeNode::setReturnType()` says. */
+	public function setReturnType(?TypeNode $type): static
+	{
+		Surgery::writeReturnType($this, $this->closeParen, $type);
+		return $this;
 	}
 }

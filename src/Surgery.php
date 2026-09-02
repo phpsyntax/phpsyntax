@@ -7,17 +7,186 @@
 
 namespace PhpSyntax;
 
-use PhpSyntax\Nodes\{NodeList, SeparatedNodeList};
+use PhpSyntax\Nodes\Expression\{ArrowFunctionNode, ClosureNode};
+use PhpSyntax\Nodes\Member\{MethodNode, PropertyNode};
+use PhpSyntax\Nodes\{NodeList, ParameterNode, SeparatedNodeList, TypeNode};
+use PhpSyntax\Nodes\Statement\FunctionNode;
 use function count;
 
 
 /**
- * Takes a node out of the tree or puts another in its place, and sews up the trivia around the cut: the comments,
- * the lines and the whitespace the node leaves behind or the new one is given.
- * @internal the algorithm of `Node::remove()`, `Node::replaceWith()` and `Token::replaceWith()`
+ * Takes a node out of the tree, puts another in its place or writes a slot that comes with a token of its own, and
+ * sews up the trivia around the cut: the comments, the lines and the whitespace the node leaves behind or the new
+ * one is given. It also takes a node a write is given, a copy of one standing in a tree.
+ * @internal the algorithm of `Node::remove()`, `Node::replaceWith()`, `Token::replaceWith()` and the setters of a type
  */
 final class Surgery
 {
+	/** See `FunctionLikeNode::setReturnType()`; the anchor is the token the return type follows. */
+	public static function writeReturnType(
+		FunctionNode|MethodNode|ClosureNode|ArrowFunctionNode $node,
+		Token $anchor,
+		?TypeNode $type,
+	): void
+	{
+		$current = $node->returnType;
+		if ($type === $current) {
+			return;
+
+		} elseif ($type === null) {
+			if ($current === null || $node->colon === null) {
+				return;
+			}
+
+			$tokens = [$node->colon, ...$current->getTokens()];
+			$next = self::findNeighbor($tokens[count($tokens) - 1], 1);
+			$gap = self::collapseGap($anchor, $tokens, beforeBody: true);
+			$node->colon = null;
+			$node->returnType = null;
+			$anchor->setTrailingTrivia([]);
+			self::closeGap($anchor, $gap, $next);
+			return;
+		}
+
+		$type = self::take($type);
+		if ($current !== null) {
+			$current->replaceWith($type);
+			return;
+		}
+
+		$trailing = $anchor->trailingTrivia;
+		$node->colon = Token::fromText(':')->setTrailingTrivia([Trivia::fromText(' ')]);
+		$node->returnType = $type;
+		$anchor->setTrailingTrivia([]);
+		$type->setEdgeTrivia(null, $trailing); // the gap before the body stays where it was
+	}
+
+
+	/** See `ParameterNode::setType()` and `PropertyNode::setType()`. */
+	public static function writeType(ParameterNode|PropertyNode $node, ?TypeNode $type): void
+	{
+		$current = $node->type;
+		if ($type === $current) {
+			return;
+		}
+
+		$next = null;
+		foreach (array_slice($node::Slots, array_search('type', $node::Slots, true) + 1) as $slot) {
+			if ($next = $node->$slot?->getFirstToken()) {
+				break;
+			}
+		}
+
+		if ($type === null) {
+			$tokens = $current?->getTokens();
+			if (!$tokens) {
+				return;
+			}
+
+			$previous = self::findNeighbor($tokens[0], -1);
+			$gap = self::collapseGap($previous, $tokens, beforeBody: false);
+			$node->type = null;
+			$previous?->setTrailingTrivia([]);
+			self::closeGap($previous, $gap, $next);
+			return;
+		}
+
+		$type = self::take($type);
+		if ($current !== null) {
+			$current->replaceWith($type);
+			return;
+		}
+
+		$leading = $next === null ? [] : $next->leadingTrivia;
+		$node->type = $type;
+		$next?->setLeadingTrivia([]);
+		$type->setEdgeTrivia($leading, [Trivia::fromText(' ')]);
+	}
+
+
+	/**
+	 * The trivia a run of tokens leaves between the previous token and the next one once it goes, as one gap: what
+	 * stood before the run, then its comments, each followed by a space or by its line ending, then the end of its
+	 * line; the whitespace collapses, and a run alone on its line takes the line with it. The whitespace that ended the
+	 * run stays only with `$beforeBody`, being the gap before the body of a function, which also sets a comment kept
+	 * right after the previous token apart from it by a space.
+	 * @param  non-empty-list<Token>  $tokens
+	 * @return list<Trivia>
+	 */
+	private static function collapseGap(?Token $previous, array $tokens, bool $beforeBody): array
+	{
+		$before = [...$previous->trailingTrivia ?? [], ...$tokens[0]->leadingTrivia];
+		$after = $tokens[count($tokens) - 1]->trailingTrivia;
+		$comments = [];
+		foreach ($tokens as $i => $token) {
+			$trivias = $i === 0 ? $token->trailingTrivia : [...$token->leadingTrivia, ...$token->trailingTrivia];
+			foreach ($trivias as $j => $trivia) {
+				if ($trivia->isComment()) {
+					$following = $trivias[$j + 1] ?? null;
+					$comments[] = $trivia;
+					$comments[] = $following?->is(Trivia::LineEnding) ? $following : Trivia::fromText(' ');
+				}
+			}
+		}
+
+		$lastComment = array_find_key(array_reverse($after, preserve_keys: true), fn(Trivia $trivia) => $trivia->isComment());
+		$after = $lastComment === null ? $after : array_slice($after, $lastComment + 1); // what ends the run
+		$end = array_find($after, fn(Trivia $trivia) => $trivia->is(Trivia::LineEnding))
+			?? (array_find($after, fn(Trivia $trivia) => $trivia->is(Trivia::Whitespace)) ? Trivia::fromText(' ') : null);
+		if ($comments && end($comments)->is(Trivia::Whitespace)) {
+			if ($end) {
+				$comments[count($comments) - 1] = $end;
+			} else {
+				array_pop($comments); // the run stood right against the next token, and so does its last comment
+			}
+		}
+
+		$lastBreak = null;
+		foreach ($before as $i => $trivia) {
+			if ($trivia->isLineEnding()) {
+				$lastBreak = $i;
+			} elseif (!$trivia->is(Trivia::Whitespace)) {
+				$lastBreak = null;
+			}
+		}
+
+		if ($lastBreak !== null && $end?->is(Trivia::LineEnding)) { // the run stood alone on its line
+			$indentation = array_slice($before, $lastBreak + 1);
+			return [...array_slice($before, 0, $lastBreak + 1), ...($comments ? [...$indentation, ...$comments] : [])];
+		}
+
+		if ($beforeBody && $comments && (!$before || end($before)->isComment())) {
+			$before[] = Trivia::fromText(' ');
+		}
+
+		$result = [];
+		foreach ([...$before, ...($comments ?: ($end && ($beforeBody || $end->is(Trivia::LineEnding)) ? [$end] : []))] as $trivia) {
+			$last = $result ? $result[count($result) - 1] : null;
+			if ($trivia->is(Trivia::Whitespace) && $last?->is(Trivia::Whitespace)) {
+				continue;
+			} elseif ($trivia->is(Trivia::LineEnding) && $last?->is(Trivia::Whitespace)) {
+				array_pop($result);
+			}
+
+			$result[] = $trivia;
+		}
+
+		return $result;
+	}
+
+
+	/**
+	 * A node standing in a tree as a copy without the trivia on its edges, a detached one as it is with its edges cleared.
+	 * @template T of Node
+	 * @param  T  $node
+	 * @return T
+	 */
+	public static function take(Node $node): Node
+	{
+		return $node->parent !== null ? $node->withoutEdgeTrivia() : $node->setEdgeTrivia([], []);
+	}
+
+
 	/** See `Node::replaceWith()` and `Token::replaceWith()`. */
 	public static function replace(Node|Token $old, Node|Token $new): void
 	{
