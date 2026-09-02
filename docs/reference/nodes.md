@@ -113,6 +113,7 @@ Implements `AttributeAwareNode`.
 | `$parameters: ?SeparatedNodeList` | null for a property hook written without parentheses |
 | `$closeParen: ?Token` | The parenthesis closing the parameters; null for a property hook written without parentheses. |
 | `$returnType: ?TypeNode` | The return type declared; null where none is, a property hook having none to declare. |
+| `setReturnType(?TypeNode $type): static` | Writes the return type together with its colon, or removes both, their comments staying after the closing parenthesis; the gap before the body stays where it was, and a type standing in a tree comes as a copy without the trivia on its edges. Throws LogicException for a property hook, which has no return type. |
 
 ### MemberNode
 
@@ -339,6 +340,7 @@ Extends `Node`. Implements `AttributeAwareNode`.
 | Member | Description |
 |---|---|
 | `$promoted: bool` | Whether the parameter declares a property of the class, which its modifiers make it do. |
+| `setType(?TypeNode $type): static` | Writes the type before the variable with one space after it, or removes it with its space, its comments staying; a type standing in a tree comes as a copy without the trivia on its edges. |
 | `getFirstToken(): Token` | Narrows the return type of `Node::getFirstToken()`. |
 | `getLastToken(): Token` | Narrows the return type of `Node::getLastToken()`. |
 
@@ -1312,6 +1314,7 @@ Extends `ExpressionNode`. Implements `AnonymousFunctionNode`, `AttributeAwareNod
 
 | Member | Description |
 |---|---|
+| `setReturnType(?TypeNode $type): static` | Writes the return type with its colon, or removes both, as `FunctionLikeNode::setReturnType()` says. |
 | `getCapturedVariableNames(): array` | Names of the variables the closure captures with `use (...)`, without the dollar sign. |
 
 ### Expression\ArrowFunctionNode
@@ -1338,6 +1341,7 @@ Extends `ExpressionNode`. Implements `AnonymousFunctionNode`, `RightExtendingNod
 |---|---|
 | `$precedence: int` |  |
 | `$associativity: Associativity` |  |
+| `setReturnType(?TypeNode $type): static` | Writes the return type with its colon, or removes both, as `FunctionLikeNode::setReturnType()` says. |
 
 ### Expression\ShellExecNode
 
@@ -1957,6 +1961,10 @@ Extends `StatementNode`. Implements `FunctionLikeNode`, `AttributeAwareNode`.
 | `returnType` | `?TypeNode` | Content |
 | `body` | `Statement\BlockNode` | Body |
 
+| Member | Description |
+|---|---|
+| `setReturnType(?TypeNode $type): static` | Writes the return type with its colon, or removes both, as `FunctionLikeNode::setReturnType()` says. |
+
 ### Statement\ClassNode
 
 Class declaration.
@@ -2045,6 +2053,10 @@ Extends `MemberNode`. Implements `AttributeAwareNode`.
 | `hooks` | `?PlainNodeList<Member\PropertyHookNode>` | Content |
 | `closeBrace` | `?Token` | Closer |
 
+| Member | Description |
+|---|---|
+| `setType(?TypeNode $type): static` | Writes the type before the items with one space after it, or removes it with its space, its comments staying; a type standing in a tree comes as a copy without the trivia on its edges. |
+
 ### Member\PropertyItemNode
 
 One property of a declaration with an optional default.
@@ -2086,6 +2098,7 @@ Extends `Node`. Implements `FunctionLikeNode`, `AttributeAwareNode`.
 | Member | Description |
 |---|---|
 | `$returnType: ?TypeNode` |  |
+| `setReturnType(?TypeNode $type): static` | Throws LogicException always, a property hook has no return type. |
 | `getFirstToken(): Token` | Narrows the return type of `Node::getFirstToken()`. |
 | `getLastToken(): Token` | Narrows the return type of `Node::getLastToken()`. |
 
@@ -2132,6 +2145,7 @@ Extends `MemberNode`. Implements `FunctionLikeNode`, `AttributeAwareNode`.
 
 | Member | Description |
 |---|---|
+| `setReturnType(?TypeNode $type): static` | Writes the return type with its colon, or removes both, as `FunctionLikeNode::setReturnType()` says. |
 | `isConstructor(): bool` | Whether the method is the constructor, whose name PHP compares without regard to letter case. |
 | `getFirstToken(): Token` | Narrows the return type of `Node::getFirstToken()`. |
 | `getLastToken(): Token` | Narrows the return type of `Node::getLastToken()`. |

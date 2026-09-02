@@ -9,7 +9,7 @@ namespace PhpSyntax\Nodes\Expression;
 
 use PhpSyntax\Nodes\{AnonymousFunctionNode, AttributeGroupNode, ClosureUseListNode, ExpressionNode, ParameterNode, PlainNodeList, SeparatedNodeList, TypeNode};
 use PhpSyntax\Nodes\Statement\BlockNode;
-use PhpSyntax\Token;
+use PhpSyntax\{Surgery, Token};
 
 
 /**
@@ -67,6 +67,14 @@ final class ClosureNode extends ExpressionNode implements AnonymousFunctionNode
 		$colon === null || $this->colon = $colon;
 		$returnType === null || $this->returnType = $returnType;
 		$this->body = $body;
+	}
+
+
+	/** Writes the return type with its colon, or removes both, as `FunctionLikeNode::setReturnType()` says. */
+	public function setReturnType(?TypeNode $type): static
+	{
+		Surgery::writeReturnType($this, $this->uses->closeParen ?? $this->closeParen, $type);
+		return $this;
 	}
 
 

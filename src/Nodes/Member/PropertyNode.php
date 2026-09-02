@@ -8,7 +8,7 @@
 namespace PhpSyntax\Nodes\Member;
 
 use PhpSyntax\Nodes\{AttributeAwareNode, AttributeGroupNode, MemberNode, ModifiersNode, PlainNodeList, SeparatedNodeList, TypeNode};
-use PhpSyntax\Token;
+use PhpSyntax\{Surgery, Token};
 
 
 /**
@@ -57,5 +57,16 @@ final class PropertyNode extends MemberNode implements AttributeAwareNode
 		$openBrace === null || $this->openBrace = $openBrace;
 		$hooks === null || $this->hooks = $hooks;
 		$closeBrace === null || $this->closeBrace = $closeBrace;
+	}
+
+
+	/**
+	 * Writes the type before the items with one space after it, or removes it with its space, its comments
+	 * staying; a type standing in a tree comes as a copy without the trivia on its edges.
+	 */
+	public function setType(?TypeNode $type): static
+	{
+		Surgery::writeType($this, $type);
+		return $this;
 	}
 }
