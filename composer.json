@@ -29,7 +29,8 @@
 	"scripts": {
 		"phpstan": "phpstan analyse",
 		"tester": "tester tests -s",
-		"compile-grammar": "php grammar/build.php"
+		"compile-grammar": "php grammar/build.php",
+		"reference": "php docs/reference/generate.php"
 	},
 	"config": {
 		"allow-plugins": {
