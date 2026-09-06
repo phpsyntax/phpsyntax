@@ -3,7 +3,13 @@
 namespace PhpSyntax;
 
 use PhpSyntax\Lexer\Lexer;
+use PhpSyntax\Nodes\ArgumentNode;
 use PhpSyntax\Nodes\ArrayItemNode;
+use PhpSyntax\Nodes\AttributeGroupNode;
+use PhpSyntax\Nodes\CatchNode;
+use PhpSyntax\Nodes\ClosureUseNode;
+use PhpSyntax\Nodes\ConstItemNode;
+use PhpSyntax\Nodes\ElseIfNode;
 use PhpSyntax\Nodes\EmptyArrayItemNode;
 use PhpSyntax\Nodes\Expression\ArrayNode;
 use PhpSyntax\Nodes\Expression\ConstantFetchNode;
@@ -11,8 +17,12 @@ use PhpSyntax\Nodes\Expression\ListNode;
 use PhpSyntax\Nodes\Expression\VariableNode;
 use PhpSyntax\Nodes\ExpressionNode;
 use PhpSyntax\Nodes\FileNode;
+use PhpSyntax\Nodes\MatchArmNode;
+use PhpSyntax\Nodes\Member\PropertyHookNode;
+use PhpSyntax\Nodes\MemberNode;
 use PhpSyntax\Nodes\NameNode;
 use PhpSyntax\Nodes\NodeList;
+use PhpSyntax\Nodes\ParameterNode;
 use PhpSyntax\Nodes\Scalar\BooleanNode;
 use PhpSyntax\Nodes\Scalar\IntegerNode;
 use PhpSyntax\Nodes\Scalar\NullNode;
@@ -21,7 +31,10 @@ use PhpSyntax\Nodes\SeparatedNodeList;
 use PhpSyntax\Nodes\Statement\HaltCompilerNode;
 use PhpSyntax\Nodes\Statement\NamespaceNode;
 use PhpSyntax\Nodes\StatementNode;
-use function array_slice, count, ord;
+use PhpSyntax\Nodes\StaticVariableNode;
+use PhpSyntax\Nodes\TypeNode;
+use PhpSyntax\Nodes\UseItemNode;
+use function array_slice, count, ord, strlen;
 
 
 /**
@@ -33,6 +46,27 @@ final class Parser
 	use ParserData;
 
 	private const SymbolNone = -1;
+
+	/** @var array<class-string, array{string, string}>  the code a fragment of the kind is parsed in */
+	private const Wrappers = [
+		ExpressionNode::class => ['<?php ', "\n;"],
+		StatementNode::class => ['<?php ', ''],
+		TypeNode::class => ['<?php function f(): ', "\n{}"],
+		NameNode::class => ['<?php ', "\n::class;"],
+		MemberNode::class => ['<?php class C { ', "\n}"],
+		ParameterNode::class => ['<?php function f(', "\n) {}"],
+		ArgumentNode::class => ['<?php f(', "\n);"],
+		ArrayItemNode::class => ['<?php [', "\n];"],
+		UseItemNode::class => ['<?php use ', "\n;"],
+		MatchArmNode::class => ['<?php match (0) { ', "\n};"],
+		AttributeGroupNode::class => ['<?php ', "\nfunction f() {}"],
+		CatchNode::class => ['<?php try {} ', "\n"],
+		ElseIfNode::class => ['<?php if (0) {} ', "\n"],
+		ClosureUseNode::class => ['<?php function () use (', "\n) {};"],
+		StaticVariableNode::class => ['<?php static ', "\n;"],
+		ConstItemNode::class => ['<?php const ', "\n;"],
+		PropertyHookNode::class => ['<?php class C { public $p { ', "\n} }"],
+	];
 
 	/** the source of the file being parsed, which an error reports its place in */
 	private string $code = '';
@@ -57,8 +91,101 @@ final class Parser
 	/** @throws ParseException */
 	public function parse(string $code): FileNode
 	{
+		return $this->parseFile($code, withPositions: true);
+	}
+
+
+	/**
+	 * Parses a fragment into a detached node of the class, without original positions and with empty trivia
+	 * on its edges; it is parsed inside the code such a node stands in, which the wrappers hold.
+	 * @template T of Node
+	 * @param  class-string<T>  $class
+	 * @return T
+	 * @throws ParseException
+	 */
+	public function parseFragment(string $class, string $code): Node
+	{
+		[$prefix, $suffix] = self::findWrapper($class)
+			?? throw new \InvalidArgumentException("There is no code a node of '$class' could be parsed in.");
+		$node = $this->parseFile($prefix . $code . $suffix, withPositions: false)->findFirst($class);
+		return $node !== null && $this->isWholeFragment($node, $prefix, $suffix)
+			? $this->detach($node)
+			: throw new ParseException('The code is not a single ' . self::describe($class) . '.');
+	}
+
+
+	/** @throws ParseException */
+	public function parseExpression(string $code): ExpressionNode
+	{
+		return $this->parseFragment(ExpressionNode::class, $code);
+	}
+
+
+	/** @throws ParseException */
+	public function parseStatement(string $code): StatementNode
+	{
+		return $this->parseFragment(StatementNode::class, $code);
+	}
+
+
+	/** @throws ParseException */
+	public function parseType(string $code): TypeNode
+	{
+		return $this->parseFragment(TypeNode::class, $code);
+	}
+
+
+	/** @throws ParseException */
+	public function parseName(string $code): NameNode
+	{
+		return $this->parseFragment(NameNode::class, $code);
+	}
+
+
+	/**
+	 * The code a node of the class stands in, split where the fragment goes; the class may be any of the
+	 * kinds the wrappers name, or one deriving from it.
+	 * @param  class-string  $class
+	 * @return ?array{string, string}
+	 */
+	private static function findWrapper(string $class): ?array
+	{
+		foreach (self::Wrappers as $kind => $wrapper) {
+			if (is_a($class, $kind, allow_string: true)) {
+				return $wrapper;
+			}
+		}
+
+		return null;
+	}
+
+
+	/**
+	 * Whether the node covers the whole fragment and not just its beginning, as it does for "$a, $b" given
+	 * as one parameter: it has to reach from the first token after the prefix to the last before the suffix.
+	 */
+	private function isWholeFragment(Node $node, string $prefix, string $suffix): bool
+	{
+		$tokens = $this->tokens; // of the file just parsed, the end of file token last
+		$before = count($this->lexer->tokenize($prefix, withPositions: false)) - 1;
+		$after = count($this->lexer->tokenize('<?php ' . $suffix, withPositions: false)) - 1;
+		return $node->getFirstToken() === ($tokens[$before] ?? null)
+			&& $node->getLastToken() === ($tokens[count($tokens) - 2 - $after] ?? null);
+	}
+
+
+	/** The kind of node in words, the way the class names it: ArrayItemNode is an array item. */
+	private static function describe(string $class): string
+	{
+		$name = substr($class, (int) strrpos($class, '\\') + 1, -strlen('Node'));
+		return strtolower((string) preg_replace('~(?<!^)[A-Z]~', ' $0', $name));
+	}
+
+
+	private function parseFile(string $code, bool $withPositions): FileNode
+	{
 		$this->code = $code;
-		$this->tokens = $this->lexer->tokenize($code);
+		$this->tokens = $this->lexer->tokenize($code, $withPositions);
 		$this->position = 0;
 		$stmts = $this->run();
 		if (!$stmts instanceof NodeList) {
@@ -78,6 +205,27 @@ final class Parser
 
 		/** @var NodeList<StatementNode> $stmts */
 		return new FileNode($this->nestNamespaces($stmts), $eof);
+	}
+
+
+	/**
+	 * Takes the node out of the helper tree it was parsed in and clears the trivia on its edges.
+	 * @template T of Node
+	 * @param  T  $node
+	 * @return T
+	 */
+	private function detach(Node $node): Node
+	{
+		$node->attachTo(null);
+		if ($first = $node->getFirstToken()) {
+			$first->setLeadingTrivia([]);
+		}
+
+		if ($last = $node->getLastToken()) {
+			$last->setTrailingTrivia([]);
+		}
+
+		return $node;
 	}
 
 
