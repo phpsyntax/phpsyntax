@@ -28,7 +28,10 @@
 	},
 	"scripts": {
 		"phpstan": "phpstan analyse",
-		"tester": "tester tests -s"
+		"tester": "tester tests -s",
+		"build": "php grammar/build.php",
+		"reference": "php docs/reference/generate.php",
+		"verify-examples": "php examples/verify.php"
 	},
 	"config": {
 		"allow-plugins": {
