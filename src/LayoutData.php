@@ -35,6 +35,11 @@ final class LayoutData
 		Nodes\VariadicPlaceholderNode::class => [
 			'ellipsis' => LayoutRole::Content,
 		],
+		Nodes\ArgumentPlaceholderNode::class => [
+			'name' => LayoutRole::Content,
+			'colon' => LayoutRole::Content,
+			'question' => LayoutRole::Content,
+		],
 		Nodes\ParameterNode::class => [
 			'attributes' => LayoutRole::Anchor,
 			'modifiers' => LayoutRole::Anchor,

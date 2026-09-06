@@ -13,6 +13,7 @@ $input = <<<'XX'
 	A::B; A::class; A::{$x}; $a::B; static::B;
 	f(1, ...$a, name: 2); $f(); $a->m(); $a?->m(); A::m(); $a::m(); A::{'m'}(); $a->{'m'}(); 'f'(); (fn() => 1)();
 	new A(1); new A; new static; new $b; new ($c); new class(1) extends B implements C { }; f(...); $a->m(...);
+	f(?); f(1, ?); f(name: ?); f(?, ...); new A(?); $a->m(?); A::m(?);
 	[1, 'k' => 2, ...$x, &$y, 3 => &$z]; array(1,); [, $b] = $x; list($a, , $b) = $c; [$a, [$b]] = $c; [$k => $v] = $c;
 	$a = $b += $c .= $d ??= $e; $a = &$b; $a++; $a--; ++$a; --$a; +$a; -$a; !$a; ~$a; @$a;
 	$a + $b - $c * $d / $e % $f ** $g; $a . $b; $a & $b | $c ^ $d << $e >> $f;
@@ -406,6 +407,100 @@ FileNode
           items: SeparatedNodeList
             - VariadicPlaceholderNode
               ellipsis: Ellipsis "..."
+          closeParen: ')' ")"
+      semicolon: ';' ";"  >EndOfLine"\n"
+    - ExpressionStatementNode
+      expression: FunctionCallNode
+        name: NameNode
+          token: Identifier "f"
+        arguments: ArgumentListNode
+          openParen: '(' "("
+          items: SeparatedNodeList
+            - ArgumentPlaceholderNode
+              question: '?' "?"
+          closeParen: ')' ")"
+      semicolon: ';' ";"  >Whitespace" "
+    - ExpressionStatementNode
+      expression: FunctionCallNode
+        name: NameNode
+          token: Identifier "f"
+        arguments: ArgumentListNode
+          openParen: '(' "("
+          items: SeparatedNodeList
+            - ArgumentNode
+              value: IntegerNode
+                token: Integer "1"
+            - ',' ","  >Whitespace" "
+            - ArgumentPlaceholderNode
+              question: '?' "?"
+          closeParen: ')' ")"
+      semicolon: ';' ";"  >Whitespace" "
+    - ExpressionStatementNode
+      expression: FunctionCallNode
+        name: NameNode
+          token: Identifier "f"
+        arguments: ArgumentListNode
+          openParen: '(' "("
+          items: SeparatedNodeList
+            - ArgumentPlaceholderNode
+              name: IdentifierNode
+                token: Identifier "name"
+              colon: ':' ":"  >Whitespace" "
+              question: '?' "?"
+          closeParen: ')' ")"
+      semicolon: ';' ";"  >Whitespace" "
+    - ExpressionStatementNode
+      expression: FunctionCallNode
+        name: NameNode
+          token: Identifier "f"
+        arguments: ArgumentListNode
+          openParen: '(' "("
+          items: SeparatedNodeList
+            - ArgumentPlaceholderNode
+              question: '?' "?"
+            - ',' ","  >Whitespace" "
+            - VariadicPlaceholderNode
+              ellipsis: Ellipsis "..."
+          closeParen: ')' ")"
+      semicolon: ';' ";"  >Whitespace" "
+    - ExpressionStatementNode
+      expression: NewNode
+        newKeyword: New "new"  >Whitespace" "
+        class: NameNode
+          token: Identifier "A"
+        arguments: ArgumentListNode
+          openParen: '(' "("
+          items: SeparatedNodeList
+            - ArgumentPlaceholderNode
+              question: '?' "?"
+          closeParen: ')' ")"
+      semicolon: ';' ";"  >Whitespace" "
+    - ExpressionStatementNode
+      expression: MethodCallNode
+        object: VariableNode
+          name: Variable "$a"
+        operator: ObjectOperator "->"
+        name: IdentifierNode
+          token: Identifier "m"
+        arguments: ArgumentListNode
+          openParen: '(' "("
+          items: SeparatedNodeList
+            - ArgumentPlaceholderNode
+              question: '?' "?"
+          closeParen: ')' ")"
+      semicolon: ';' ";"  >Whitespace" "
+    - ExpressionStatementNode
+      expression: StaticMethodCallNode
+        class: NameNode
+          token: Identifier "A"
+        doubleColon: DoubleColon "::"
+        name: IdentifierNode
+          token: Identifier "m"
+        arguments: ArgumentListNode
+          openParen: '(' "("
+          items: SeparatedNodeList
+            - ArgumentPlaceholderNode
+              question: '?' "?"
           closeParen: ')' ")"
       semicolon: ';' ";"  >EndOfLine"\n"
     - ExpressionStatementNode

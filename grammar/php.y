@@ -731,24 +731,18 @@ optional_return_type:
 argument_list:
       '(' ')'                                               { $$ = Nodes\ArgumentListNode[$1, separated(), $2]; }
     | '(' non_empty_argument_list optional_comma ')'        { trailing($2, $3); $$ = Nodes\ArgumentListNode[$1, $2, $4]; }
-    | '(' variadic_placeholder ')'                          { $$ = Nodes\ArgumentListNode[$1, separated($2), $3]; }
 ;
 
 clone_argument_list:
       '(' ')'                                              { $$ = Nodes\ArgumentListNode[$1, separated(), $2]; }
     | '(' non_empty_clone_argument_list optional_comma ')' { trailing($2, $3); $$ = Nodes\ArgumentListNode[$1, $2, $4]; }
     | '(' expr ',' ')'                                     { $list = separated(Nodes\ArgumentNode[null, null, null, null, $2]); trailing($list, $3); $$ = Nodes\ArgumentListNode[$1, $list, $4]; }
-    | '(' variadic_placeholder ')'                         { $$ = Nodes\ArgumentListNode[$1, separated($2), $3]; }
 ;
 
 non_empty_clone_argument_list:
 		expr ',' argument                                   { $$ = separated(Nodes\ArgumentNode[null, null, null, null, $1]); push($$, $2, $3); }
 	|	argument_no_expr                                    { $$ = separated($1); }
 	|	non_empty_clone_argument_list ',' argument          { push($1, $2, $3); }
-;
-
-variadic_placeholder:
-      T_ELLIPSIS                                            { $$ = Nodes\VariadicPlaceholderNode[$1]; }
 ;
 
 non_empty_argument_list:
@@ -759,7 +753,10 @@ non_empty_argument_list:
 argument_no_expr:
       ampersand variable                                    { $$ = Nodes\ArgumentNode[null, null, $1, null, $2]; }
     | T_ELLIPSIS expr                                       { $$ = Nodes\ArgumentNode[null, null, null, $1, $2]; }
+    | T_ELLIPSIS                                            { $$ = Nodes\VariadicPlaceholderNode[$1]; }
+    | '?'                                                   { $$ = Nodes\ArgumentPlaceholderNode[null, null, $1]; }
     | identifier_maybe_reserved ':' expr                    { $$ = Nodes\ArgumentNode[$1, $2, null, null, $3]; }
+    | identifier_maybe_reserved ':' '?'                     { $$ = Nodes\ArgumentPlaceholderNode[$1, $2, $3]; }
 ;
 
 argument:

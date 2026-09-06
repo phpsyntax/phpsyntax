@@ -28,7 +28,7 @@ return [
 	'ArgumentListNode' => [
 		'slots' => [
 			'openParen' => 'Token',
-			'items' => 'SeparatedNodeList<ArgumentNode|VariadicPlaceholderNode>',
+			'items' => 'SeparatedNodeList<ArgumentNode|VariadicPlaceholderNode|ArgumentPlaceholderNode>',
 			'closeParen' => 'Token',
 		],
 	],
@@ -43,6 +43,13 @@ return [
 	],
 	'VariadicPlaceholderNode' => [
 		'slots' => ['ellipsis' => 'Token'],
+	],
+	'ArgumentPlaceholderNode' => [
+		'slots' => [
+			'name' => '?IdentifierNode',
+			'colon' => '?Token',
+			'question' => 'Token',
+		],
 	],
 	'ParameterNode' => [
 		'slots' => [

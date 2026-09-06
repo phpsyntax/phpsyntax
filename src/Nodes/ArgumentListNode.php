@@ -17,26 +17,32 @@ final class ArgumentListNode extends Node
 	/** @internal */
 	public function __construct(
 		public Token $openParen { set => $this->prepareSlot(__PROPERTY__, $value); },
-		/** @var SeparatedNodeList<ArgumentNode|VariadicPlaceholderNode> */
+		/** @var SeparatedNodeList<ArgumentNode|VariadicPlaceholderNode|ArgumentPlaceholderNode> */
 		public SeparatedNodeList $items { set => $this->prepareSlot(__PROPERTY__, $value); },
 		public Token $closeParen { set => $this->prepareSlot(__PROPERTY__, $value); },
 	) {
 	}
 
 
-	/** Whether the call is written f(...), which makes a closure of it instead of calling it. */
+	/** Whether the list leaves parameters unbound with ? or ..., which makes a closure of the call instead of calling it. */
 	public function isPartialApplication(): bool
 	{
-		return ($this->items->getItems()[0] ?? null) instanceof VariadicPlaceholderNode;
+		foreach ($this->items as $argument) {
+			if (!$argument instanceof ArgumentNode) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 
 	/**
 	 * The argument the parameter of the name and the position gets: the one written with the name, else the
 	 * one standing at the position, so that get_class(object: $o) reads as the call get_class($o) is. Null
-	 * where the parameter gets none, and where the call does not say which it gets: an unpacked array stands
-	 * for as many arguments as it holds, so it takes the answer from a position after it, never from a name,
-	 * which stands for itself.
+	 * where the parameter gets none, and where the call does not say which it gets: a ? placeholder holds a
+	 * place without being an argument, and an unpacked array stands for as many arguments as it holds, so
+	 * it takes the answer from a position after it, never from a name, which stands for itself.
 	 */
 	public function findArgument(string $name, int $position): ?ArgumentNode
 	{
@@ -44,14 +50,14 @@ final class ArgumentListNode extends Node
 		$index = 0;
 		$unpacked = false;
 		foreach ($this->items as $argument) {
-			if (!$argument instanceof ArgumentNode) {
+			if ($argument instanceof VariadicPlaceholderNode) {
 				continue;
 			} elseif ($argument->name?->text === $name) {
-				return $argument;
-			} elseif ($argument->ellipsis !== null) {
+				return $argument instanceof ArgumentNode ? $argument : null;
+			} elseif ($argument instanceof ArgumentNode && $argument->ellipsis !== null) {
 				$unpacked = true; // what it unpacks is unknown, so no position after it has an answer
 			} elseif (!$unpacked && $argument->name === null && $index++ === $position) {
-				$positional = $argument;
+				$positional = $argument instanceof ArgumentNode ? $argument : null;
 			}
 		}
 

@@ -90,8 +90,8 @@ test('a promoted parameter is the one with modifiers', function () {
 
 
 test('the argument a parameter gets, and the partial application', function () {
-	$file = parseFile('f(1, b: 2, ...$c); g(...); i(...$a); j(...$a, b: 2); k(...$a, c: 3);');
-	[$call, $partial, $unpacked, $named, $other] = $file->find(ArgumentListNode::class);
+	$file = parseFile('f(1, b: 2, ...$c); g(...); h(1, ?, c: ?); i(...$a); j(...$a, b: 2); k(...$a, c: 3);');
+	[$call, $callable, $partial, $unpacked, $named, $other] = $file->find(ArgumentListNode::class);
 	Assert::false($call->isPartialApplication());
 	Assert::same('1', (string) $call->findArgument('a', 0)?->value);
 	Assert::same('2', (string) $call->findArgument('b', 1)?->value);
@@ -104,8 +104,13 @@ test('the argument a parameter gets, and the partial application', function () {
 	Assert::same('2', (string) $named->findArgument('b', 0)?->value);
 	Assert::null($other->findArgument('b', 0));
 
+	Assert::true($callable->isPartialApplication());
+	Assert::null($callable->findArgument('a', 0));
+
 	Assert::true($partial->isPartialApplication());
-	Assert::null($partial->findArgument('a', 0));
+	Assert::same('1', (string) $partial->findArgument('a', 0)?->value);
+	Assert::null($partial->findArgument('b', 1)); // the placeholder holds the position
+	Assert::null($partial->findArgument('c', 9));
 });
 
 
