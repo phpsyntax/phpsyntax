@@ -4,7 +4,9 @@ namespace PhpSyntax\Nodes;
 
 use PhpSyntax\Node;
 use PhpSyntax\Token;
-use function count, in_array;
+use PhpSyntax\Trivia;
+use PhpSyntax\TriviaKind;
+use function count, in_array, ord;
 
 
 /**
@@ -58,24 +60,58 @@ final class SeparatedNodeList extends Node implements \Countable, \IteratorAggre
 
 
 	/**
+	 * Appends an item; the separator before it is derived from the existing ones unless given.
 	 * @param T $item
-	 * @param ?Token $separator  the one before the item; required for any item but the first
 	 */
 	public function append(Node $item, ?Token $separator = null): void
 	{
-		if ($this->items === [] xor $separator === null) {
-			throw new \LogicException('A separator is required before every item but the first.');
+		$this->insert(count($this->items), $item, $separator);
+	}
+
+
+	/**
+	 * Inserts an item at the index. A missing separator is modeled on the existing ones, or on ", " in
+	 * a one-line list; in a multi-line list the item also inherits the indentation of its neighbor.
+	 * @param T $item
+	 */
+	public function insert(int $index, Node $item, ?Token $separator = null): void
+	{
+		if ($index < 0 || $index > count($this->items)) {
+			throw new \OutOfRangeException("Index $index is out of range.");
+		} elseif ($separator && $this->items === []) {
+			throw new \LogicException('The first item has no separator before it.');
 		}
 
-		$this->prepareValue($item, null);
+		// both values are checked before either moves, so a refused insertion leaves both of their trees as they were
+		$this->checkValue($item, null);
 		if ($separator) {
-			$this->prepareValue($separator, null);
-			$this->adopt($separator);
-			$this->separators[] = $separator;
+			$this->checkValue($separator, null);
+			for ($node = $separator->parent; $node !== null; $node = $node->parent) {
+				if ($node === $item) {
+					throw new \LogicException('The separator cannot be a part of the item it separates.');
+				}
+			}
+		}
+
+		$this->liftFrom($item, null);
+		if ($separator) {
+			$this->liftFrom($separator, null);
+		} elseif ($this->items !== []) {
+			$neighbor = $this->items[$index > 0 ? $index - 1 : 0];
+			$separator = $this->deriveSeparator($index, $neighbor);
+			self::indentLike($item, $neighbor);
+			if ($index > 0) {
+				$this->endLineLike($item, $neighbor);
+			}
 		}
 
 		$this->adopt($item);
-		$this->items[] = $item;
+		self::insertInto($this->items, $index, $item);
+		if ($separator) {
+			$this->adopt($separator);
+			self::insertInto($this->separators, max($index - 1, 0), $separator);
+		}
+
 		$this->structureChanged();
 	}
 
@@ -100,21 +136,33 @@ final class SeparatedNodeList extends Node implements \Countable, \IteratorAggre
 
 
 	/**
-	 * Removes the item together with the separator after it, or the one before it for the last item.
+	 * Removes the item together with the separator that goes with it (see findSeparatorOf()).
 	 */
 	public function removeItem(Node $item): void
 	{
 		$index = $this->indexOf($item);
+		$separator = $this->findSeparatorOf($item);
 		$this->release($item);
 		$this->items = self::spliceList($this->items, $index, 1);
-		$separator = $this->separators[$index] ?? null;
-		$separatorIndex = $separator ? $index : $index - 1;
-		if (isset($this->separators[$separatorIndex])) {
-			$this->release($this->separators[$separatorIndex]);
-			$this->separators = self::spliceList($this->separators, $separatorIndex, 1);
+		if ($this->items === []) {
+			array_walk($this->separators, $this->release(...));
+			$this->separators = [];
+		} elseif ($separator !== null) {
+			$this->release($separator);
+			$this->separators = self::spliceList($this->separators, (int) array_search($separator, $this->separators, strict: true), 1);
 		}
 
 		$this->structureChanged();
+	}
+
+
+	/**
+	 * The separator that goes when the item goes: the one after it, and for the last item the one before it.
+	 */
+	public function findSeparatorOf(Node $item): ?Token
+	{
+		$index = $this->indexOf($item);
+		return $this->separators[$index === count($this->items) - 1 ? $index - 1 : $index] ?? null;
 	}
 
 
@@ -208,5 +256,62 @@ final class SeparatedNodeList extends Node implements \Countable, \IteratorAggre
 		parent::__clone();
 		$this->items = $this->cloneChildren($this->items);
 		$this->separators = $this->cloneChildren($this->separators);
+	}
+
+
+	private function deriveSeparator(int $index, Node $neighbor): Token
+	{
+		$model = $this->separators[min($index, count($this->separators)) - 1] ?? $this->separators[0] ?? null;
+		if ($model) {
+			return clone $model;
+		}
+
+		$separator = new Token(ord(','), ',');
+		$eol = self::findLineEnding($neighbor);
+		$separator->setTrailingTrivia([$eol ?? new Trivia(TriviaKind::Whitespace, ' ')]);
+		return $separator;
+	}
+
+
+	/**
+	 * When the neighbor ends its line, the new item after it takes over that role.
+	 */
+	private function endLineLike(Node $item, Node $neighbor): void
+	{
+		$source = $neighbor->getLastToken();
+		$target = $item->getLastToken();
+		$trailing = $source === null ? [] : $source->trailingTrivia; // a copy: a hooked property takes no indirect change
+		if (
+			$source
+			&& $target
+			&& $trailing
+			&& end($trailing)->isEndOfLine()
+			&& !$target->trailingTrivia
+		) {
+			$target->setTrailingTrivia($trailing);
+			$source->setTrailingTrivia([]);
+		}
+	}
+
+
+	/** The line ending before the item when it starts a line. */
+	private static function findLineEnding(Node $item): ?Trivia
+	{
+		$token = $item->getFirstToken();
+		if (!$token) {
+			return null;
+		}
+
+		foreach ([array_reverse($token->leadingTrivia), array_reverse($token->getPrevious()->trailingTrivia ?? [])] as $trivias) {
+			foreach ($trivias as $trivia) {
+				if ($trivia->kind === TriviaKind::EndOfLine) {
+					return $trivia;
+				} elseif ($trivia->kind !== TriviaKind::Whitespace) {
+					return null;
+				}
+			}
+		}
+
+		return null;
 	}
 }

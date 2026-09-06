@@ -2,7 +2,7 @@
 
 namespace PhpSyntax;
 
-use function is_int;
+use function array_slice, count, is_int, ord;
 
 
 final class Token implements \Stringable
@@ -10,20 +10,24 @@ final class Token implements \Stringable
 	/** The node the token belongs to; only the tree writes it, through attachTo(). */
 	public private(set) ?Node $parent = null;
 
-	/** @var list<Trivia> */
-	public array $leadingTrivia = [];
+	/** @internal position in the order of the tokens of the file, written by TokenIndex */
+	public int $index = 0;
+
+	/** @internal the index that numbered the token last: a shortcut to the file, verified before use */
+	public ?TokenIndex $indexedBy = null;
+
+	/**
+	 * Whitespace, comments and the open tag before the token, up to the end of the line above it;
+	 * setLeadingTrivia() writes it.
+	 * @var list<Trivia>
+	 */
+	public private(set) array $leadingTrivia = [];
 
 	/**
 	 * What follows the token up to and including the end of its line; setTrailingTrivia() writes it.
 	 * @var list<Trivia>
 	 */
 	public private(set) array $trailingTrivia = [];
-
-	/** @internal position in the order of the tokens of the file, written by TokenIndex */
-	public int $index = 0;
-
-	/** @internal the index that numbered the token last: a shortcut to the file, verified before use */
-	public ?TokenIndex $indexedBy = null;
 
 
 	public function __construct(
@@ -70,6 +74,35 @@ final class Token implements \Stringable
 	}
 
 
+	/**
+	 * Whether the token is of one of the kinds, given as a kind or as the text of an operator or punctuation;
+	 * the content of a string never matches a text.
+	 */
+	public function is(int|string ...$kinds): bool
+	{
+		foreach ($kinds as $kind) {
+			if (is_int($kind) ? $this->kind === $kind : ($this->text === $kind && !$this->isStringContent())) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+
+	/** A semicolon or a close tag standing in for it. */
+	public function isSemicolon(): bool
+	{
+		return $this->kind === ord(';') || $this->kind === TokenKind::CloseTag;
+	}
+
+
+	public function isOpenTagWithEcho(): bool
+	{
+		return $this->kind === TokenKind::OpenTagWithEcho;
+	}
+
+
 	public function getFile(): ?Nodes\FileNode
 	{
 		return $this->parent?->getFile();
@@ -79,40 +112,191 @@ final class Token implements \Stringable
 	/** Navigation and positions come from the file index; a token of a detached subtree has none. */
 	public function getNext(): ?self
 	{
-		return $this->getFile()?->getIndex()->getNext($this);
+		return $this->findIndex()?->getNext($this);
 	}
 
 
 	public function getPrevious(): ?self
 	{
-		return $this->getFile()?->getIndex()->getPrevious($this);
+		return $this->findIndex()?->getPrevious($this);
 	}
 
 
 	/** Current line, 1-based; unlike originalLine it follows mutations. */
 	public function getLine(): ?int
 	{
-		return $this->getFile()?->getIndex()->getLine($this);
+		return $this->findIndex()?->getLine($this);
 	}
 
 
 	/** Current column, 1-based, in UTF-8 characters. */
 	public function getColumn(): ?int
 	{
-		return $this->getFile()?->getIndex()->getColumn($this);
+		return $this->findIndex()?->getColumn($this);
 	}
 
 
 	/** Current column with tabs expanded, 1-based. */
 	public function getVisualColumn(Style $style): ?int
 	{
-		return $this->getFile()?->getIndex()->getVisualColumn($this, $style);
+		return $this->findIndex()?->getVisualColumn($this, $style);
 	}
 
 
 	public function getOffset(): ?int
 	{
-		return $this->getFile()?->getIndex()->getOffset($this);
+		return $this->findIndex()?->getOffset($this);
+	}
+
+
+	/** The index of the file the token is in: the one that numbered it when it still holds it, else via the parents. */
+	private function findIndex(): ?TokenIndex
+	{
+		$index = $this->indexedBy;
+		return $index !== null && $index->contains($this)
+			? $index
+			: $this->getFile()?->getIndex();
+	}
+
+
+	/** Whether the token is the first on its line. */
+	public function startsLine(): bool
+	{
+		foreach ($this->leadingTrivia as $trivia) {
+			if ($trivia->isEndOfLine()) {
+				return true;
+			}
+		}
+
+		$previous = $this->getPrevious();
+		$before = $previous?->trailingTrivia;
+		return $previous === null
+			|| ($before ? end($before)->isEndOfLine() : self::endsWithLineEnding($previous->text));
+	}
+
+
+	/** Whether the text ends its line by itself: a close tag, a heredoc start, inline HTML. */
+	private static function endsWithLineEnding(string $text): bool
+	{
+		return $text !== '' && ($text[-1] === "\n" || $text[-1] === "\r");
+	}
+
+
+	/** Whitespace between the start of the line and the token; empty when the token does not start a line. */
+	public function getIndentation(): string
+	{
+		$indentation = '';
+		foreach ($this->leadingTrivia as $trivia) {
+			$indentation = $trivia->kind === TriviaKind::Whitespace ? $indentation . $trivia->text : '';
+		}
+
+		return $indentation;
+	}
+
+
+	/**
+	 * Replaces the whitespace between the start of the line and the token; the token must start a line.
+	 */
+	public function setIndentation(string $indentation): void
+	{
+		$this->refuseInterpolation();
+		if (!$this->startsLine()) {
+			throw new \LogicException("Token '$this->text' does not start a line.");
+		}
+
+		$leading = $this->leadingTrivia;
+		while ($leading && end($leading)->kind === TriviaKind::Whitespace) {
+			array_pop($leading);
+		}
+
+		if ($indentation !== '') {
+			$leading[] = new Trivia(TriviaKind::Whitespace, $indentation);
+		}
+
+		$this->setLeadingTrivia($leading);
+	}
+
+
+	/**
+	 * Moves the token to its own line unless it already starts one; the indentation stays as it was.
+	 * The line ending goes to the trailing trivia of the previous token, where the lexer would put it.
+	 */
+	public function ensureLeadingNewline(string $eol = "\n"): void
+	{
+		$this->refuseInterpolation();
+		if ($this->startsLine()) {
+			return;
+		}
+
+		$previous = $this->getPrevious();
+		if ($previous === null) {
+			$this->setLeadingTrivia([new Trivia(TriviaKind::EndOfLine, $eol), ...$this->leadingTrivia]);
+			return;
+		}
+
+		$previous->removeTrailingWhitespace();
+		$previous->setTrailingTrivia([...$previous->trailingTrivia, new Trivia(TriviaKind::EndOfLine, $eol)]);
+	}
+
+
+	/**
+	 * Removes whitespace at the end of the line the token ends, keeping comments and the line ending;
+	 * whitespace ending a single-line comment counts as well, since the tokenizer makes it part of the comment.
+	 */
+	public function removeTrailingWhitespace(): void
+	{
+		$this->refuseInterpolation();
+		$trailing = [];
+		$whitespace = [];
+		foreach ($this->trailingTrivia as $trivia) {
+			if ($trivia->kind === TriviaKind::Whitespace) {
+				$whitespace[] = $trivia;
+			} elseif ($trivia->kind === TriviaKind::EndOfLine) {
+				$trailing[] = $trivia;
+				$whitespace = [];
+			} else {
+				$trailing = [...$trailing, ...$whitespace, $trivia];
+				$whitespace = [];
+			}
+		}
+
+		$last = $trailing ? $trailing[count($trailing) - 1] : null;
+		$comment = $last?->kind === TriviaKind::Comment && !str_starts_with($last->text, '/*')
+			? $last
+			: ($trailing[count($trailing) - 2] ?? null);
+		if (
+			$comment?->kind === TriviaKind::Comment
+			&& !str_starts_with($comment->text, '/*')
+			&& rtrim($comment->text) !== $comment->text
+		) {
+			$trimmed = new Trivia(TriviaKind::Comment, rtrim($comment->text), $comment->inInterpolation);
+			$trailing = array_map(fn(Trivia $trivia) => $trivia === $comment ? $trimmed : $trivia, $trailing);
+		}
+
+		$this->setTrailingTrivia($trailing);
+	}
+
+
+	/**
+	 * Sets the number of blank lines before the token, which must start a line; comments before it keep
+	 * their position after the blank lines.
+	 */
+	public function setBlankLinesBefore(int $count, string $eol = "\n"): void
+	{
+		$this->refuseInterpolation();
+		if (!$this->startsLine()) {
+			throw new \LogicException("Token '$this->text' does not start a line.");
+		}
+
+		$leading = $this->leadingTrivia;
+		$start = $leading && $leading[0]->kind === TriviaKind::OpenTag ? 1 : 0;
+		$end = $start;
+		while ($end < count($leading) && $leading[$end]->kind === TriviaKind::EndOfLine) {
+			$end++;
+		}
+
+		$blank = array_fill(0, $count, new Trivia(TriviaKind::EndOfLine, $eol));
+		$this->setLeadingTrivia([...array_slice($leading, 0, $start), ...$blank, ...array_slice($leading, $end)]);
 	}
 
 
@@ -141,19 +325,14 @@ final class Token implements \Stringable
 	}
 
 
-	/**
-	 * Whether the token is of one of the kinds, given as a kind or as the text of an operator or punctuation;
-	 * the content of a string never matches a text.
-	 */
-	public function is(int|string ...$kinds): bool
+	/** Whitespace inside string interpolation is part of the string value and must not be reformatted. */
+	private function refuseInterpolation(): void
 	{
-		foreach ($kinds as $kind) {
-			if (is_int($kind) ? $this->kind === $kind : ($this->text === $kind && !$this->isStringContent())) {
-				return true;
+		foreach ([...$this->leadingTrivia, ...$this->trailingTrivia] as $trivia) {
+			if ($trivia->inInterpolation) {
+				throw new \LogicException("Token '$this->text' is inside string interpolation; its whitespace cannot be changed.");
 			}
 		}
-
-		return false;
 	}
 
 

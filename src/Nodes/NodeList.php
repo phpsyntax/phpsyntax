@@ -40,23 +40,52 @@ final class NodeList extends Node implements \Countable, \IteratorAggregate
 	}
 
 
-	/** @param T $item */
+	/**
+	 * Appends an item, which takes the place in the lines of the list its neighbor has.
+	 * @param T $item
+	 */
 	public function append(Node $item): void
 	{
-		$this->prepareValue($item, null);
+		$this->insert(count($this->items), $item);
+	}
+
+
+	/**
+	 * Inserts an item at the index. In a list standing in a file, an item that carries no trivia of its own
+	 * takes the indentation of its neighbor and ends its line the same way.
+	 * @param T $item
+	 */
+	public function insert(int $index, Node $item): void
+	{
+		if ($index < 0 || $index > count($this->items)) {
+			throw new \OutOfRangeException("Index $index is out of range.");
+		}
+
+		$this->prepareValue($item, null); // nothing moves before this, so a refused item leaves the list as it was
+		if ($this->items !== [] && $this->getFile() !== null && !$item->leadingTrivia && !$item->trailingTrivia) {
+			$neighbor = $this->items[$index > 0 ? $index - 1 : 0];
+			self::indentLike($item, $neighbor);
+			self::endLike($item, $neighbor);
+		}
+
 		$this->adopt($item);
-		$this->items[] = $item;
+		self::insertInto($this->items, $index, $item);
 		$this->structureChanged();
 	}
 
 
-	/** @param T $item */
-	public function insert(int $index, Node $item): void
+	/**
+	 * Ends the item the way its neighbor ends, with a line ending or with a space; a comment of the neighbor
+	 * stays with it, and an item ending its line inside its own text needs nothing.
+	 */
+	private static function endLike(Node $item, Node $neighbor): void
 	{
-		$this->prepareValue($item, null);
-		$this->adopt($item);
-		self::insertInto($this->items, $index, $item);
-		$this->structureChanged();
+		$target = $item->getLastToken();
+		$trailing = $neighbor->trailingTrivia;
+		$last = $trailing[count($trailing) - 1] ?? null;
+		if ($target !== null && $last?->isWhitespace() && !preg_match('~[\r\n]$~', $target->text)) {
+			$target->setTrailingTrivia([$last]);
+		}
 	}
 
 

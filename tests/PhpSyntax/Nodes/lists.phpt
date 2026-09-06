@@ -94,7 +94,8 @@ test('SeparatedNodeList: separators between items and an optional trailing one',
 	$list->replaceChild($a, node('x'));
 	Assert::same('x;b', (string) $list);
 
-	Assert::exception(fn() => $list->append(node('c')), LogicException::class, 'A separator is required before every item but the first.');
+	$list->append(node('c'));
+	Assert::same('x;b;c', (string) $list);
 	Assert::exception(fn() => (new SeparatedNodeList)->append(node('c'), comma()), LogicException::class);
 	Assert::exception(fn() => $list->replaceChild($semicolon, node('y')), InvalidArgumentException::class);
 });

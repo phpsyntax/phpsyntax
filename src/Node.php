@@ -410,6 +410,12 @@ abstract class Node implements \Stringable
 		}
 
 		$tokens = $this->getTokens();
+		$separatorAfter = false;
+		if ($parent instanceof SeparatedNodeList && ($separator = $parent->findSeparatorOf($this)) !== null) {
+			$separatorAfter = $separator !== ($tokens[0] ?? null)?->getPrevious(); // the last item has it before
+			$tokens = $separatorAfter ? [...$tokens, $separator] : [$separator, ...$tokens];
+		}
+
 		$first = $tokens[0] ?? null;
 		$last = $tokens[count($tokens) - 1] ?? null;
 		$previous = $first?->getPrevious();
@@ -423,6 +429,9 @@ abstract class Node implements \Stringable
 
 		[$trailing, $trailingComments] = self::splitComments($last->trailingTrivia ?? []);
 		$moved = [...$moved, ...$trailingComments];
+		if ($separatorAfter) { // the gap the separator opened goes with it, the line ending of the item stays
+			$trailing = array_values(array_filter($trailing, fn(Trivia $trivia) => $trivia->isEndOfLine()));
+		}
 
 		if (self::standsAlone($first->leadingTrivia ?? [], $last->trailingTrivia ?? [], $previous, $next)) {
 			if ($leading && end($leading)->kind === TriviaKind::Whitespace) {
@@ -442,6 +451,10 @@ abstract class Node implements \Stringable
 		if ($previous) {
 			$previous->setTrailingTrivia([...$previous->trailingTrivia, ...$before, ...$trailing]);
 			$trailing = [];
+			$ends = $previous->trailingTrivia; // a copy: a hooked property takes no indirect change
+			if ($ends && end($ends)->isEndOfLine()) {
+				$previous->removeTrailingWhitespace(); // the line ends here now, so nothing dangles before it
+			}
 		}
 
 		if ($next) {
@@ -568,12 +581,14 @@ abstract class Node implements \Stringable
 		}
 
 		$child->attachTo($this);
+		$this->getFile()?->adopted($child);
 	}
 
 
 	protected function release(self|Token|null $child): void
 	{
-		if ($child) {
+		if ($child?->parent === $this) { // a clone under construction still holds the children of the original
+			$this->getFile()?->released($child);
 			$child->attachTo(null);
 		}
 	}
@@ -595,6 +610,29 @@ abstract class Node implements \Stringable
 	protected function structureChanged(): void
 	{
 		$this->getFile()?->structureChanged();
+	}
+
+
+	/**
+	 * Gives the node the leading indentation of the model, where the model starts a line and the node
+	 * carries no leading trivia of its own; an item added to a list stands where its neighbor stands.
+	 */
+	protected static function indentLike(self $node, self $model): void
+	{
+		$target = $node->getFirstToken();
+		$source = $model->getFirstToken();
+		if (!$target || !$source || $target->leadingTrivia) {
+			return;
+		}
+
+		$indentation = [];
+		foreach ($source->leadingTrivia as $trivia) {
+			$indentation = $trivia->kind === TriviaKind::Whitespace ? [...$indentation, $trivia] : [];
+		}
+
+		if ($source->startsLine()) {
+			$target->setLeadingTrivia($indentation);
+		}
 	}
 
 

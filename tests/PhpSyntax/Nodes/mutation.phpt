@@ -89,6 +89,41 @@ test('remove takes a whole line, keeps blank lines and the open tag', function (
 });
 
 
+test('an item of a list goes with the separator that goes with it', function () {
+	$remove = function (string $code, int $index): string {
+		$file = parse($code);
+		$list = $file->findFirst(PhpSyntax\Nodes\SeparatedNodeList::class);
+		$list?->getItems()[$index]->remove();
+		return (string) $file;
+	};
+
+	// the last item of a list written on several lines takes its line, the trailing comma stays behind
+	$multiline = "<?php\n\$c = [\n\t'a' => 1,\n\t'b' => 2,\n\t'c' => 3,\n];\n";
+	Assert::same("<?php\n\$c = [\n\t'a' => 1,\n\t'b' => 2,\n];\n", $remove($multiline, 2));
+	Assert::same("<?php\n\$c = [\n\t'b' => 2,\n\t'c' => 3,\n];\n", $remove($multiline, 0));
+	Assert::same("<?php\n\$c = [\n\t'a' => 1,\n\t'b' => 2\n];\n", $remove("<?php\n\$c = [\n\t'a' => 1,\n\t'b' => 2,\n\t'c' => 3\n];\n", 2));
+
+	// on one line the gap the separator opened goes with it
+	Assert::same('<?php f(1, 2);', $remove('<?php f(1, 2, 3);', 2));
+	Assert::same('<?php f(1, 3);', $remove('<?php f(1, 2, 3);', 1));
+	Assert::same('<?php f( 1 , 3 );', $remove('<?php f( 1 , 2 , 3 );', 1));
+	Assert::same('<?php f($a,);', $remove('<?php f($a, $c,);', 1));
+	Assert::same('<?php f();', $remove('<?php f(1);', 0));
+
+	// what ends the line stays, and nothing dangles before it
+	Assert::same("<?php \$x = [1,\n\t3];", $remove("<?php \$x = [1, 2,\n\t3];", 1));
+});
+
+
+test('remove inside a line keeps the whitespace around', function () {
+	$file = parse('<?php $a; $b; $c;');
+	stmts($file)[1]->remove();
+	Assert::same('<?php $a;  $c;', (string) $file);
+	stmts($file)[0]->remove();
+	Assert::same('<?php   $c;', (string) $file);
+});
+
+
 test('comments of a removed node follow the policy', function () {
 	$code = "<?php\n\$a;\n/** doc */\n\$b; // b\n\$c;\n";
 	$file = parse($code);

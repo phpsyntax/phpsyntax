@@ -54,7 +54,7 @@ test('visual column expands tabs', function () {
 });
 
 
-test('a change of trivia moves the lines', function () {
+test('a change of trivia moves the lines, a structural change also the order', function () {
 	$file = (new Parser)->parse("<?php\n\$a;\n\$b;");
 	$index = $file->getIndex();
 	$b = $index->getTokens()[2];
@@ -64,6 +64,13 @@ test('a change of trivia moves the lines', function () {
 	$a->setLeadingTrivia([new Trivia(TriviaKind::OpenTag, "<?php\n"), new Trivia(TriviaKind::EndOfLine, "\n")]);
 	Assert::same(4, $b->getLine());
 	Assert::same(1, $file->revision);
+
+	$stmt = $file->statements->getItems()[0];
+	$file->statements->removeItem($stmt);
+	Assert::same(2, $file->revision);
+	Assert::same($b, $index->getTokens()[0]);
+	Assert::same(1, $b->getLine());
+	Assert::null($b->getPrevious());
 });
 
 
