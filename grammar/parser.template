@@ -15,6 +15,13 @@ $meta #
 namespace PhpSyntax;
 
 use PhpSyntax\Nodes;
+use PhpSyntax\Nodes\Expression;
+use PhpSyntax\Nodes\Member;
+use PhpSyntax\Nodes\NodeList;
+use PhpSyntax\Nodes\Scalar;
+use PhpSyntax\Nodes\SeparatedNodeList;
+use PhpSyntax\Nodes\Statement;
+use PhpSyntax\Nodes\Type;
 #include;
 
 

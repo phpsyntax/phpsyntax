@@ -130,8 +130,8 @@ start:
 ;
 
 top_statement_list_ex:
-      top_statement_list_ex top_statement
-    | /* empty */
+      top_statement_list_ex top_statement                   { push($1, $2); }
+    | /* empty */                                           { $$ = init(); }
 ;
 
 top_statement_list:
@@ -161,36 +161,36 @@ semi_reserved:
 ;
 
 identifier_maybe_reserved:
-      T_STRING
-    | semi_reserved
+      T_STRING                                              { $$ = Nodes\IdentifierNode[$1]; }
+    | semi_reserved                                         { $$ = Nodes\IdentifierNode[$1]; }
 ;
 
 identifier_not_reserved:
-      T_STRING
+      T_STRING                                              { $$ = Nodes\IdentifierNode[$1]; }
 ;
 
 reserved_non_modifiers_identifier:
-      reserved_non_modifiers
+      reserved_non_modifiers                                { $$ = Nodes\IdentifierNode[$1]; }
 ;
 
 namespace_declaration_name:
-      T_STRING
-    | semi_reserved
-    | T_NAME_QUALIFIED
+      T_STRING                                              { $$ = Nodes\NameNode[$1]; }
+    | semi_reserved                                         { $$ = Nodes\NameNode[$1]; }
+    | T_NAME_QUALIFIED                                      { $$ = Nodes\NameNode[$1]; }
 ;
 
 namespace_name:
-      T_STRING
-    | T_NAME_QUALIFIED
+      T_STRING                                              { $$ = Nodes\NameNode[$1]; }
+    | T_NAME_QUALIFIED                                      { $$ = Nodes\NameNode[$1]; }
 ;
 
 legacy_namespace_name:
       namespace_name
-    | T_NAME_FULLY_QUALIFIED
+    | T_NAME_FULLY_QUALIFIED                                { $$ = Nodes\NameNode[$1]; }
 ;
 
 plain_variable:
-      T_VARIABLE
+      T_VARIABLE                                            { $$ = Expression\VariableNode[null, null, $1, null]; }
 ;
 
 semi:
@@ -213,8 +213,8 @@ attribute_decl:
 ;
 
 attribute_group:
-      attribute_decl
-    | attribute_group ',' attribute_decl
+      attribute_decl                                        { $$ = separated($1); }
+    | attribute_group ',' attribute_decl                    { push($1, $2, $3); }
 ;
 
 attribute:
@@ -222,12 +222,12 @@ attribute:
 ;
 
 attributes:
-      attribute
-    | attributes attribute
+      attribute                                             { $$ = init($1); }
+    | attributes attribute                                  { push($1, $2); }
 ;
 
 optional_attributes:
-      /* empty */
+      /* empty */                                           { $$ = init(); }
     | attributes
 ;
 
@@ -235,13 +235,13 @@ top_statement:
       statement
     | function_declaration_statement
     | class_declaration_statement
-    | T_HALT_COMPILER '(' ')' ';'
-    | T_NAMESPACE namespace_declaration_name semi
+    | T_HALT_COMPILER '(' ')' ';'                           { $$ = Statement\HaltCompilerNode[$1, $2, $3, $4, null]; }
+    | T_NAMESPACE namespace_declaration_name semi           { $$ = Statement\NamespaceNode[$1, $2, $3, null, init(), null]; }
     | T_NAMESPACE namespace_declaration_name '{' top_statement_list '}'
           { $$ = Statement\NamespaceNode[$1, $2, null, $3, $4, $5]; }
     | T_NAMESPACE '{' top_statement_list '}'                { $$ = Statement\NamespaceNode[$1, null, null, $2, $3, $4]; }
-    | T_USE use_declarations semi                           { $$ = Statement\UseNode[$1, null, $2, $3]; }
-    | T_USE use_type use_declarations semi                  { $$ = Statement\UseNode[$1, $2, $3, $4]; }
+    | T_USE use_declarations semi                           { $$ = Statement\UseNode[$1, null, null, null, null, $2, null, $3]; }
+    | T_USE use_type use_declarations semi                  { $$ = Statement\UseNode[$1, $2, null, null, null, $3, null, $4]; }
     | group_use_declaration
     | T_CONST constant_declaration_list semi                { $$ = Statement\ConstNode[init(), $1, $2, $3]; }
     | attributes T_CONST constant_declaration_list semi     { $$ = Statement\ConstNode[$1, $2, $3, $4]; }
@@ -254,36 +254,36 @@ use_type:
 
 group_use_declaration:
       T_USE use_type legacy_namespace_name T_NS_SEPARATOR '{' unprefixed_use_declarations '}' semi
-          { $$ = Statement\GroupUseNode[$1, $2, $3, $4, $5, $6, $7, $8]; }
+          { $$ = Statement\UseNode[$1, $2, $3, $4, $5, $6, $7, $8]; }
     | T_USE legacy_namespace_name T_NS_SEPARATOR '{' inline_use_declarations '}' semi
-          { $$ = Statement\GroupUseNode[$1, null, $2, $3, $4, $5, $6, $7]; }
+          { $$ = Statement\UseNode[$1, null, $2, $3, $4, $5, $6, $7]; }
 ;
 
 unprefixed_use_declarations:
-      non_empty_unprefixed_use_declarations optional_comma
+      non_empty_unprefixed_use_declarations optional_comma  { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_unprefixed_use_declarations:
-      non_empty_unprefixed_use_declarations ',' unprefixed_use_declaration
-    | unprefixed_use_declaration
+      non_empty_unprefixed_use_declarations ',' unprefixed_use_declaration   { push($1, $2, $3); }
+    | unprefixed_use_declaration                            { $$ = separated($1); }
 ;
 
 use_declarations:
-      non_empty_use_declarations no_comma
+      non_empty_use_declarations no_comma                   { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_use_declarations:
-      non_empty_use_declarations ',' use_declaration
-    | use_declaration
+      non_empty_use_declarations ',' use_declaration        { push($1, $2, $3); }
+    | use_declaration                                       { $$ = separated($1); }
 ;
 
 inline_use_declarations:
-      non_empty_inline_use_declarations optional_comma
+      non_empty_inline_use_declarations optional_comma      { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_inline_use_declarations:
-      non_empty_inline_use_declarations ',' inline_use_declaration
-    | inline_use_declaration
+      non_empty_inline_use_declarations ',' inline_use_declaration   { push($1, $2, $3); }
+    | inline_use_declaration                                { $$ = separated($1); }
 ;
 
 unprefixed_use_declaration:
@@ -302,12 +302,12 @@ inline_use_declaration:
 ;
 
 constant_declaration_list:
-      non_empty_constant_declaration_list no_comma
+      non_empty_constant_declaration_list no_comma          { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_constant_declaration_list:
-      non_empty_constant_declaration_list ',' constant_declaration
-    | constant_declaration
+      non_empty_constant_declaration_list ',' constant_declaration   { push($1, $2, $3); }
+    | constant_declaration                                  { $$ = separated($1); }
 ;
 
 constant_declaration:
@@ -315,12 +315,12 @@ constant_declaration:
 ;
 
 class_const_list:
-      non_empty_class_const_list no_comma
+      non_empty_class_const_list no_comma                   { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_class_const_list:
-      non_empty_class_const_list ',' class_const
-    | class_const
+      non_empty_class_const_list ',' class_const            { push($1, $2, $3); }
+    | class_const                                           { $$ = separated($1); }
 ;
 
 class_const:
@@ -329,8 +329,8 @@ class_const:
 ;
 
 inner_statement_list_ex:
-      inner_statement_list_ex inner_statement
-    | /* empty */
+      inner_statement_list_ex inner_statement               { push($1, $2); }
+    | /* empty */                                           { $$ = init(); }
 ;
 
 inner_statement_list:
@@ -352,16 +352,17 @@ non_empty_statement:
     | T_WHILE '(' expr ')' while_statement                  { $$ = Statement\WhileNode[$1, $2, $3, $4, ...$5]; }
     | T_DO blocklike_statement T_WHILE '(' expr ')' ';'     { $$ = Statement\DoWhileNode[$1, $2, $3, $4, $5, $6, $7]; }
     | T_FOR '(' for_expr ';'  for_expr ';' for_expr ')' for_statement
-    | T_SWITCH '(' expr ')' switch_case_list
-    | T_BREAK optional_expr semi
-    | T_CONTINUE optional_expr semi
-    | T_RETURN optional_expr semi
-    | T_GLOBAL global_var_list semi
-    | T_STATIC static_var_list semi
-    | T_ECHO expr_list_forbid_comma semi
-    | T_INLINE_HTML
-    | expr semi
-    | T_UNSET '(' variables_list ')' semi
+          { $$ = Statement\ForNode[$1, $2, $3, $4, $5, $6, $7, $8, ...$9]; }
+    | T_SWITCH '(' expr ')' switch_case_list                { $$ = Statement\SwitchNode[$1, $2, $3, $4, ...$5]; }
+    | T_BREAK optional_expr semi                            { $$ = Statement\BreakNode[$1, $2, $3]; }
+    | T_CONTINUE optional_expr semi                         { $$ = Statement\ContinueNode[$1, $2, $3]; }
+    | T_RETURN optional_expr semi                           { $$ = Statement\ReturnNode[$1, $2, $3]; }
+    | T_GLOBAL global_var_list semi                         { $$ = Statement\GlobalNode[$1, $2, $3]; }
+    | T_STATIC static_var_list semi                         { $$ = Statement\StaticNode[$1, $2, $3]; }
+    | T_ECHO expr_list_forbid_comma semi                    { $$ = Statement\EchoNode[$1, $2, $3]; }
+    | T_INLINE_HTML                                         { $$ = Statement\InlineHtmlNode[$1]; }
+    | expr semi                                             { $$ = Statement\ExpressionStatementNode[$1, $2]; }
+    | T_UNSET '(' variables_list ')' semi                   { $$ = Statement\UnsetNode[$1, $2, $3, $4, $5]; }
     | T_FOREACH '(' expr T_AS foreach_variable ')' foreach_statement
           { $$ = Statement\ForeachNode[$1, $2, $3, $4, null, null, $5[0], $5[1], $6, ...$7]; }
     | T_FOREACH '(' expr T_AS variable T_DOUBLE_ARROW foreach_variable ')' foreach_statement
@@ -375,7 +376,7 @@ non_empty_statement:
 
 statement:
       non_empty_statement
-    | ';'
+    | ';'                                                   { $$ = Statement\EmptyStatementNode[$1]; }
 ;
 
 blocklike_statement:
@@ -383,13 +384,13 @@ blocklike_statement:
 ;
 
 catches:
-      /* empty */
-    | catches catch
+      /* empty */                                           { $$ = init(); }
+    | catches catch                                         { push($1, $2); }
 ;
 
 name_union:
-      name
-    | name_union '|' name
+      name                                                  { $$ = separated($1); }
+    | name_union '|' name                                   { push($1, $2, $3); }
 ;
 
 catch:
@@ -403,12 +404,12 @@ optional_finally:
 ;
 
 variables_list:
-      non_empty_variables_list optional_comma
+      non_empty_variables_list optional_comma               { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_variables_list:
-      variable
-    | non_empty_variables_list ',' variable
+      variable                                              { $$ = separated($1); }
+    | non_empty_variables_list ',' variable                 { push($1, $2, $3); }
 ;
 
 optional_ref:
@@ -472,8 +473,8 @@ class_entry_type:
 ;
 
 class_modifiers:
-      class_modifier
-    | class_modifiers class_modifier
+      class_modifier                                        { $$ = modifiers($1); }
+    | class_modifiers class_modifier                        { push($1, $2); }
 ;
 
 class_modifier:
@@ -498,12 +499,12 @@ implements_list:
 ;
 
 class_name_list:
-      non_empty_class_name_list no_comma
+      non_empty_class_name_list no_comma                    { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_class_name_list:
-      class_name
-    | non_empty_class_name_list ',' class_name
+      class_name                                            { $$ = separated($1); }
+    | non_empty_class_name_list ',' class_name              { push($1, $2, $3); }
 ;
 
 for_statement:
@@ -523,12 +524,12 @@ declare_statement:
 ;
 
 declare_list:
-      non_empty_declare_list no_comma
+      non_empty_declare_list no_comma                       { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_declare_list:
-      declare_list_element
-    | non_empty_declare_list ',' declare_list_element
+      declare_list_element                                  { $$ = separated($1); }
+    | non_empty_declare_list ',' declare_list_element       { push($1, $2, $3); }
 ;
 
 declare_list_element:
@@ -543,8 +544,8 @@ switch_case_list:
 ;
 
 case_list:
-      /* empty */
-    | case_list case
+      /* empty */                                           { $$ = init(); }
+    | case_list case                                        { push($1, $2); }
 ;
 
 case:
@@ -562,13 +563,13 @@ match:
 ;
 
 match_arm_list:
-      /* empty */
-    | non_empty_match_arm_list optional_comma
+      /* empty */                                           { $$ = separated(); }
+    | non_empty_match_arm_list optional_comma               { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_match_arm_list:
-      match_arm
-    | non_empty_match_arm_list ',' match_arm
+      match_arm                                             { $$ = separated($1); }
+    | non_empty_match_arm_list ',' match_arm                { push($1, $2, $3); }
 ;
 
 match_arm:
@@ -582,8 +583,8 @@ while_statement:
 ;
 
 elseif_list:
-      /* empty */
-    | elseif_list elseif
+      /* empty */                                           { $$ = init(); }
+    | elseif_list elseif                                    { push($1, $2); }
 ;
 
 elseif:
@@ -591,8 +592,8 @@ elseif:
 ;
 
 new_elseif_list:
-      /* empty */
-    | new_elseif_list new_elseif
+      /* empty */                                           { $$ = init(); }
+    | new_elseif_list new_elseif                            { push($1, $2); }
 ;
 
 new_elseif:
@@ -613,22 +614,22 @@ foreach_variable:
       variable                                              { $$ = [null, $1]; }
     | ampersand variable                                    { $$ = [$1, $2]; }
     | list_expr                                             { $$ = [null, $1]; }
-    | array_short_syntax                                    { $$ = [null, $1]; }
+    | array_short_syntax                                    { $$ = [null, $this->toDestructuring($1)]; }
 ;
 
 parameter_list:
-      non_empty_parameter_list optional_comma
-    | /* empty */
+      non_empty_parameter_list optional_comma               { trailing($1, $2); $$ = $1; }
+    | /* empty */                                           { $$ = separated(); }
 ;
 
 non_empty_parameter_list:
-      parameter
-    | non_empty_parameter_list ',' parameter
+      parameter                                             { $$ = separated($1); }
+    | non_empty_parameter_list ',' parameter                { push($1, $2, $3); }
 ;
 
 optional_property_modifiers:
-      /* empty */
-    | optional_property_modifiers property_modifier
+      /* empty */                                           { $$ = modifiers(); }
+    | optional_property_modifiers property_modifier         { push($1, $2); }
 ;
 
 property_modifier:
@@ -751,8 +752,8 @@ variadic_placeholder:
 ;
 
 non_empty_argument_list:
-      argument
-    | non_empty_argument_list ',' argument
+      argument                                              { $$ = separated($1); }
+    | non_empty_argument_list ',' argument                  { push($1, $2, $3); }
 ;
 
 argument_no_expr:
@@ -767,12 +768,12 @@ argument:
 ;
 
 global_var_list:
-      non_empty_global_var_list no_comma
+      non_empty_global_var_list no_comma                    { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_global_var_list:
-      non_empty_global_var_list ',' global_var
-    | global_var
+      non_empty_global_var_list ',' global_var              { push($1, $2, $3); }
+    | global_var                                            { $$ = separated($1); }
 ;
 
 global_var:
@@ -780,12 +781,12 @@ global_var:
 ;
 
 static_var_list:
-      non_empty_static_var_list no_comma
+      non_empty_static_var_list no_comma                    { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_static_var_list:
-      non_empty_static_var_list ',' static_var
-    | static_var
+      non_empty_static_var_list ',' static_var              { push($1, $2, $3); }
+    | static_var                                            { $$ = separated($1); }
 ;
 
 static_var:
@@ -794,8 +795,8 @@ static_var:
 ;
 
 class_statement_list_ex:
-      class_statement_list_ex class_statement
-    | /* empty */
+      class_statement_list_ex class_statement               { push($1, $2); }
+    | /* empty */                                           { $$ = init(); }
 ;
 
 class_statement_list:
@@ -825,8 +826,8 @@ trait_adaptations:
 ;
 
 trait_adaptation_list:
-      /* empty */
-    | trait_adaptation_list trait_adaptation
+      /* empty */                                           { $$ = init(); }
+    | trait_adaptation_list trait_adaptation                { push($1, $2); }
 ;
 
 trait_adaptation:
@@ -857,17 +858,17 @@ method_body:
 
 variable_modifiers:
       non_empty_member_modifiers
-    | T_VAR
+    | T_VAR                                                 { $$ = modifiers($1); }
 ;
 
 method_modifiers:
-      /* empty */
+      /* empty */                                           { $$ = modifiers(); }
     | non_empty_member_modifiers
 ;
 
 non_empty_member_modifiers:
-      member_modifier
-    | non_empty_member_modifiers member_modifier
+      member_modifier                                       { $$ = modifiers($1); }
+    | non_empty_member_modifiers member_modifier            { push($1, $2); }
 ;
 
 member_modifier:
@@ -884,12 +885,12 @@ member_modifier:
 ;
 
 property_declaration_list:
-      non_empty_property_declaration_list no_comma
+      non_empty_property_declaration_list no_comma          { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_property_declaration_list:
-      property_declaration
-    | non_empty_property_declaration_list ',' property_declaration
+      property_declaration                                  { $$ = separated($1); }
+    | non_empty_property_declaration_list ',' property_declaration   { push($1, $2, $3); }
 ;
 
 property_decl_name:
@@ -902,8 +903,8 @@ property_declaration:
 ;
 
 property_hook_list:
-      /* empty */
-    | property_hook_list property_hook
+      /* empty */                                           { $$ = init(); }
+    | property_hook_list property_hook                      { push($1, $2); }
 ;
 
 optional_property_hook_list:
@@ -925,32 +926,32 @@ property_hook_body:
 ;
 
 property_hook_modifiers:
-      /* empty */
-    | property_hook_modifiers member_modifier
+      /* empty */                                           { $$ = modifiers(); }
+    | property_hook_modifiers member_modifier               { push($1, $2); }
 ;
 
 expr_list_forbid_comma:
-      non_empty_expr_list no_comma
+      non_empty_expr_list no_comma                          { trailing($1, $2); $$ = $1; }
 ;
 
 expr_list_allow_comma:
-      non_empty_expr_list optional_comma
+      non_empty_expr_list optional_comma                    { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_expr_list:
-      non_empty_expr_list ',' expr
-    | expr
+      non_empty_expr_list ',' expr                          { push($1, $2, $3); }
+    | expr                                                  { $$ = separated($1); }
 ;
 
 for_expr:
-      /* empty */
+      /* empty */                                           { $$ = separated(); }
     | expr_list_forbid_comma
 ;
 
 expr:
       variable
     | list_expr '=' expr                                    { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | array_short_syntax '=' expr                           { $$ = Expression\AssignmentNode[$1, $2, $3]; }
+    | array_short_syntax '=' expr                           { $$ = Expression\AssignmentNode[$this->toDestructuring($1), $2, $3]; }
     | variable '=' expr                                     { $$ = Expression\AssignmentNode[$1, $2, $3]; }
     | variable '=' ampersand variable                       { $$ = Expression\AssignmentByReferenceNode[$1, $2, $3, $4]; }
     | variable '=' ampersand new_expr                       { $$ = Expression\AssignmentByReferenceNode[$1, $2, $3, $4]; }
@@ -958,23 +959,23 @@ expr:
     | match
     | T_CLONE clone_argument_list                           { $$ = Expression\FunctionCallNode[Nodes\NameNode[$1], $2]; }
     | T_CLONE expr                                          { $$ = Expression\CloneNode[$1, $2]; }
-    | variable T_PLUS_EQUAL expr                            { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | variable T_MINUS_EQUAL expr                           { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | variable T_MUL_EQUAL expr                             { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | variable T_DIV_EQUAL expr                             { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | variable T_CONCAT_EQUAL expr                          { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | variable T_MOD_EQUAL expr                             { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | variable T_AND_EQUAL expr                             { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | variable T_OR_EQUAL expr                              { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | variable T_XOR_EQUAL expr                             { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | variable T_SL_EQUAL expr                              { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | variable T_SR_EQUAL expr                              { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | variable T_POW_EQUAL expr                             { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | variable T_COALESCE_EQUAL expr                        { $$ = Expression\AssignmentNode[$1, $2, $3]; }
-    | variable T_INC                                        { $$ = Expression\PostOpNode[$1, $2]; }
-    | T_INC variable                                        { $$ = Expression\UnaryOpNode[$1, $2]; }
-    | variable T_DEC                                        { $$ = Expression\PostOpNode[$1, $2]; }
-    | T_DEC variable                                        { $$ = Expression\UnaryOpNode[$1, $2]; }
+    | variable T_PLUS_EQUAL expr                            { $$ = Expression\CombinedAssignmentNode[$1, $2, $3]; }
+    | variable T_MINUS_EQUAL expr                           { $$ = Expression\CombinedAssignmentNode[$1, $2, $3]; }
+    | variable T_MUL_EQUAL expr                             { $$ = Expression\CombinedAssignmentNode[$1, $2, $3]; }
+    | variable T_DIV_EQUAL expr                             { $$ = Expression\CombinedAssignmentNode[$1, $2, $3]; }
+    | variable T_CONCAT_EQUAL expr                          { $$ = Expression\CombinedAssignmentNode[$1, $2, $3]; }
+    | variable T_MOD_EQUAL expr                             { $$ = Expression\CombinedAssignmentNode[$1, $2, $3]; }
+    | variable T_AND_EQUAL expr                             { $$ = Expression\CombinedAssignmentNode[$1, $2, $3]; }
+    | variable T_OR_EQUAL expr                              { $$ = Expression\CombinedAssignmentNode[$1, $2, $3]; }
+    | variable T_XOR_EQUAL expr                             { $$ = Expression\CombinedAssignmentNode[$1, $2, $3]; }
+    | variable T_SL_EQUAL expr                              { $$ = Expression\CombinedAssignmentNode[$1, $2, $3]; }
+    | variable T_SR_EQUAL expr                              { $$ = Expression\CombinedAssignmentNode[$1, $2, $3]; }
+    | variable T_POW_EQUAL expr                             { $$ = Expression\CombinedAssignmentNode[$1, $2, $3]; }
+    | variable T_COALESCE_EQUAL expr                        { $$ = Expression\CombinedAssignmentNode[$1, $2, $3]; }
+    | variable T_INC                                        { $$ = Expression\PostfixOpNode[$1, $2]; }
+    | T_INC variable                                        { $$ = Expression\PrefixOpNode[$1, $2]; }
+    | variable T_DEC                                        { $$ = Expression\PostfixOpNode[$1, $2]; }
+    | T_DEC variable                                        { $$ = Expression\PrefixOpNode[$1, $2]; }
     | expr T_BOOLEAN_OR expr                                { $$ = Expression\BinaryOpNode[$1, $2, $3]; }
     | expr T_BOOLEAN_AND expr                               { $$ = Expression\BinaryOpNode[$1, $2, $3]; }
     | expr T_LOGICAL_OR expr                                { $$ = Expression\BinaryOpNode[$1, $2, $3]; }
@@ -1082,12 +1083,12 @@ lexical_vars:
 ;
 
 lexical_var_list:
-      non_empty_lexical_var_list optional_comma
+      non_empty_lexical_var_list optional_comma             { trailing($1, $2); $$ = $1; }
 ;
 
 non_empty_lexical_var_list:
-      lexical_var
-    | non_empty_lexical_var_list ',' lexical_var
+      lexical_var                                           { $$ = separated($1); }
+    | non_empty_lexical_var_list ',' lexical_var            { push($1, $2, $3); }
 ;
 
 lexical_var:
@@ -1095,7 +1096,7 @@ lexical_var:
 ;
 
 name_readonly:
-      T_READONLY
+      T_READONLY                                            { $$ = Nodes\NameNode[$1]; }
 ;
 
 function_call:
@@ -1107,15 +1108,15 @@ function_call:
 ;
 
 class_name:
-      T_STATIC
+      T_STATIC                                              { $$ = Nodes\NameNode[$1]; }
     | name
 ;
 
 name:
-      T_STRING
-    | T_NAME_QUALIFIED
-    | T_NAME_FULLY_QUALIFIED
-    | T_NAME_RELATIVE
+      T_STRING                                              { $$ = Nodes\NameNode[$1]; }
+    | T_NAME_QUALIFIED                                      { $$ = Nodes\NameNode[$1]; }
+    | T_NAME_FULLY_QUALIFIED                                { $$ = Nodes\NameNode[$1]; }
+    | T_NAME_RELATIVE                                       { $$ = Nodes\NameNode[$1]; }
 ;
 
 class_name_reference:
@@ -1141,16 +1142,16 @@ ctor_arguments:
 ;
 
 constant:
-      name
-    | T_LINE
-    | T_FILE
-    | T_DIR
-    | T_CLASS_C
-    | T_TRAIT_C
-    | T_METHOD_C
-    | T_FUNC_C
-    | T_NS_C
-    | T_PROPERTY_C
+      name                                                  { $$ = $this->makeConstant($1); }
+    | T_LINE                                                { $$ = Scalar\MagicConstantNode[$1]; }
+    | T_FILE                                                { $$ = Scalar\MagicConstantNode[$1]; }
+    | T_DIR                                                 { $$ = Scalar\MagicConstantNode[$1]; }
+    | T_CLASS_C                                             { $$ = Scalar\MagicConstantNode[$1]; }
+    | T_TRAIT_C                                             { $$ = Scalar\MagicConstantNode[$1]; }
+    | T_METHOD_C                                            { $$ = Scalar\MagicConstantNode[$1]; }
+    | T_FUNC_C                                              { $$ = Scalar\MagicConstantNode[$1]; }
+    | T_NS_C                                                { $$ = Scalar\MagicConstantNode[$1]; }
+    | T_PROPERTY_C                                          { $$ = Scalar\MagicConstantNode[$1]; }
 ;
 
 class_constant:
@@ -1167,13 +1168,13 @@ array_short_syntax:
 dereferenceable_scalar:
       T_ARRAY '(' array_pair_list ')'                       { $$ = Expression\ArrayNode[$1, $2, $3, $4]; }
     | array_short_syntax
-    | T_CONSTANT_ENCAPSED_STRING
-    | '"' encaps_list '"'
+    | T_CONSTANT_ENCAPSED_STRING                            { $$ = Scalar\StringNode[$1]; }
+    | '"' encaps_list '"'                                   { $$ = Scalar\InterpolatedStringNode[$1, $2, $3]; }
 ;
 
 scalar:
-      T_LNUMBER
-    | T_DNUMBER
+      T_LNUMBER                                             { $$ = Scalar\IntegerNode[$1]; }
+    | T_DNUMBER                                             { $$ = Scalar\FloatNode[$1]; }
     | dereferenceable_scalar
     | constant
     | class_constant
@@ -1239,12 +1240,12 @@ simple_variable:
 ;
 
 static_member_prop_name:
-      simple_variable
+      simple_variable                                       { $$ = $this->unwrapVariable($1); }
 ;
 
 static_member:
       class_name_or_var T_PAAMAYIM_NEKUDOTAYIM static_member_prop_name
-          { $$ = Expression\StaticPropertyFetchNode[$1, $2, $3]; }
+          { $$ = Expression\StaticPropertyFetchNode[$1, $2, $3[0], $3[1], $3[2], $3[3]]; }
 ;
 
 new_variable:
@@ -1253,9 +1254,9 @@ new_variable:
     | new_variable T_OBJECT_OPERATOR property_name          { $$ = Expression\PropertyFetchNode[$1, $2, $3[0], $3[1], $3[2]]; }
     | new_variable T_NULLSAFE_OBJECT_OPERATOR property_name { $$ = Expression\PropertyFetchNode[$1, $2, $3[0], $3[1], $3[2]]; }
     | class_name T_PAAMAYIM_NEKUDOTAYIM static_member_prop_name
-          { $$ = Expression\StaticPropertyFetchNode[$1, $2, $3]; }
+          { $$ = Expression\StaticPropertyFetchNode[$1, $2, $3[0], $3[1], $3[2], $3[3]]; }
     | new_variable T_PAAMAYIM_NEKUDOTAYIM static_member_prop_name
-          { $$ = Expression\StaticPropertyFetchNode[$1, $2, $3]; }
+          { $$ = Expression\StaticPropertyFetchNode[$1, $2, $3[0], $3[1], $3[2], $3[3]]; }
 ;
 
 member_name:
@@ -1271,27 +1272,27 @@ property_name:
 ;
 
 list_expr:
-      T_LIST '(' inner_array_pair_list ')'                  { $$ = Expression\ListNode[$1, $2, $this->finishArrayItems($3), $4]; }
+      T_LIST '(' inner_array_pair_list ')'                  { $$ = $this->toDestructuring(Expression\ListNode[$1, $2, $this->finishArrayItems($3), $4]); }
 ;
 
 array_pair_list:
-      inner_array_pair_list
+      inner_array_pair_list                                 { $$ = $this->finishArrayItems($1); }
 ;
 
 inner_array_pair_list:
-      inner_array_pair_list ',' array_pair
-    | array_pair
+      inner_array_pair_list ',' array_pair                  { push($1, $2, $3); }
+    | array_pair                                            { $$ = separated($1); }
 ;
 
 array_pair:
-      expr
-    | ampersand variable
-    | list_expr
-    | expr T_DOUBLE_ARROW expr
-    | expr T_DOUBLE_ARROW ampersand variable
-    | expr T_DOUBLE_ARROW list_expr
-    | T_ELLIPSIS expr
-    | /* empty */
+      expr                                                  { $$ = Nodes\ArrayItemNode[null, null, null, null, $1]; }
+    | ampersand variable                                    { $$ = Nodes\ArrayItemNode[null, null, $1, null, $2]; }
+    | list_expr                                             { $$ = Nodes\ArrayItemNode[null, null, null, null, $1]; }
+    | expr T_DOUBLE_ARROW expr                              { $$ = Nodes\ArrayItemNode[$1, $2, null, null, $3]; }
+    | expr T_DOUBLE_ARROW ampersand variable                { $$ = Nodes\ArrayItemNode[$1, $2, $3, null, $4]; }
+    | expr T_DOUBLE_ARROW list_expr                         { $$ = Nodes\ArrayItemNode[$1, $2, null, null, $3]; }
+    | T_ELLIPSIS expr                                       { $$ = Nodes\ArrayItemNode[null, null, null, $1, $2]; }
+    | /* empty */                                           { $$ = Nodes\EmptyArrayItemNode[]; }
 ;
 
 encaps_list:
@@ -1324,7 +1325,7 @@ encaps_var:
 ;
 
 encaps_var_offset:
-      T_STRING                                              { $$ = Scalar\StringNode[$1]; }
+      T_STRING                                              { $$ = Scalar\UnquotedStringNode[$1]; }
     | T_NUM_STRING                                          { $$ = $this->offsetNumber($1); }
     | '-' T_NUM_STRING                                      { $$ = Expression\UnaryOpNode[$1, Scalar\IntegerNode[$2]]; }
     | plain_variable
