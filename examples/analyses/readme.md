@@ -2,7 +2,8 @@
 
 Two analyses ship with the library, and between them they answer the questions a static analysis tool,
 a linter or a refactoring script asks before it does anything: what class is this name, is this the
-global `count()` or a namespaced one, is `$this` available here, what does this closure capture.
+global `count()` or a namespaced one, is `$this` available here, what does this closure capture. The
+last chapter here puts them to work in a rule that reads the imports of a file and writes one back.
 
 **You will learn:**
 
@@ -10,6 +11,7 @@ global `count()` or a namespaced one, is `$this` available here, what does this 
 - how to write a fully qualified name back the way this file would write it
 - what function, class and `$this` a node stands in
 - what a real linter rule looks like when the tree does the bookkeeping
+- how an import is read and written, group prefix and all
 
 The two are built differently, and it matters after a mutation. `NameResolver` takes the `FileNode`,
 reads the imports of a namespace the first time it is asked about one, and keeps what it learned, so
@@ -89,7 +91,7 @@ closure or a hook, and `getClass()` gives a `ClassLikeNode` with `$name` and `$m
 anonymous class is the one whose `$name` is `null`. That is why the listing above prints the class name
 without asking which of the five declarations it is.
 
-## A linter rule in twenty lines: unused imports (unused-imports.php)
+## A linter rule over the imports of a PHP file: remove the unused, add a new one (unused-imports.php)
 
 ```
 unused import on line 5: Shop\Tax\Rate
@@ -98,17 +100,28 @@ unused import on line 6: Shop\Receipt
 - use Shop\Tax\Rate as TaxRate;
 - use Shop\{Invoice, Receipt};
 + use Shop\{Invoice};
+
+- use Shop\{Invoice, Receipt};
++ use Shop\{Invoice, Receipt, Discount, Tax\Vat as VatRate};
+
+InvalidArgumentException: The name 'Billing\Ledger' does not stand under the prefix of the group.
 ```
 
-This is the whole thing: collect what the file refers to, resolved to fully qualified names, compare
-with what it imports, and remove the imports nothing refers to. Two dozen lines including the printing
-and the group-use arithmetic, and the removal is `remove()`, so a whole statement takes its line with
-it while one item of a group leaves the rest of the group alone.
+The rule itself is twenty lines: collect what the file refers to, resolved to fully qualified names,
+compare with what it imports, and remove the imports nothing refers to. The removal is `remove()`, so a
+whole statement takes its line with it while one item of a group leaves the rest of the group alone.
 
 What the tree hands over here is most of the rule: which token is a name, which name is a class rather
 than a function or a constant, what the imports of this file are, and whether a name resolves to the
 imported class or to a different one of the same short name. Those questions are the reason the same
 rule is long in a tool that works over a flat token array; it has to answer them first.
+
+The second half of the run is the mirror operation. `addImport()` takes the **fully qualified** name
+and writes it the way the statement writes its other items: whole in a plain import, and under the
+prefix in a group, which is why `Shop\Tax\Vat` comes out as `Tax\Vat as VatRate`. A name that does not
+stand under the prefix is refused rather than written wrong, and that refusal is the point: an item
+carries no prefix of its own, so an item moved from one statement to another silently imports
+something else.
 
 The two places a rule shipped to users would go further are both visible in the source. A class named
 in a doc comment counts as a use, and the tree hands you the comment without reading it: what a doc

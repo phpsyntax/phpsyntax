@@ -239,6 +239,9 @@ $resolver = new NameResolver($file);
 $resolver->resolveClass($name);                          // against namespace and imports
 $resolver->isGlobalFunctionCall($call, 'count');         // right inside a namespace too
 $resolver->getShortName($fullName, SymbolKind::ClassLike, $at); // and the way back
+$resolver->findDeclaration('Shop\Billing\Invoice', SymbolKind::ClassLike); // which declaration in this file is it
+
+$use->addImport('Shop\Money', alias: 'Cash');            // written the way this statement writes items
 
 $scope = new Scope;
 $scope->hasThis($node);                                  // is $this available here
@@ -247,6 +250,11 @@ $scope->hasThis($node);                                  // is $this available h
 `getShortName()` is the half most libraries leave out: to insert code you must write a name the way
 *this* file would write it, through an alias, through an imported prefix, relative to the namespace, or
 fully qualified when nothing else is safe.
+
+Imports are the other half. An item of a `use` statement means what the statement says, so in a group
+its name is written under the prefix and carries none of its own. `addImport()` takes the fully
+qualified name and writes it the way that statement writes the rest, and refuses a name that does not
+belong in the group; `UseItemNode::$fullName` reads it back the same way, prefix included.
 
  <!---->
 

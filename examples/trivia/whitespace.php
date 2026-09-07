@@ -12,6 +12,7 @@
 
 require __DIR__ . '/../bootstrap.php';
 
+use PhpSyntax\Indentation;
 use PhpSyntax\Nodes\Expression\BinaryOpNode;
 use PhpSyntax\Nodes\Member\MethodNode;
 use PhpSyntax\Nodes\Statement\ClassNode;
@@ -23,10 +24,10 @@ $code = sample(<<<'PHP'
 	class Report
 	{
 		public function rows(): array { return $this->rows; }
-		public function count(): int
-		{
-			return count($this->rows)+1;
-		}
+			public function count(): int
+			{
+				return count($this->rows)+1;
+			}
 	}
 	PHP);
 
@@ -73,4 +74,13 @@ $statement->setIndentation($indentation . $style->indent);
 $body->closeBrace->ensureLeadingNewline($style->eol);
 $body->closeBrace->setIndentation($indentation);
 
-echo (string) $file, "\n";
+// the second method came indented one level too deep, and a whole construct moves in one call:
+// every line the node opens, and with a heredoc its body and closing delimiter too, so the value
+// it stands for does not change
+$printed = (string) $file;
+Indentation::shift($methods[1], -1, $style);
+
+echo "--- the method put back where it belongs ---\n";
+printDiff($printed, (string) $file);
+
+echo "\n", (string) $file, "\n";

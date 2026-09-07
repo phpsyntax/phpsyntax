@@ -73,7 +73,7 @@ so the node finds it, which means a comment can be removed exactly where it was 
 exists on the token (`Token::removeTrivia()`, `replaceTrivia()`) for when you already hold one, and
 `removeDocComment()` is the special case of the same thing.
 
-## Whitespace as data: a PHP code formatter in ten lines (whitespace.php)
+## Whitespace as data: a small PHP code formatter (whitespace.php)
 
 Whitespace is data you can read and write, not a formatting pass you have to trigger.
 
@@ -84,6 +84,16 @@ space after the class brace: null
 indentation of "return": "\t\t\t"
 indentation of "+": ""
 line indentation of "+": "\t\t\t"
+
+--- the method put back where it belongs ---
+- 		public function count(): int
+- 		{
+- 			return count($this->rows) + 1;
+- 		}
++ 	public function count(): int
++ 	{
++ 		return count($this->rows) + 1;
++ 	}
 
 <?php
 class Report
@@ -113,9 +123,9 @@ code around you sits.
 
 The rest of the run is a formatter of a dozen lines. A blank line between two methods is
 `setBlankLinesBefore(1)`. Breaking a one-line method body across lines is `ensureLeadingNewline()` plus
-`setIndentation()` on three tokens. The braces, the body statement and the closing brace go where you
-say, and **nothing else in the file moves**: the second method keeps its formatting, the sample keeps
-its tabs, and the file still ends the way it ended.
+`setIndentation()`, once for the opening brace, once for the statement and once for the closing brace.
+And **nothing else in the file moves**: the sample keeps its tabs and the file still ends the way it
+ended.
 
 The line ending comes from `Style::detectEol($code)` rather than from a constant in the tool, which is
 how the same script edits a CRLF file without turning it into a mixed one. That single argument is the
@@ -125,6 +135,11 @@ Why those helpers rather than writing `"\n\t"` into some trivia array yourself? 
 to stay canonical, the line ending belongs to the trailing trivia of the token that ends the line, and a
 misplaced one makes `getTrailingSpace()` blind. `ensureLeadingNewline()` puts it where the lexer would
 have. Build on it and your tool behaves like the parser, not like a string replacement.
+
+The last step is the one a hand-written loop gets wrong. The second method came in indented a level
+too deep, and `Indentation::shift($node, -1, $style)` puts it back: every line the node opens moves,
+and where the node holds a heredoc its body and closing delimiter move with it, so the string the
+heredoc stands for is the same afterwards. Miss that and a formatter quietly rewrites data.
 
 `Style` carries the conventions of a file: the indentation unit, the line ending and the tab width. It
 is the one object a formatting tool passes around, and the library itself has no opinion about what is
