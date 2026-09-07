@@ -1,6 +1,7 @@
 <?php declare(strict_types=1);
 
 use PhpSyntax\{Builder, Node, Parser, Token, Trivia};
+use PhpSyntax\Nodes\Expression\{ArrayNode, FunctionCallNode};
 use PhpSyntax\Nodes\{FileNode, MemberNode, ModifiersNode, NodeList, PlainNodeList, SeparatedNodeList, StatementNode};
 use PhpSyntax\Nodes\Member\MethodNode;
 use PhpSyntax\Nodes\Statement\{BlockNode, ClassNode, NamespaceNode};
@@ -118,6 +119,68 @@ test('a statement inserted into a file stands where its neighbor stands', functi
 	$copy->setEdgeTrivia(leading: []); // the open tag came with the copy
 	$file->statements->append($copy);
 	Assert::same("<?php\n\$a = 1;\n\$a = 1;\n", (string) $file);
+});
+
+
+test('the trailing separator stands where the last item ended', function () {
+	$parser = new Parser;
+	$builder = new Builder;
+	$file = $parser->parse("<?php\n\$a = [\n\t1,\n\t2 // two\n];\nf(1, 2);\n");
+	$items = ($file->findFirst(ArrayNode::class) ?? throw new LogicException)->items;
+	Assert::null($items->getTrailingSeparator());
+	$items->setTrailingSeparator($comma = new Token(ord(','), ','));
+	Assert::same("<?php\n\$a = [\n\t1,\n\t2, // two\n];\nf(1, 2);\n", (string) $file);
+	Assert::same($comma, $items->getTrailingSeparator());
+
+	// removed, it leaves its trailing trivia to the last item
+	$items->setTrailingSeparator(null);
+	Assert::same("<?php\n\$a = [\n\t1,\n\t2 // two\n];\nf(1, 2);\n", (string) $file);
+
+	// one replacing another takes its trivia, and one with trivia of its own is written as it is
+	$items->setTrailingSeparator(new Token(ord(','), ','));
+	$items->setTrailingSeparator(new Token(ord(','), ','));
+	Assert::same("<?php\n\$a = [\n\t1,\n\t2, // two\n];\nf(1, 2);\n", (string) $file);
+	$arguments = ($file->findFirst(FunctionCallNode::class) ?? throw new LogicException)->arguments->items;
+	$arguments->setTrailingSeparator(new Token(ord(','), ',')->setTrailingTrivia([new Trivia(Trivia::Whitespace, ' ')]));
+	Assert::same("<?php\n\$a = [\n\t1,\n\t2, // two\n];\nf(1, 2, );\n", (string) $file);
+});
+
+
+test('the comments of a trailing separator stay when it is removed or replaced', function () {
+	$parser = new Parser;
+	$items = fn(FileNode $file) => ($file->findFirst(ArrayNode::class) ?? throw new LogicException)->items;
+
+	$file = $parser->parse("<?php\n\$a = [\n\t1,\n\t2\n\t/* c */,\n];\n");
+	$items($file)->setTrailingSeparator(null);
+	Assert::same("<?php\n\$a = [\n\t1,\n\t2\n\t/* c */\n];\n", (string) $file);
+
+	$file = $parser->parse("<?php\n\$a = [\n\t1,\n\t2\n\t,\n];\n");
+	$items($file)->setTrailingSeparator(null);
+	Assert::same("<?php\n\$a = [\n\t1,\n\t2\n];\n", (string) $file);
+
+	$file = $parser->parse("<?php\n\$a = [\n\t1,\n\t2, // two\n];\n");
+	$items($file)->setTrailingSeparator(new Token(ord(','), ',')->setTrailingTrivia([new Trivia(Trivia::Whitespace, ' ')]));
+	Assert::same("<?php\n\$a = [\n\t1,\n\t2, // two\n];\n", (string) $file);
+
+	$file = $parser->parse("<?php\n\$a = [\n\t1,\n\t2\n\t/* c */,\n];\n");
+	$items($file)->setTrailingSeparator(new Token(ord(','), ',')->setTrailingTrivia([new Trivia(Trivia::Whitespace, ' ')]));
+	Assert::same("<?php\n\$a = [\n\t1,\n\t2\n\t/* c */,\n];\n", (string) $file);
+});
+
+
+test('a trailing separator written as it stands changes nothing, nor does one in a list being built', function () {
+	$file = new Parser()->parse("<?php\n\$a = [1, 2];\n\$b = [1, 2,];\n");
+	[$first, $second] = $file->find(ArrayNode::class);
+	$revision = $file->revision;
+	$first->items->setTrailingSeparator(null);
+	$second->items->setTrailingSeparator($second->items->getTrailingSeparator());
+	Assert::same($revision, $file->revision);
+
+	// the parser builds a list of tokens that carry their trivia already
+	$list = new SeparatedNodeList([new StubNode(new Token(Token::Identifier, 'a')->setTrailingTrivia([new Trivia(Trivia::Whitespace, ' ')]))]);
+	$list->setTrailingSeparator($comma = comma());
+	Assert::same('a ,', (string) $list);
+	Assert::same([], $comma->trailingTrivia);
 });
 
 

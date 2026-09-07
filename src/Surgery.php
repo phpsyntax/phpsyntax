@@ -18,7 +18,8 @@ use function count;
  * Takes a node out of the tree, puts another in its place or writes a slot that comes with a token of its own, and
  * sews up the trivia around the cut: the comments, the lines and the whitespace the node leaves behind or the new
  * one is given. It also takes a node a write is given, a copy of one standing in a tree.
- * @internal the algorithm of `Node::remove()`, `Node::replaceWith()`, `Token::replaceWith()` and the setters of a type
+ * @internal the algorithm of `Node::remove()`, `Node::replaceWith()`, `Token::replaceWith()`,
+ *   `SeparatedNodeList::setTrailingSeparator()` and the setters of a type
  */
 final class Surgery
 {
@@ -184,6 +185,78 @@ final class Surgery
 	public static function take(Node $node): Node
 	{
 		return $node->parent !== null ? $node->withoutEdgeTrivia() : $node->setEdgeTrivia([], []);
+	}
+
+
+	/**
+	 * See `SeparatedNodeList::setTrailingSeparator()`; `$last` is the last token of the last item, and the separator
+	 * taken out and the one put in are already written into the list.
+	 */
+	public static function moveSeparatorTrivia(?Token $last, ?Token $current, ?Token $separator): void
+	{
+		if ($current === null) {
+			if ($separator && $last && !$separator->leadingTrivia && !$separator->trailingTrivia) {
+				$separator->setTrailingTrivia($last->trailingTrivia);
+				$last->setTrailingTrivia([]);
+			}
+
+			return;
+
+		} elseif ($separator && !$separator->leadingTrivia && !$separator->trailingTrivia) {
+			$separator->setLeadingTrivia($current->leadingTrivia)->setTrailingTrivia($current->trailingTrivia);
+			return;
+		}
+
+		$before = $last === null ? [] : $last->trailingTrivia;
+		$opensLine = $before && end($before)->isLineEnding();
+		if ($separator === null) {
+			$leading = $current->leadingTrivia;
+			$trailing = $current->trailingTrivia;
+			if ($opensLine) { // the line of the separator goes, unless a comment stands on it
+				while (
+					!array_any($leading, fn(Trivia $trivia) => $trivia->isComment())
+					&& $trailing
+					&& $trailing[0]->is(Trivia::Whitespace)
+				) {
+					array_shift($trailing);
+				}
+
+				$gap = array_any([...$leading, ...$trailing], fn(Trivia $trivia) => $trivia->isComment()) ? [...$leading, ...$trailing] : [];
+
+			} else {
+				$gap = [...self::splitComments($leading, atLineStart: false)[1], ...$trailing];
+			}
+
+			self::closeGap($last, $gap, $last ? self::findNeighbor($last, 1) : null);
+			return;
+		}
+
+		[, $comments] = self::splitComments($current->leadingTrivia, $opensLine);
+
+		// a separator with trivia of its own keeps them, followed by what the old one carried beyond whitespace
+		$kept = $current->trailingTrivia;
+		while ($kept && $kept[0]->is(Trivia::Whitespace)) {
+			array_shift($kept);
+		}
+
+		if ($kept) {
+			$own = $separator->trailingTrivia;
+			if (array_any($kept, fn(Trivia $trivia) => $trivia->isLineEnding())) {
+				$own = array_values(array_filter($own, fn(Trivia $trivia) => !$trivia->isLineEnding()));
+			}
+
+			if ($kept[0]->isLineEnding() && $own && end($own)->is(Trivia::Whitespace)) {
+				array_pop($own);
+			} elseif ($kept[0]->isComment() && (!$own || !end($own)->is(Trivia::Whitespace))) {
+				$own[] = Trivia::fromText(' ');
+			}
+
+			$separator->setTrailingTrivia([...$own, ...$kept]);
+		}
+
+		if ($comments) {
+			$separator->setLeadingTrivia([...$comments, ...$separator->leadingTrivia]);
+		}
 	}
 
 

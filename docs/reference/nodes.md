@@ -446,7 +446,8 @@ Extends `NodeList`. Handwritten class.
 | `hasTrailingSeparator(): bool` | Whether a separator follows the last item. |
 | `append(Node $item, ?Token $separator = null): void` | Appends an item; the separator before it is derived from the existing ones unless given. |
 | `insert(int $index, Node $item, ?Token $separator = null): void` | Inserts an item at the index. A missing separator is modeled on the existing ones, or on `, ` in a one-line list, and then the item also takes the indentation and the line ending of its neighbor in a multi-line list; a separator given is inserted as it is. The separator is the one that goes with the item: the one after it, and for the last item the one before it, so what the separators already there carry stays with the items they follow. |
-| `setTrailingSeparator(?Token $separator): static` | Writes the separator after the last item, or removes it with null. |
+| `getTrailingSeparator(): ?Token` | The separator after the last item; null where there is none. |
+| `setTrailingSeparator(?Token $separator): static` | Writes the separator after the last item, or removes it with null. The separator stands where the item ended: one without trivia of its own takes over the trailing trivia of the last item, or the trivia of the separator it replaces, and one removed leaves its comments and the end of its line to the last item; a separator with trivia keeps them, followed by the comments and the line ending of the one it replaces, and one in a list standing nowhere, as the parser builds it, is written as it is. |
 | `removeItem(Node $item): void` | Takes the item out with its trivia, together with the separator that goes with it, the one after it and for the last item the one before it, and tidies nothing; `Node::remove()` takes the lines with it. |
 | `getChildren(): array` |  |
 | `findSlotOf(Node\|Token $child): ?string` |  |
