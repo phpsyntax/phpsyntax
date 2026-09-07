@@ -7,7 +7,7 @@
 
 namespace PhpSyntax\Nodes;
 
-use PhpSyntax\{Helpers, Node, Token, Trivia};
+use PhpSyntax\{Helpers, Node, Surgery, Token, Trivia};
 use function count;
 
 
@@ -117,10 +117,23 @@ final class SeparatedNodeList extends NodeList
 	}
 
 
-	/** Writes the separator after the last item, or removes it with null. */
+	/** The separator after the last item; null where there is none. */
+	public function getTrailingSeparator(): ?Token
+	{
+		return $this->hasTrailingSeparator() ? $this->separators[count($this->separators) - 1] : null;
+	}
+
+
+	/**
+	 * Writes the separator after the last item, or removes it with null. The separator stands where the item ended:
+	 * one without trivia of its own takes over the trailing trivia of the last item, or the trivia of the separator it
+	 * replaces, and one removed leaves its comments and the end of its line to the last item; a separator with trivia
+	 * keeps them, followed by the comments and the line ending of the one it replaces, and one in a list standing
+	 * nowhere, as the parser builds it, is written as it is.
+	 */
 	public function setTrailingSeparator(?Token $separator): static
 	{
-		$current = $this->hasTrailingSeparator() ? $this->separators[count($this->separators) - 1] : null;
+		$current = $this->getTrailingSeparator();
 		if ($separator === $current) {
 			return $this;
 		} elseif ($separator && $this->items === []) {
@@ -129,8 +142,8 @@ final class SeparatedNodeList extends NodeList
 			$this->prepareValue($separator, null);
 		}
 
-		if ($this->hasTrailingSeparator()) {
-			$this->release($this->separators[count($this->separators) - 1]);
+		if ($current) {
+			$this->release($current);
 			array_pop($this->separators);
 		}
 
@@ -140,6 +153,11 @@ final class SeparatedNodeList extends NodeList
 		}
 
 		$this->structureChanged();
+		if ($this->parent === null) { // a list being built, as the parser builds it, whose tokens carry their trivia already
+			return $this;
+		}
+
+		Surgery::moveSeparatorTrivia($this->items[count($this->items) - 1]->getLastToken(), $current, $separator);
 		return $this;
 	}
 
