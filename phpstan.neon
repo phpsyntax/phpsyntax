@@ -9,3 +9,11 @@ parameters:
 		- tests/corpus/*
 		- tests/temp/*
 
+	ignoreErrors:
+		-	# rule numbers come from the generated Action tables, so they always index the generated rule tables
+			message: '#^Offset .* might not exist on non-empty-list<int>\.$#'
+			path: src/Parser.php
+
+		-	# an action builds the list from the item the production has, while the slot is typed by every kind that may stand in it
+			message: '#^Parameter \#\d+ \$\w+ of class .+ constructor expects PhpSyntax\\Nodes\\(Separated)?NodeList<.+>, PhpSyntax\\Nodes\\(Separated)?NodeList<.+> given\.$#'
+			path: src/ParserData.php

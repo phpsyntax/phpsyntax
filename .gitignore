@@ -5,4 +5,5 @@
 /grammar/tmp_parser.*
 /grammar/y.output
 /temp
+tests/**/output
 /tests/temp
