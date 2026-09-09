@@ -130,11 +130,13 @@ $counts[$i++] = $counts[$i++] + 1      true   false        false    leave alone
 $total = $subtotal + $vat              false  true         false    leave alone
 $net = $net /* without VAT */ + $fee   true   true         true     leave alone (comment)
 
-parentheses      redundant    why
-($user->name)    true         nothing around them binds tighter
-(new DateTime)   false        the parent reaches inside them
-($a + $b)        false        what stands around them binds at least as tightly
-($a + $b)        true         nothing around them binds tighter
+parentheses      redundant    reached by   why
+($user->name)    true         -            nothing around them binds tighter
+(new DateTime)   false        Member       the parent reaches inside them
+($factory)       true         Call         nothing around them binds tighter
+(FOO)            false        ClassName    the parent reaches inside them
+($a + $b)        false        -            what stands around them binds at least as tightly
+($a + $b)        true         -            nothing around them binds tighter
 ```
 
 `$a = $a + $b` becomes `$a += $b`. That innocent rule needs three questions answered, and the table is
@@ -162,8 +164,12 @@ in a rule that has to be kept in sync with PHP. And where the composition is not
 answers `false`: a codemod that keeps a redundant pair of parentheses is dull, one that removes a
 necessary pair is a bug report.
 
-`isDereferenced()` is still there and answers the narrower question underneath, whether the parent
-reaches into the expression, as it does with `(new DateTime)->format()`.
+Underneath sits the narrower question of how the parent reaches in at all, and `getAccessKind()`
+answers it: `Member` for `->` and `[]`, `Call` for `(...)`, `ClassName` for `::`, and `null` where
+nothing reaches in; `isDereferenced()` is the same question asked without the kind. The kind is not
+decoration. `($factory)()` may lose its parentheses, because a variable can be called bare, while
+`(FOO)::class` may not: without them the name itself would be the class, instead of the class of
+whatever the constant holds.
 
 ## Writing the result back
 

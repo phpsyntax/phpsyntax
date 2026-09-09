@@ -1,6 +1,6 @@
 # The concrete syntax tree (CST) of PHP: nodes, named slots, tokens and trivia
 
-Six programs about what you actually hold after parsing, and the vocabulary the rest of the library
+Seven programs about what you actually hold after parsing, and the vocabulary the rest of the library
 speaks.
 
 **You will learn:**
@@ -10,6 +10,7 @@ speaks.
 - what a name knows about itself before anything resolves it
 - why a literal carries its notation as well as its value
 - why the class of a node follows what the code means and not how it is spelled
+- why one class covers two spellings of a destructuring but not three ways of assigning
 - which argument a parameter gets when the call is written by name, unpacked or not bound at all
 
 ```shell
@@ -18,6 +19,7 @@ php examples/tree/find.php
 php examples/tree/names.php
 php examples/tree/literals.php
 php examples/tree/destructuring.php
+php examples/tree/assignments.php
 php examples/tree/arguments.php
 ```
 
@@ -233,6 +235,34 @@ parentheses that were written, so the text prints back byte for byte.
 The last row is the other half of the deal. The same square brackets on the right of an assignment are
 an array literal and stay an `ArrayNode`, because there they mean a value. One question, one answer:
 `ArrayNode` is a literal, `ListNode` is a target, and neither of them is sometimes the other.
+
+## One meaning for one node: the three ways of assigning (assignments.php)
+
+The other half of the same deal: where two spellings mean one thing they share a class, and where one
+spelling means three things it does not.
+
+```
+written            node                        target         operator
+$a = 1             AssignmentNode              VariableNode   =
+$a += 1            CombinedAssignmentNode      VariableNode   +=
+$a ??= 1           CombinedAssignmentNode      VariableNode   ??=
+$a .= 1            CombinedAssignmentNode      VariableNode   .=
+$a = &$b           AssignmentByReferenceNode   VariableNode   =&
+[$a, $b] = $x      AssignmentNode              ListNode       =
+list($a, $b) = $x  AssignmentNode              ListNode       =
+
+Unexpected '+='
+```
+
+A rule about the combined assignment asks for `CombinedAssignmentNode` and is done; it does not read
+the text of the operator to find out that `=` is not one of its own. Which operation is baked in is
+still a question of the token, so all thirteen of them are one class, the same way `BinaryOpNode`
+covers every binary operator.
+
+The `target` column is where the split pays for itself. Only the plain assignment takes a
+destructuring, so its slot is `ExpressionNode|ListNode` while the combined one is `ExpressionNode`, and
+a caller reading the target of a combined assignment needs no narrowing. That is not a convention the
+library invented: `[$a, $b] += 1` is not PHP, and the last line of the output is the parser saying so.
 
 ## Which argument a parameter gets, however the call is written (arguments.php)
 

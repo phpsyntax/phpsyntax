@@ -26,6 +26,8 @@ $code = sample(<<<'PHP'
 
 	$name = ($user->name);
 	$date = (new DateTime)->format('Y');
+	$out = ($factory)();
+	$id = (FOO)::class;
 	$sum = ($a + $b) * $c;
 	$all = ($a + $b);
 	PHP);
@@ -62,13 +64,15 @@ foreach ($file->find(AssignmentNode::class) as $assign) {
 echo "\n";
 
 // parentheses: isRedundant() weighs how tightly both sides bind, so precedence and dereferencing
-// are one answer rather than two half-answers
-printf("%-16s %-12s %s\n", 'parentheses', 'redundant', 'why');
+// are one answer rather than two half-answers; getAccessKind() is the half that says which way
+// the parent reaches in, because what may stand there bare differs by the kind
+printf("%-16s %-12s %-12s %s\n", 'parentheses', 'redundant', 'reached by', 'why');
 foreach ($file->find(ParenthesizedNode::class) as $parens) {
 	printf(
-		"%-16s %-12s %s\n",
+		"%-16s %-12s %-12s %s\n",
 		$parens->text,
 		var_export($parens->isRedundant(), return: true),
+		$parens->getAccessKind()->name ?? '-',
 		match (true) {
 			$parens->isRedundant() => 'nothing around them binds tighter',
 			$parens->isDereferenced() => 'the parent reaches inside them',
