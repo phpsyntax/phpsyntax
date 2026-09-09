@@ -196,6 +196,29 @@ test('$plainName is the name without the dollar, and null where the name is an e
 });
 
 
+test('the plain and the combined assignment are told apart by the class', function () {
+	$expression = fn(string $code) => parseStatement($code)->expression;
+
+	Assert::type(PhpSyntax\Nodes\Expression\AssignmentNode::class, $expression("\$a = 1;\n"));
+	Assert::type(PhpSyntax\Nodes\Expression\AssignmentByReferenceNode::class, $expression("\$a = &\$b;\n"));
+	foreach (['+=', '-=', '*=', '/=', '.=', '%=', '&=', '|=', '^=', '<<=', '>>=', '**=', '??='] as $operator) {
+		$combined = $expression("\$a $operator 1;\n");
+		Assert::type(PhpSyntax\Nodes\Expression\CombinedAssignmentNode::class, $combined, $operator);
+		Assert::same($operator, $combined->operator->text);
+	}
+
+	// the plain one takes a destructuring on the left, which is why its slot is wider; the grammar
+	// takes a variable alone on the left of the combined one
+	$destructuring = $expression("[\$a, \$b] = \$x;\n");
+	assert($destructuring instanceof PhpSyntax\Nodes\Expression\AssignmentNode);
+	Assert::type(PhpSyntax\Nodes\Expression\ListNode::class, $destructuring->target);
+	Assert::exception(
+		fn() => (new Parser)->parseExpression('[$a, $b] += 1'),
+		PhpSyntax\ParseException::class,
+	);
+});
+
+
 test('destructuring is a ListNode however it is written, an array literal is not', function () {
 	$target = function (string $code): PhpSyntax\Nodes\Expression\ListNode {
 		$assign = parseStatement($code)->expression;
