@@ -27,6 +27,6 @@ final class InlineHtmlNode extends StatementNode
 	 */
 	public function isPreamble(): bool
 	{
-		return preg_match("~^(\xEF\xBB\xBF)?(#![^\r\n]*\\R)?$~", $this->html->text) === 1;
+		return preg_match("~^(\xEF\xBB\xBF)?(#![^\r\n]*\\R)?$~D", $this->html->text) === 1;
 	}
 }

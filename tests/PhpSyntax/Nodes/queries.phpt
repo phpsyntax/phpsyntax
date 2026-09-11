@@ -3,6 +3,7 @@
 use PhpSyntax\AccessKind;
 use PhpSyntax\Nodes\Member\MethodNode;
 use PhpSyntax\Nodes\Statement\ExpressionStatementNode;
+use PhpSyntax\Nodes\Statement\InlineHtmlNode;
 use PhpSyntax\Parser;
 use PhpSyntax\TriviaKind;
 use Tester\Assert;
@@ -456,4 +457,19 @@ test('isRepeatableRead()', function () {
 	Assert::true(parseStatement("\"a\$b\";\n")->expression->isRepeatableRead());
 	Assert::true(parseStatement("<<<X\n\ta\n\tX;\n")->expression->isRepeatableRead());
 	Assert::false(parseStatement("\"a{\$b->c()}\";\n")->expression->isRepeatableRead());
+});
+
+
+test('isPreamble() is a BOM, a hashbang line, or both, and nothing more', function () {
+	$first = function (string $code): InlineHtmlNode {
+		$stmt = (new Parser)->parse($code)->statements->getItems()[0];
+		assert($stmt instanceof InlineHtmlNode);
+		return $stmt;
+	};
+	Assert::true($first("\u{FEFF}<?php\n")->isPreamble());
+	Assert::true($first("#!/usr/bin/env php\n<?php\n")->isPreamble());
+	Assert::true($first("\u{FEFF}#!/usr/bin/env php\r\n<?php\n")->isPreamble());
+	Assert::false($first("#!/usr/bin/env php\n\n<?php\n")->isPreamble()); // the blank line is output
+	Assert::false($first("\n<?php\n")->isPreamble());
+	Assert::false($first("<html>\n<?php\n")->isPreamble());
 });
