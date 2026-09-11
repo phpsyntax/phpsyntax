@@ -30,7 +30,8 @@
 		"phpstan": "phpstan analyse",
 		"tester": "tester tests -s",
 		"compile-grammar": "php grammar/build.php",
-		"reference": "php docs/reference/generate.php"
+		"reference": "php docs/reference/generate.php",
+		"verify-examples": "php examples/verify.php"
 	},
 	"config": {
 		"allow-plugins": {
