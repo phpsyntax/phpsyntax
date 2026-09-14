@@ -520,6 +520,41 @@ test('remove inside a line keeps the whitespace around', function () {
 });
 
 
+test('remove merging blank lines leaves the narrower gap, and none at the edge of the list', function () {
+	$code = "<?php\nclass A\n{\n\tpublic \$a;\n\n\tpublic \$b;\n\n\n\t// c\n\tpublic \$c;\n\n\tpublic \$d;\n}\n";
+	$members = fn(FileNode $file) => ($file->findFirst(PhpSyntax\Nodes\Statement\ClassNode::class) ?? throw new LogicException)->members;
+
+	$file = parse($code);
+	$members($file)[1]->remove();
+	Assert::same("<?php\nclass A\n{\n\tpublic \$a;\n\n\n\n\t// c\n\tpublic \$c;\n\n\tpublic \$d;\n}\n", (string) $file);
+
+	$file = parse($code);
+	$members($file)[1]->remove(mergeBlankLines: true);
+	Assert::same("<?php\nclass A\n{\n\tpublic \$a;\n\n\t// c\n\tpublic \$c;\n\n\tpublic \$d;\n}\n", (string) $file);
+
+	$members($file)[0]->remove(mergeBlankLines: true);
+	Assert::same("<?php\nclass A\n{\n\t// c\n\tpublic \$c;\n\n\tpublic \$d;\n}\n", (string) $file);
+
+	$members($file)[1]->remove(mergeBlankLines: true);
+	Assert::same("<?php\nclass A\n{\n\t// c\n\tpublic \$c;\n}\n", (string) $file);
+
+	// the items of a separated list, and a line ending of the file
+	$file = parse("<?php\r\n\$a = [\r\n\t1,\r\n\r\n\t2,\r\n\r\n\r\n\t3,\r\n];\r\n");
+	($file->findFirst(ArrayNode::class) ?? throw new LogicException)->items[1]->remove(mergeBlankLines: true);
+	Assert::same("<?php\r\n\$a = [\r\n\t1,\r\n\r\n\t3,\r\n];\r\n", (string) $file);
+
+	// within a line there are no blank lines to merge
+	$file = parse('<?php $a; $b; $c;');
+	stmts($file)[1]->remove(mergeBlankLines: true);
+	Assert::same('<?php $a;  $c;', (string) $file);
+
+	// nor where the node shares its line with another one
+	$file = parse("<?php\nclass A {\n\tpublic \$a; public \$b;\n\n\tpublic \$c;\n}\n");
+	$members($file)[1]->remove(mergeBlankLines: true);
+	Assert::same("<?php\nclass A {\n\tpublic \$a;\n\n\tpublic \$c;\n}\n", (string) $file);
+});
+
+
 test('a comment sharing the line of a removed node stands on a line of its own, or before the next token within a line', function () {
 	$file = parse("<?php\n/* lead */ \$b;\n\$c;\n");
 	stmts($file)[0]->remove();
@@ -532,6 +567,64 @@ test('a comment sharing the line of a removed node stands on a line of its own, 
 	$file = parse('<?php $a; $b /* x */; $c;');
 	stmts($file)[1]->remove();
 	Assert::same('<?php $a;  /* x */ $c;', (string) $file);
+});
+
+
+test('remove merging blank lines counts them above the comments the node leaves behind', function () {
+	$file = parse("<?php\n\$a;\n\n/** d */\n\$b;\n\n\n\$c;\n");
+	stmts($file)[1]->remove(mergeBlankLines: true);
+	Assert::same("<?php\n\$a;\n\n/** d */\n\$c;\n", (string) $file);
+
+	$file = parse("<?php\n\$a;\n\n\$b; // b\n\n\n\$c;\n");
+	stmts($file)[1]->remove(mergeBlankLines: true);
+	Assert::same("<?php\n\$a;\n\n// b\n\$c;\n", (string) $file);
+
+	$file = parse("<?php\n\$a;\n\n/** d */\n\$b;\n\n\n\$c;\n");
+	stmts($file)[1]->remove(CommentPolicy::MoveToPreviousToken, mergeBlankLines: true);
+	Assert::same("<?php\n\$a;\n/** d */\n\n\$c;\n", (string) $file);
+	assertAsReparsed($file);
+	Assert::same(0, $file->statements[1]->getFirstToken()->countBlankLinesBefore());
+
+	// the blank lines between a comment and the node stay below the comment
+	$file = parse("<?php\nclass A\n{\n\t// columns\n\n\tpublic \$a;\n\n\tpublic \$b;\n}\n");
+	$members = ($file->findFirst(PhpSyntax\Nodes\Statement\ClassNode::class) ?? throw new LogicException)->members;
+	$members[0]->remove(mergeBlankLines: true);
+	Assert::same("<?php\nclass A\n{\n\t// columns\n\n\tpublic \$b;\n}\n", (string) $file);
+
+	$file = parse("<?php\n\$x;\n\n// columns\n\n\$a;\n\n\$b;\n");
+	stmts($file)[1]->remove(mergeBlankLines: true);
+	Assert::same("<?php\n\$x;\n\n// columns\n\n\$b;\n", (string) $file);
+
+	// and so do those between two comments
+	$file = parse("<?php\n\$x;\n\n// c\n\n// e\n\n\$a;\n\n\$b;\n");
+	stmts($file)[1]->remove(mergeBlankLines: true);
+	Assert::same("<?php\n\$x;\n\n// c\n\n// e\n\n\$b;\n", (string) $file);
+
+	// toward the end of the list no more of them than the gap merged there
+	$file = parse("<?php\nclass A {\n\tpublic \$a;\n\n\t// c\n\n\tpublic \$b;\n}\n");
+	($file->findFirst(PhpSyntax\Nodes\Statement\ClassNode::class) ?? throw new LogicException)->members[1]->remove(mergeBlankLines: true);
+	Assert::same("<?php\nclass A {\n\tpublic \$a;\n\t// c\n}\n", (string) $file);
+});
+
+
+test('remove merging blank lines keeps the gap toward the edge of the list and the line ending of the file', function () {
+	$file = parse("<?php\n\n\$a;\n\n\n\$b;\n\n\$c;\n");
+	stmts($file)[0]->remove(mergeBlankLines: true);
+	Assert::same("<?php\n\n\$b;\n\n\$c;\n", (string) $file);
+
+	// the open tag ends a line, but its text is no line ending to write
+	$file = parse("<?php\r\n\$a;\r\n\r\n\$b;\r\n");
+	stmts($file)[0]->remove(mergeBlankLines: true);
+	Assert::same("<?php\r\n\$b;\r\n", (string) $file);
+
+	$file = parse("<?php\r\n\$a;\r\n\r\n\$b;\r\n\$c;\r\n");
+	stmts($file)[1]->remove(mergeBlankLines: true);
+	Assert::same("<?php\r\n\$a;\r\n\$c;\r\n", (string) $file);
+
+	// the text after a close tag is no gap to merge
+	$file = parse("<?php\n\$a;\n\n\$b ?>\n\n\nx");
+	stmts($file)[1]->remove(mergeBlankLines: true);
+	Assert::same("<?php\n\$a;\n\n?>\n\n\nx", (string) $file);
 });
 
 

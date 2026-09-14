@@ -374,7 +374,7 @@ final class Surgery
 
 
 	/** See `Node::remove()`. */
-	public static function remove(Node $node, CommentPolicy $comments): void
+	public static function remove(Node $node, CommentPolicy $comments, bool $mergeBlankLines = false): void
 	{
 		$parent = $node->parent;
 		if (!$parent instanceof NodeList) {
@@ -392,6 +392,13 @@ final class Surgery
 		$last = $tokens[count($tokens) - 1] ?? null;
 		$previous = $first?->getPrevious();
 		$next = $last?->getNext();
+		$blankLines = $lineEnding = null;
+		$start = $node->getFirstToken();
+		if ($mergeBlankLines && $start && $next && Indentation::opensLine($start) && Indentation::opensLine($next)) {
+			$blankLines = self::countMergedBlankLines($node, $parent, $start, $next);
+			$lineEnding = self::findLineEnding($start);
+		}
+
 		$alone = self::standsAlone($first->leadingTrivia ?? [], $last->trailingTrivia ?? [], $previous, $next);
 		$own = $first->leadingTrivia ?? [];
 		$lineStart = 0; // where the line of the node starts in its leading trivia, the head being the lines above it
@@ -401,7 +408,26 @@ final class Surgery
 			}
 		}
 
-		[$leading, $moved] = self::splitComments($alone ? array_slice($own, 0, $lineStart) : $own, $first?->startsLine() ?? false);
+		$head = $alone ? array_slice($own, 0, $lineStart) : $own;
+		[$leading, $moved] = self::splitComments($head, $first?->startsLine() ?? false);
+		$below = 0; // blank lines between the last comment above the node and the node, which stay below the comment
+		if ($lineEnding !== null) { // the lines above the comments are set anew by the merged count, those between them stay
+			$commentKeys = array_keys(array_filter($head, fn(Trivia $trivia) => $trivia->isComment()));
+			if ($commentKeys) {
+				$from = $commentKeys[0] - (($head[$commentKeys[0] - 1] ?? null)?->is(Trivia::Whitespace) ? 1 : 0);
+				$to = end($commentKeys) + (($head[end($commentKeys) + 1] ?? null)?->is(Trivia::LineEnding) ? 2 : 1);
+				$moved = array_slice($head, $from, $to - $from);
+				$below = count(array_filter(array_slice($head, $to), fn(Trivia $trivia) => $trivia->is(Trivia::LineEnding)));
+				if ($parent->indexOf($node) === count($parent) - 1) { // the gap toward the end of the list is the merged one
+					$below = min($below, $blankLines);
+				}
+
+				$head = [...array_slice($head, 0, $from), ...array_slice($head, $to)];
+			}
+
+			$leading = array_values(array_filter($head, fn(Trivia $trivia) => !$trivia->isWhitespace()));
+		}
+
 		$tail = $alone ? array_slice($own, $lineStart) : [];
 		$indentation = ($tail[0] ?? null)?->is(Trivia::Whitespace) ? $tail[0] : null;
 		$moved = [...$moved, ...self::splitComments($tail, atLineStart: true)[1]];
@@ -441,6 +467,10 @@ final class Surgery
 			}
 		}
 
+		if ($lineEnding !== null) {
+			$next->setBlankLinesBefore(0, $lineEnding); // they are set anew above what the node leaves to it
+		}
+
 		$neighbor = $previous;
 		$previous = $previous && !self::opensOutput($previous) ? $previous : null; // trivia after it would be output
 		$before = $after = [];
@@ -460,13 +490,17 @@ final class Surgery
 		}
 
 		if ($next) {
+			$gap = $after && $below ? array_fill(0, $below, new Trivia(Trivia::LineEnding, (string) $lineEnding)) : [];
 			$after = $previous ? self::setApart($after, [...$previous->trailingTrivia, ...$leading]) : $after;
-			$next->setLeadingTrivia([...$leading, ...$after, ...$trailing, ...$next->leadingTrivia]);
+			$next->setLeadingTrivia([...$leading, ...$after, ...$gap, ...$trailing, ...$next->leadingTrivia]);
 		} elseif ($previous) {
 			$previous->setTrailingTrivia([...$previous->trailingTrivia, ...$leading, ...$after]);
 		}
 
 		$parent->removeItem($node);
+		if ($blankLines !== null && $next->startsLine()) {
+			$next->setBlankLinesBefore($blankLines, $lineEnding);
+		}
 
 		self::splitSeam($neighbor, $next);
 	}
@@ -531,6 +565,23 @@ final class Surgery
 		if ($leading !== $next->leadingTrivia) {
 			$next->setLeadingTrivia($leading);
 		}
+	}
+
+
+	/**
+	 * The blank lines left between the neighbors of a node that goes, both standing on lines of their own: the narrower
+	 * of the two gaps it stood between, and the one toward the edge where it was the first or the last item of its list.
+	 * @param  NodeList<covariant Node>  $list
+	 */
+	private static function countMergedBlankLines(Node $node, NodeList $list, Token $first, Token $next): int
+	{
+		$index = $list->indexOf($node);
+		$last = count($list) - 1;
+		return match (true) {
+			$index === 0 && $last > 0 => $first->countBlankLinesBefore(),
+			$index === $last && $last > 0 => $next->countBlankLinesBefore(),
+			default => min($first->countBlankLinesBefore(), $next->countBlankLinesBefore()),
+		};
 	}
 
 

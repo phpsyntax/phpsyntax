@@ -44,7 +44,7 @@ Node of the concrete syntax tree; every token of the source is reachable through
 | `setEdgeTrivia(?array $leading = null, ?array $trailing = null): static` | Writes the trivia on the outer edges of the node: before its first token and after its last one. A `null` leaves that edge alone, `[]` clears it, and a node without tokens takes neither. |
 | `withoutEdgeTrivia(): static` | A deep copy without a parent and without the trivia on its outer edges, which belong to the place it was copied from. |
 | `replaceWith(Node $node): void` | Replaces this node in its parent; the trivia around the old node stay in place around the new one, or with the tokens on either side when the new one has no tokens, an empty list, and where the new one then stands right against a token it would be read together with, `.` against `1` or `return` against `FOO`, a space keeps the two apart. |
-| `remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken): void` | Removes this node from its list, together with the separator that goes with it. A node alone on its lines takes the lines with it (indentation and line ending), otherwise the whitespace around stays; its comments, those on its edges included, go where the policy says, each with its indentation and the line ending after it. |
+| `remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken, bool $mergeBlankLines = false): void` | Removes this node from its list, together with the separator that goes with it. A node alone on its lines takes the lines with it (indentation and line ending), otherwise the whitespace around stays; its comments, those on its edges included, go where the policy says, each with its indentation and the line ending after it. With `$mergeBlankLines`, where the node and the token after it stand at the start of a line, the two gaps of blank lines the node stood between become the narrower of them, or the one toward the edge where the node was the first or the last item of its list, counted above the comments the node leaves behind. |
 | `__toString(): string` | The node printed back to source, the trivia on its outer edges included; `$text` leaves them out. |
 
 ### AnonymousFunctionNode
@@ -184,7 +184,7 @@ Extends `Node`.
 
 | Member | Description |
 |---|---|
-| `remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken): void` | Removes the statement as `Node::remove()` does. A statement ended by a close tag leaves the tag behind as an empty statement, so that the text after it stays text. A statement that opens its code too, as `<?=` does, goes whole, and so does the empty statement of a close tag, whose removal is for the caller to decide. |
+| `remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken, bool $mergeBlankLines = false): void` | Removes the statement as `Node::remove()` does. A statement ended by a close tag leaves the tag behind as an empty statement, so that the text after it stays text. A statement that opens its code too, as `<?=` does, goes whole, and so does the empty statement of a close tag, whose removal is for the caller to decide. |
 | `interruptsFlow(): bool` | Whether the code does not go on after the statement: `return`, `break`, `continue`, `goto`, `throw` or `exit`. It reads the statement itself, so an `if` whose every branch returns is no such statement; that is control flow. |
 | `getFirstToken(): Token` | Narrows the return type of `Node::getFirstToken()`. |
 | `getLastToken(): Token` | Narrows the return type of `Node::getLastToken()`. |
