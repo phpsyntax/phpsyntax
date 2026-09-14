@@ -24,7 +24,7 @@ abstract class StatementNode extends Node
 	 * an empty statement, so that the text after it stays text. A statement that opens its code too, as `<?=`
 	 * does, goes whole, and so does the empty statement of a close tag, whose removal is for the caller to decide.
 	 */
-	public function remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken): void
+	public function remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken, bool $mergeBlankLines = false): void
 	{
 		$tag = $this->getLastToken();
 		if (
@@ -40,7 +40,7 @@ abstract class StatementNode extends Node
 			$tag->setLeadingTrivia($leading); // neither the replacement nor the insertion lays the tag out anew
 		}
 
-		parent::remove($comments);
+		parent::remove($comments, $mergeBlankLines);
 	}
 
 

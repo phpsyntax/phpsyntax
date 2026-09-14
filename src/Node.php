@@ -589,11 +589,13 @@ abstract class Node implements \Stringable
 	 * lines takes the lines with it (indentation and line ending), otherwise the whitespace around stays; the
 	 * comments it owns, inside it, on its line, its doc comment and the ones right above it, go where the policy
 	 * says, each with its indentation and the line ending after it, while a comment above set apart by a blank
-	 * line stays where it is.
+	 * line stays where it is. With `$mergeBlankLines`, where the node and the token after it stand at the start of a line,
+	 * the two gaps of blank lines the node stood between become the narrower of them, or the one toward the edge where
+	 * the node was the first or the last item of its list, counted above the comments the node leaves behind.
 	 */
-	public function remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken): void
+	public function remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken, bool $mergeBlankLines = false): void
 	{
-		Surgery::remove($this, $comments);
+		Surgery::remove($this, $comments, $mergeBlankLines);
 	}
 
 
