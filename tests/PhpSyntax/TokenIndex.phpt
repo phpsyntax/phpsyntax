@@ -5,6 +5,7 @@ use PhpSyntax\Nodes\ArgumentNode;
 use PhpSyntax\Nodes\ArrayItemNode;
 use PhpSyntax\Nodes\Expression\ArrayNode;
 use PhpSyntax\Nodes\Expression\BinaryOpNode;
+use PhpSyntax\Nodes\ExpressionNode;
 use PhpSyntax\Nodes\FileNode;
 use PhpSyntax\Nodes\NodeList;
 use PhpSyntax\Nodes\Statement\BlockNode;
@@ -301,4 +302,49 @@ test('line width counts the indentation visually and drops trailing whitespace',
 	$item = $file->find(ArrayItemNode::class)[0];
 	Assert::same(strlen("    'xy'    => 1,"), $item->getFirstToken()?->getLineWidth($style));
 	Assert::same(strlen("    'xy'    ") + 1, $item->doubleArrow?->getVisualColumn($style));
+});
+
+
+test('offset range of a node and a token, in the current text', function () {
+	$code = "<?php\n\$a = (1 + \$b);\n";
+	$file = (new Parser)->parse($code);
+	$index = $file->getIndex();
+	$sum = $file->find(BinaryOpNode::class)[0];
+	Assert::same([12, 18], $index->getOffsetRange($sum)); // '1 + $b'
+	Assert::same([16, 18], $index->getOffsetRange($sum->right));
+	Assert::same([14, 15], $index->getOffsetRange($sum->operator));
+	Assert::null($index->getOffsetRange(new NodeList([])));
+
+	$sum->left->getFirstToken()?->setText('100');
+	Assert::same([12, 20], $index->getOffsetRange($sum));
+	Assert::same([18, 20], $index->getOffsetRange($sum->right));
+});
+
+
+test('a node is found by its offsets: the outermost of the class, none without the exact text', function () {
+	$code = "<?php\n\$a = (1 + \$b);\n";
+	$file = (new Parser)->parse($code);
+	$index = $file->getIndex();
+	$sum = $file->find(BinaryOpNode::class)[0];
+	Assert::same($sum, $index->findNode(12, 18));
+	Assert::same($sum, $index->findNode(12, 18, ExpressionNode::class));
+	Assert::null($index->findNode(12, 18, StatementNode::class));
+	Assert::null($index->findNode(12, 17));
+	Assert::same($sum->parent, $index->findNode(11, 19)); // the parentheses
+	Assert::same($sum->right, $index->findNode(16, 18, ExpressionNode::class));
+
+	// the statement and its assignment share nothing, the statement ends with the semicolon; the list of the
+	// one statement stands at the same offsets and is the outermost
+	$statement = $file->statements->items[0];
+	Assert::same($file->statements, $index->findNode(6, 20));
+	Assert::same($statement, $index->findNode(6, 20, StatementNode::class));
+	Assert::null($index->findNode(6, 20, ExpressionNode::class));
+	Assert::same($statement->getChildren()[0], $index->findNode(6, 19, ExpressionNode::class));
+
+	// the map follows a mutation
+	$sum->left->getFirstToken()?->setText('100');
+	Assert::null($index->findNode(12, 18));
+	Assert::same($sum, $index->findNode(12, 20));
+	$file->statements->removeItem($statement);
+	Assert::null($index->findNode(12, 20));
 });
