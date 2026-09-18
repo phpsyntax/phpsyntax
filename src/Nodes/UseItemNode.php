@@ -7,7 +7,8 @@
 
 namespace PhpSyntax\Nodes;
 
-use PhpSyntax\{Node, SymbolKind, Token};
+use PhpSyntax\{CommentPolicy, Node, SymbolKind, Token};
+use function count;
 
 
 /**
@@ -52,6 +53,21 @@ final class UseItemNode extends Node
 		$this->name = $name;
 		$asKeyword === null || $this->asKeyword = $asKeyword;
 		$alias === null || $this->alias = $alias;
+	}
+
+
+	/**
+	 * Removes the item as `Node::remove()` does, and the whole statement where the item is the only one it imports,
+	 * which `StatementNode::remove()` takes with its line.
+	 */
+	public function remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken, bool $mergeBlankLines = false): void
+	{
+		$statement = $this->getStatement();
+		if ($statement !== null && count($statement->items) === 1) {
+			$statement->remove($comments, $mergeBlankLines);
+		} else {
+			parent::remove($comments, $mergeBlankLines);
+		}
 	}
 
 

@@ -720,6 +720,7 @@ Extends `Node`.
 |---|---|
 | `$symbolKind: SymbolKind` | What the item imports: its own type where a group use writes one per item, else what the statement imports. |
 | `$fullName: string` | The name the item imports, without a leading backslash: what is written here, and in a group use the prefix of the statement before it. |
+| `remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken, bool $mergeBlankLines = false): void` | Removes the item as `Node::remove()` does, and the whole statement where the item is the only one it imports, which `StatementNode::remove()` takes with its line. |
 | `getStatement(): ?Statement\UseNode` | The import the item belongs to; null for an item that is not in one. |
 | `getFirstToken(): Token` | Narrows the return type of `Node::getFirstToken()`. |
 | `getLastToken(): Token` | Narrows the return type of `Node::getLastToken()`. |
