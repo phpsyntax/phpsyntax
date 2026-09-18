@@ -628,6 +628,19 @@ test('remove merging blank lines keeps the gap toward the edge of the list and t
 });
 
 
+test('an import item goes alone, or with its statement where it is the only one', function () {
+	$file = parse("<?php\nuse A\\B;\nuse C\\{D, E};\n\nuse F, G;\n\$x;\n");
+	$items = $file->find(PhpSyntax\Nodes\UseItemNode::class);
+	$items[0]->remove();
+	$items[1]->remove();
+	$items[4]->remove();
+	Assert::same("<?php\nuse C\\{E};\n\nuse F;\n\$x;\n", (string) $file);
+
+	$items[2]->remove(mergeBlankLines: true);
+	Assert::same("<?php\nuse F;\n\$x;\n", (string) $file);
+});
+
+
 test('comments of a removed node follow the policy', function () {
 	$code = "<?php\n\$a;\n/** doc */\n\$b; // b\n\$c;\n";
 	$file = parse($code);
