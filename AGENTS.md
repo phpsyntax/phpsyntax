@@ -10,7 +10,7 @@ It is my fervent wish that this file guide every AI coding agent working with co
 
 PhpSyntax is a **lossless concrete syntax tree** for PHP: every token of the source is in the tree, whitespace and comments are trivia attached to tokens, and printing the tree reproduces the input byte for byte. It is the layer a formatter, a refactoring tool or a code checker is built on.
 
-One namespace, one PSR-4 root: `PhpSyntax` (`src/`) holds the lexer, the parser, the nodes, the printer, navigation, mutation and analyses. It has **no dependencies** and never imports Nette, php-parser or anything from `vendor/`; `composer.json` requires PHP and `ext-tokenizer` alone, everything else is `require-dev`. Everything is public API but for what says `@internal`.
+One namespace, one PSR-4 root: `PhpSyntax` (`src/`) holds the lexer, the parser, the nodes, the printer, navigation, mutation and analyses. Beside it ships `bin/phpsyntax`, the command line tool: a single script in `PhpSyntax\Cli` with no classes of its own, which reads the library the way a user of it does. It has **no dependencies** and never imports Nette, php-parser or anything from `vendor/`; `composer.json` requires PHP and `ext-tokenizer` alone, everything else is `require-dev`. Everything is public API but for what says `@internal`.
 
 ## Essential commands
 
@@ -19,6 +19,7 @@ One namespace, one PSR-4 root: `PhpSyntax` (`src/`) holds the lexer, the parser,
 - `composer compile-grammar`: regenerates `src/ParserData.php`, `src/TokenKind.php`, `src/LayoutData.php` and, in every node class, the `Slots` constant and the constructor from `grammar/` (`php.y` for the parser, `nodes.php` for the slots of the nodes); the rest of a node class is handwritten. Commit the output once the code style of `dresscode.neon` has run over it: what is committed is the formatted form, so a bare rebuild differs from it and that difference is no defect. A rebuild marks every generated file in `git status`, because the generator writes LF and the checkout has CRLF; `git diff` is the one that says what really changed. The procedure for a new PHP version is in `docs/internals.md`.
 - `composer reference`: regenerates `docs/reference/nodes.md` (the base classes and the node classes with their slots, properties and methods) from `grammar/nodes.php` and the classes. Commit the output.
 - Round-trip over an external corpus: `PHPSYNTAX_CORPUS=/path/to/php/code composer tester`.
+- `php bin/phpsyntax check <path>`: the round trip over a file or a tree, outside the test suite; `dump`, `tokens`, `resolve` and `find` answer what the tree looks like. `--help` lists the options, `tests/Tools/cli.phpt` pins the exit codes.
 
 ## Conventions
 

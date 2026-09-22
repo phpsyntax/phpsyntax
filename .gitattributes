@@ -12,5 +12,6 @@ vendor/         export-ignore
 *               text=auto
 *.php*          diff=php
 *.sh            text eol=lf
+bin/phpsyntax   text eol=lf
 tests/corpus/**  -text
 tests/PhpSyntax/Parser/dump/**    -text

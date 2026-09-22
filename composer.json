@@ -22,6 +22,7 @@
 		"nette/phpstan-rules": "^1.0",
 		"nikic/php-parser": "^5.0"
 	},
+	"bin": ["bin/phpsyntax"],
 	"autoload": {
 		"classmap": ["src/"],
 		"psr-4": {

@@ -1,0 +1,666 @@
+#!/usr/bin/env php
+<?php declare(strict_types=1);
+
+/**
+ * This file is part of the PhpSyntax, a lossless syntax tree for PHP (https://phpsyntax.deegee.dev)
+ * Copyright (c) 2026 David Grudl (https://davidgrudl.com)
+ */
+
+namespace PhpSyntax\Cli;
+
+use FilesystemIterator;
+use Generator;
+use InvalidArgumentException;
+use PhpSyntax\Analyses\NameResolver;
+use PhpSyntax\Lexer\Lexer;
+use PhpSyntax\{Node, ParseException, Parser, Printer, SymbolKind, Token, TokenKind, Trivia};
+use PhpSyntax\Nodes\NameNode;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use ReflectionClass;
+use RuntimeException;
+
+/** the options of each command; the type of the default tells a flag from a value and parses it */
+const Commands = [
+	'check' => ['lint' => false, 'quiet' => false],
+	'dump' => ['trivia' => true, 'positions' => false, 'depth' => 0, 'filter' => '', 'at' => '', 'as' => 'file'],
+	'tokens' => [],
+	'resolve' => [],
+	'find' => ['text' => true, 'as' => 'file'],
+];
+
+/** the options every command takes: what to read */
+const InputOptions = ['eval' => '', 'ext' => 'php,phpt,inc'];
+
+const Aliases = ['e' => 'eval', 'q' => 'quiet', 'f' => 'filter', 'p' => 'positions'];
+
+
+foreach ([__DIR__ . '/../../../autoload.php', __DIR__ . '/../vendor/autoload.php'] as $autoload) {
+	if (is_file($autoload)) {
+		require $autoload;
+		exit(main(array_values(array_slice(array_map(strval(...), (array) $_SERVER['argv']), 1))));
+	}
+}
+
+fwrite(STDERR, "PhpSyntax is not installed: run composer install first.\n");
+exit(2);
+
+
+/** @param  list<string>  $args */
+function main(array $args): int
+{
+	foreach ($args as $arg) {
+		if ($arg === '--') {
+			break;
+		} elseif ($arg === '-h' || $arg === '--help') {
+			echo help();
+			return 0;
+		}
+	}
+
+	$command = $args[0] ?? '';
+	if (!isset(Commands[$command])) {
+		return fail($command === '' ? 'Say what to do.' : "Unknown command '$command'.");
+	}
+
+	try {
+		[$operands, $options] = parseArgs(array_slice($args, 1), Commands[$command] + InputOptions);
+		return match ($command) {
+			'check' => commandCheck($operands, $options),
+			'dump' => commandDump($operands, $options),
+			'tokens' => commandTokens($operands, $options),
+			'resolve' => commandResolve($operands, $options),
+			'find' => commandFind($operands, $options),
+		};
+	} catch (InvalidArgumentException $e) {
+		return fail($e->getMessage());
+	} catch (RuntimeException $e) {
+		fwrite(STDERR, $e->getMessage() . "\n");
+		return 1;
+	}
+}
+
+
+/**
+ * Parses each input and prints it back: the round trip is the invariant the library stands on, and an input
+ * where it fails is the bug report.
+ * @param  list<string>  $operands
+ * @param  array<string, bool|int|string>  $options
+ */
+function commandCheck(array $operands, array $options): int
+{
+	$parser = new Parser;
+	$read = $failures = 0;
+	foreach (inputs($operands, $options) as $label => $code) {
+		$read++;
+		try {
+			$node = $parser->parse($code); // the round trip is the promise about a whole file
+
+		} catch (ParseException $e) {
+			if ($options['lint'] && !isValidPhp($code)) {
+				fwrite(STDERR, "invalid PHP, skipped: $label\n");
+			} else {
+				$failures++;
+				echo describeParseError($label, $e);
+			}
+
+			continue;
+		}
+
+		$printed = Printer::print($node);
+		if ($printed !== $code) {
+			$failures++;
+			echo describeDifference($label, $code, $printed);
+		} elseif (!$options['quiet']) {
+			fwrite(STDERR, "ok $label\n");
+		}
+	}
+
+	fwrite(STDERR, "$read read, $failures failed\n");
+	return $failures === 0 ? 0 : 1;
+}
+
+
+/**
+ * Prints the tree: the class of each node, the slot its child stands in, and every token with its trivia.
+ * @param  list<string>  $operands
+ * @param  array<string, bool|int|string>  $options
+ */
+function commandDump(array $operands, array $options): int
+{
+	if ($options['at'] !== '' && $options['filter'] !== '') {
+		throw new InvalidArgumentException('Pass either --at or --filter, not both.');
+	}
+
+	$parser = new Parser;
+	$found = $failures = 0;
+	foreach (inputs($operands, $options) as $label => $code) {
+		try {
+			$node = parseInput($parser, $code, (string) $options['as']);
+		} catch (ParseException $e) {
+			$failures++;
+			fwrite(STDERR, describeParseError($label, $e));
+			continue;
+		}
+
+		fwrite(STDERR, "==> $label\n");
+		if ($options['positions'] && $node->getFile() === null) {
+			fwrite(STDERR, "a fragment stands in no file, so its tokens have no position\n");
+		}
+
+		foreach (selectNodes($node, $code, $options) as $selected) {
+			$found++;
+			echo renderNode($selected, $options, (int) $options['depth'], '');
+		}
+	}
+
+	if ($options['filter'] !== '') {
+		fwrite(STDERR, "$found found\n");
+	}
+
+	return $found > 0 && $failures === 0 ? 0 : 1;
+}
+
+
+/**
+ * Lists what the lexer makes of the code: the only view of a file the grammar refuses, and the way to see
+ * what token emulation did on a runtime older than the syntax.
+ * @param  list<string>  $operands
+ * @param  array<string, bool|int|string>  $options
+ */
+function commandTokens(array $operands, array $options): int
+{
+	$lexer = new Lexer;
+	foreach (inputs($operands, $options) as $label => $code) {
+		fwrite(STDERR, "==> $label\n");
+		foreach ($lexer->tokenize($code) as $token) {
+			printf("%5s  %-28s %s\n", $token->originalLine, kindName($token), quote(shorten($token->text)));
+		}
+	}
+
+	return 0;
+}
+
+
+/**
+ * What each name of the file refers to, resolved against its namespace and its imports, and what the names
+ * that refer to nothing are instead.
+ * @param  list<string>  $operands
+ * @param  array<string, bool|int|string>  $options
+ */
+function commandResolve(array $operands, array $options): int
+{
+	$parser = new Parser;
+	$failures = 0;
+	foreach (inputs($operands, $options) as $label => $code) {
+		try {
+			$file = $parser->parse($code);
+		} catch (ParseException $e) {
+			$failures++;
+			fwrite(STDERR, describeParseError($label, $e));
+			continue;
+		}
+
+		fwrite(STDERR, "==> $label\n");
+		$resolver = new NameResolver($file);
+		foreach ($file->find(NameNode::class) as $name) {
+			$resolved = match (true) {
+				!$name->isReference() => $name->isDeclaration() ? 'declares or imports' : 'stands for itself',
+				$name->role === SymbolKind::Function => $resolver->resolveFunction($name),
+				$name->role === SymbolKind::Constant => $resolver->resolveConstant($name),
+				default => $resolver->resolveClass($name),
+			};
+			printf("%5s:%-3s %-10s %-28s %s\n", $name->token->getLine(), $name->token->getColumn(), $name->role->name, shorten($name->text, 28), $resolved);
+		}
+	}
+
+	return $failures === 0 ? 0 : 1;
+}
+
+
+/**
+ * Every occurrence of the node class in the inputs, as a position and the code it stands for: the way to
+ * learn what a construct is called in the tree.
+ * @param  list<string>  $operands
+ * @param  array<string, bool|int|string>  $options
+ */
+function commandFind(array $operands, array $options): int
+{
+	$class = array_shift($operands) ?? throw new InvalidArgumentException('Name the node class to look for.');
+	$parser = new Parser;
+	$found = $failures = 0;
+	foreach (inputs($operands, $options) as $label => $code) {
+		try {
+			$node = parseInput($parser, $code, (string) $options['as']);
+		} catch (ParseException $e) {
+			$failures++;
+			fwrite(STDERR, describeParseError($label, $e));
+			continue;
+		}
+
+		foreach ($node->find(resolveNodeFilter($class)) as $match) {
+			$found++;
+			$token = $match->getFirstToken();
+			echo $label
+				. ($token?->getLine() === null ? '' : ":{$token->getLine()}:{$token->getColumn()}") // a fragment stands nowhere
+				. ($options['text'] ? '  ' . quote(shorten(oneLine($match->text))) : '')
+				. "\n";
+		}
+	}
+
+	fwrite(STDERR, "$found found\n");
+	return $found > 0 && $failures === 0 ? 0 : 1;
+}
+
+
+/**
+ * Splits the arguments into operands and options; an option the command does not have is an error, and a
+ * flag takes a no- prefix to turn it off.
+ * @param  list<string>  $args
+ * @param  array<string, bool|int|string>  $defaults
+ * @return array{list<string>, array<string, bool|int|string>}
+ */
+function parseArgs(array $args, array $defaults): array
+{
+	$operands = [];
+	$options = $defaults;
+	while (($arg = array_shift($args)) !== null) {
+		if ($arg === '--') {
+			return [[...$operands, ...$args], $options];
+		} elseif ($arg === '-' || !str_starts_with($arg, '-')) {
+			$operands[] = $arg;
+			continue;
+		}
+
+		$parts = explode('=', ltrim($arg, '-'), 2);
+		$value = $parts[1] ?? null;
+		$name = Aliases[$parts[0]] ?? $parts[0];
+		$negated = !array_key_exists($name, $defaults)
+			&& str_starts_with($name, 'no-')
+			&& is_bool($defaults[substr($name, 3)] ?? null);
+		$name = $negated ? substr($name, 3) : $name;
+		$default = $defaults[$name] ?? throw new InvalidArgumentException("Unknown option '$arg'.");
+
+		if (is_bool($default)) {
+			if ($value !== null) {
+				throw new InvalidArgumentException("Option '$arg' takes no value.");
+			}
+
+			$options[$name] = !$negated;
+
+		} else {
+			$value ??= array_shift($args) ?? throw new InvalidArgumentException("Option '$arg' needs a value.");
+			if (is_int($default) && !preg_match('~^\d+$~', $value)) {
+				throw new InvalidArgumentException("Option '$arg' needs a whole number, '$value' given.");
+			}
+
+			settype($value, get_debug_type($default));
+			$options[$name] = $value;
+		}
+	}
+
+	return [$operands, $options];
+}
+
+
+/**
+ * The code to work on: the argument of --eval, standard input, the files named, a directory recursively.
+ * @param  list<string>  $operands
+ * @param  array<string, bool|int|string>  $options
+ * @return Generator<string, string>  what to call the input => its code
+ */
+function inputs(array $operands, array $options): Generator
+{
+	if ($options['eval'] !== '') {
+		yield '<argument>' => (string) $options['eval'];
+		return;
+	} elseif ($operands === []) {
+		throw new InvalidArgumentException('Nothing to read: name a file, a directory, - for standard input, or pass --eval.');
+	}
+
+	$extensions = array_map(fn(string $ext) => strtolower(trim($ext)), explode(',', (string) $options['ext']));
+	$read = 0;
+	foreach ($operands as $operand) {
+		if ($operand === '-') {
+			$read++;
+			yield '<stdin>' => readCode('php://stdin');
+		} elseif (is_dir($operand)) {
+			foreach (findFiles($operand, $extensions) as $file) {
+				$read++;
+				yield $file => readCode($file);
+			}
+		} else {
+			$read++;
+			yield $operand => readCode($operand);
+		}
+	}
+
+	if ($read === 0) {
+		throw new InvalidArgumentException("Nothing to read: no file of $options[ext] stands under " . implode(' or ', $operands) . '.');
+	}
+}
+
+
+/**
+ * @param  list<string>  $extensions
+ * @return list<string>
+ */
+function findFiles(string $dir, array $extensions): array
+{
+	$files = [];
+	$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS));
+	foreach ($iterator as $file) {
+		if (in_array(strtolower($file->getExtension()), $extensions, strict: true)) {
+			$files[] = str_replace('\\', '/', $file->getPathname());
+		}
+	}
+
+	sort($files);
+	return $files;
+}
+
+
+function readCode(string $file): string
+{
+	$code = @file_get_contents($file);
+	return $code === false
+		? throw new RuntimeException("Cannot read $file")
+		: $code;
+}
+
+
+/**
+ * Parses the code the way --as says: a whole file, one of the fragments the parser has an entry point for,
+ * or any node class through parseFragment().
+ * @throws ParseException
+ */
+function parseInput(Parser $parser, string $code, string $as): Node
+{
+	return match ($as) {
+		'file' => $parser->parse($code),
+		'expression' => $parser->parseExpression($code),
+		'statement' => $parser->parseStatement($code),
+		'type' => $parser->parseType($code),
+		'name' => $parser->parseName($code),
+		default => $parser->parseFragment(resolveNodeClass($as), $code),
+	};
+}
+
+
+/**
+ * The node class a fragment is parsed as.
+ * @return class-string<Node>
+ */
+function resolveNodeClass(string $name): string
+{
+	$class = resolveNodeFilter($name);
+	return is_a($class, Node::class, allow_string: true)
+		? $class
+		: throw new InvalidArgumentException("'$class' is not a node class.");
+}
+
+
+/**
+ * The node class or interface a short name stands for; a name with a namespace separator is taken as
+ * written, and whether a node ever stands in it is for Node::find() to refuse.
+ * @return class-string
+ */
+function resolveNodeFilter(string $name): string
+{
+	static $index;
+	$index ??= indexNodeClasses();
+	$class = str_contains($name, '\\')
+		? $name
+		: $index[$name] ?? throw new InvalidArgumentException("Unknown node class '$name'.");
+
+	return class_exists($class) || interface_exists($class)
+		? $class
+		: throw new InvalidArgumentException("There is no class '$class'.");
+}
+
+
+/**
+ * The node classes and interfaces by their short names, read from the directory they live in.
+ * @return array<string, string>
+ */
+function indexNodeClasses(): array
+{
+	$dir = dirname((string) new ReflectionClass(Node::class)->getFileName());
+	$index = ['Node' => Node::class];
+	$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator("$dir/Nodes", FilesystemIterator::SKIP_DOTS));
+	foreach ($iterator as $file) {
+		if ($file->getExtension() === 'php') {
+			$namespace = str_replace(['/', '\\'], '\\', substr($file->getPath(), strlen($dir)));
+			$index[$file->getBasename('.php')] = 'PhpSyntax' . $namespace . '\\' . $file->getBasename('.php');
+		}
+	}
+
+	return $index;
+}
+
+
+/**
+ * The nodes to dump: the one at the position --at names, every node of the class --filter names, or the
+ * whole tree.
+ * @param  array<string, bool|int|string>  $options
+ * @return list<Node>
+ */
+function selectNodes(Node $root, string $code, array $options): array
+{
+	if ($options['at'] !== '') {
+		return [nodeAt($root, $code, (string) $options['at'])];
+	} elseif ($options['filter'] !== '') {
+		return $root->find(resolveNodeFilter((string) $options['filter']));
+	}
+
+	return [$root];
+}
+
+
+/**
+ * The innermost node at the position, written as line:column or as a byte offset, its ancestors named on
+ * the error channel so that it is clear what it sits in.
+ */
+function nodeAt(Node $root, string $code, string $position): Node
+{
+	$offset = str_contains($position, ':')
+		? offsetOf($code, ...array_map(intval(...), explode(':', $position, 2)))
+		: (int) $position;
+	$index = $root->getFile()?->getIndex() ?? throw new InvalidArgumentException('--at works on a whole file.');
+	foreach ($index->getTokens() as $token) {
+		if ($offset < $index->getOffset($token) + strlen($token->text)) {
+			$node = $token->parent ?? throw new InvalidArgumentException("Nothing stands at $position.");
+			$ancestors = [];
+			for ($ancestor = $node; $ancestor !== null; $ancestor = $ancestor->parent) {
+				$ancestors[] = shortName($ancestor::class);
+			}
+
+			fwrite(STDERR, implode(' > ', array_reverse($ancestors)) . "\n");
+			return $node;
+		}
+	}
+
+	throw new InvalidArgumentException("Nothing stands at $position.");
+}
+
+
+/** The byte offset of the line and the column, both counted from one, the column in characters. */
+function offsetOf(string $code, int $line, int $column): int
+{
+	$offset = 0;
+	for ($i = 1; $i < $line; $i++) {
+		$end = strpos($code, "\n", $offset);
+		$offset = $end === false
+			? throw new InvalidArgumentException("The code has no line $line.")
+			: $end + 1;
+	}
+
+	$text = explode("\n", substr($code, $offset), 2)[0];
+	if (strlen($text) < $column - 1) { // bytes are an upper bound of the characters, so a column past them is past the line
+		throw new InvalidArgumentException("Line $line has no column $column.");
+	}
+
+	return $offset + (preg_match('~^.{' . ($column - 1) . '}~u', $text, $m) ? strlen($m[0]) : $column - 1);
+}
+
+
+/**
+ * Renders the subtree as indented lines: what each node is, the slot its child stands in, and the text, the
+ * position and the trivia of each token, shortening a text too long to read in a terminal.
+ * @param  array<string, bool|int|string>  $options
+ * @param  int  $depth  how many levels are left to descend; zero for all of them
+ * @param  ?string  $label  the slot the node stands in, a dash for an item of a list, null for the root
+ */
+function renderNode(Node|Token $node, array $options, int $depth, string $indent, ?string $label = null): string
+{
+	$prefix = $indent . ($label === null ? '' : "$label ");
+	if ($node instanceof Token) {
+		$line = $prefix . kindName($node) . ' ' . quote(shorten($node->text));
+		if ($options['positions'] && $node->getLine() !== null) {
+			$line .= '  @' . $node->getLine() . ':' . $node->getColumn();
+		}
+
+		foreach ($options['trivia'] ? ['<' => $node->leadingTrivia, '>' => $node->trailingTrivia] : [] as $mark => $trivia) {
+			if ($trivia !== []) {
+				$line .= '  ' . $mark . implode(' ', array_map(
+					fn(Trivia $item) => $item->kind->name . ($item->inInterpolation ? '*' : '') . quote(shorten($item->text)),
+					$trivia,
+				));
+			}
+		}
+
+		return "$line\n";
+	}
+
+	$children = $node->getChildren();
+	if ($depth === 1 && $children !== []) {
+		return $prefix . shortName($node::class) . ' ...' . count($children) . " children\n";
+	}
+
+	$output = $prefix . shortName($node::class) . "\n";
+	foreach ($children as $child) {
+		$slot = $node->findSlotOf($child);
+		$output .= renderNode($child, $options, $depth - 1, "$indent  ", $slot === null ? '-' : "$slot:");
+	}
+
+	return $output;
+}
+
+
+function describeParseError(string $label, ParseException $e): string
+{
+	$position = $e->sourceLine === null ? '' : ":$e->sourceLine" . ($e->sourceColumn === null ? '' : ":$e->sourceColumn");
+	return "$label$position  {$e->getMessage()}\n";
+}
+
+
+/** Where the printed code parts from the original, as a line and a column, with both sides quoted. */
+function describeDifference(string $label, string $code, string $printed): string
+{
+	$common = strspn($code ^ $printed, "\0"); // the xor is as long as the shorter of the two
+	$line = substr_count($code, "\n", 0, $common) + 1;
+	$lineStart = strrpos(substr($code, 0, $common), "\n");
+	return "$label:$line:" . ($common - ($lineStart === false ? 0 : $lineStart + 1) + 1) . "  the round trip differs\n"
+		. '  original: ' . excerpt($code, $common) . "\n"
+		. '  printed:  ' . excerpt($printed, $common) . "\n";
+}
+
+
+/** What follows the offset, quoted and shortened, the way a difference is shown. */
+function excerpt(string $code, int $offset): string
+{
+	$rest = substr($code, $offset);
+	return $rest === '' ? '<nothing, the input ends here>' : quote(shorten($rest, 40));
+}
+
+
+/** Whether PHP itself accepts the code, which tells a bug of the parser from an invalid input. */
+function isValidPhp(string $code): bool
+{
+	$file = tempnam(sys_get_temp_dir(), 'phpsyntax');
+	if ($file === false) {
+		throw new RuntimeException('Cannot create a temporary file for --lint.');
+	}
+
+	file_put_contents($file, $code);
+	exec(escapeshellarg(PHP_BINARY) . ' -n -l ' . escapeshellarg($file) . ' 2>&1', $output, $exitCode);
+	unlink($file);
+	return $exitCode === 0;
+}
+
+
+function kindName(Token $token): string
+{
+	return TokenKind::Names[$token->kind] ?? "'$token->text'";
+}
+
+
+function shortName(string $class): string
+{
+	return substr($class, (int) strrpos($class, '\\') + 1);
+}
+
+
+function oneLine(string $text): string
+{
+	return (string) preg_replace('~\s+~', ' ', $text);
+}
+
+
+function shorten(string $text, int $limit = 60): string
+{
+	return strlen($text) <= $limit ? $text : substr($text, 0, $limit) . '...';
+}
+
+
+function quote(string $text): string
+{
+	return (string) json_encode($text, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+}
+
+
+function fail(string $message): int
+{
+	fwrite(STDERR, "$message\n\n" . help());
+	return 2;
+}
+
+
+function help(): string
+{
+	return <<<'TEXT'
+		Usage: phpsyntax <command> [options] [file | directory | - ...]
+
+		Commands:
+		    check      parses each input and prints it back; a difference is a failure
+		    dump       the tree: nodes, the slots their children stand in, tokens and trivia
+		    tokens     what the lexer makes of the code, emulated kinds included
+		    resolve    what each name refers to, against the namespace and the imports
+		    find       every occurrence of the node class named first, as a position and its code
+
+		Input:
+		    a file, a directory read recursively, - for standard input
+		    -e, --eval=CODE      the code as an argument instead of a file
+		        --ext=LIST       extensions a directory is read for (php,phpt,inc)
+		        --as=WHAT        dump and find parse it as file (default), expression, statement,
+		                         type, name, or as the fragment of a node class,
+		                         --as=ParameterNode; check reads whole files only
+
+		check:
+		        --lint           an input PHP itself refuses is skipped, not a failure
+		    -q, --quiet          only the failures
+
+		dump:
+		        --no-trivia      without the whitespace and the comments
+		    -p, --positions      the line and the column of each token
+		        --depth=N        only N levels of the tree, 0 for all of them
+		    -f, --filter=Node    only the nodes of the class, wherever they are
+		        --at=LINE:COLUMN  only the innermost node there; a byte offset does too
+
+		find:
+		        --no-text        only the positions
+
+		Exit codes: 0 all well, 1 a failure or nothing found, 2 a wrong invocation.
+
+		TEXT;
+}
