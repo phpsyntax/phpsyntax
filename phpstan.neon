@@ -5,6 +5,7 @@ parameters:
 		- bin/phpsyntax
 		- src
 		- tests
+		- examples
 
 	excludePaths:
 		- tests/corpus/*
