@@ -49,6 +49,20 @@ abstract class NodeList extends Node implements \Countable, \IteratorAggregate, 
 	abstract public function insert(int $index, Node $item): void;
 
 
+	/**
+	 * Inserts the new item right after the item, as `insert()` does.
+	 * @param T $new
+	 */
+	abstract public function insertAfter(Node $item, Node $new): void;
+
+
+	/**
+	 * Inserts the new item right before the item, as `insert()` does.
+	 * @param T $new
+	 */
+	abstract public function insertBefore(Node $item, Node $new): void;
+
+
 	/** Takes the item out with its trivia and tidies nothing; `Node::remove()` takes the lines with it. */
 	abstract public function removeItem(Node $item): void;
 
