@@ -18,7 +18,7 @@ use function count;
  * Takes a node out of the tree, puts another in its place or writes a slot that comes with a token of its own, and
  * sews up the trivia around the cut: the comments, the lines and the whitespace the node leaves behind or the new
  * one is given. It also takes a node a write is given, a copy of one standing in a tree.
- * @internal the algorithm of `Node::remove()`, `Node::replaceWith()`, `Token::replaceWith()`,
+ * @internal the algorithm of `Node::remove()`, `Node::replaceWith()`, `Token::replaceWith()`, `BlockNode::unwrap()`,
  *   `SeparatedNodeList::setTrailingSeparator()` and the setters of a type
  */
 final class Surgery
@@ -331,7 +331,7 @@ final class Surgery
 	 * Whether what follows the token up to the next open tag is output of the script, which a close tag and inline HTML
 	 * open, so that whitespace written there would change what the script prints.
 	 */
-	private static function opensOutput(Token $token): bool
+	public static function opensOutput(Token $token): bool
 	{
 		return $token->is([Token::CloseTag, Token::InlineHtml]);
 	}
@@ -643,7 +643,7 @@ final class Surgery
 	 * including its line ending, the next one the rest, an open tag included. A token whose text ends its line or after
 	 * which the text is output takes none.
 	 */
-	private static function splitSeam(?Token $previous, ?Token $next): void
+	public static function splitSeam(?Token $previous, ?Token $next): void
 	{
 		if ($previous === null || $next === null) {
 			return;
@@ -682,6 +682,42 @@ final class Surgery
 		if ($leading !== $next->leadingTrivia) {
 			$next->setLeadingTrivia($leading);
 		}
+	}
+
+
+	/**
+	 * Moves the comments of a token about to go to the token after it, see `BlockNode::unwrap()`: one on a line of its
+	 * own and one ending the line of the token stand on lines of their own there, indented as the token was, the token
+	 * keeping its line ending, and one before the next token on the same line stays before it.
+	 */
+	public static function moveCommentsToNext(Token $token): void
+	{
+		$next = self::findNeighbor($token, 1);
+		[$leading, $above] = self::splitComments($token->leadingTrivia, $token->startsLine());
+		[$trailing, $after] = self::splitComments($token->trailingTrivia, atLineStart: false);
+		if ($next === null || (!$above && !$after)) {
+			return;
+		}
+
+		$lineEnding = array_find($token->trailingTrivia, fn(Trivia $trivia) => $trivia->is(Trivia::LineEnding));
+		if ($lineEnding) {
+			$indentation = $leading && end($leading)->is(Trivia::Whitespace) && $token->startsLine() ? end($leading) : null;
+			$above = self::endComments($above, $lineEnding);
+			$after = $indentation ? self::indentComments($after, $indentation) : $after;
+			$trailing = [$lineEnding];
+		} else {
+			$above = self::endComments($above, Trivia::fromText(' '));
+			$after = self::endComments($after, Trivia::fromText(' '));
+			$trailing = []; // the comments bring the space before the next token
+		}
+
+		$moved = [...$above, ...$after];
+		if ($next->is(Token::EndOfFile) && $moved && end($moved)->is(Trivia::Whitespace)) {
+			array_pop($moved); // nothing follows that a space would set apart
+		}
+
+		$token->setLeadingTrivia($leading)->setTrailingTrivia($trailing);
+		$next->setLeadingTrivia([...$moved, ...$next->leadingTrivia]);
 	}
 
 

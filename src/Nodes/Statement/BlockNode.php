@@ -8,7 +8,7 @@
 namespace PhpSyntax\Nodes\Statement;
 
 use PhpSyntax\Nodes\{PlainNodeList, StatementNode};
-use PhpSyntax\Token;
+use PhpSyntax\{Surgery, Token};
 
 
 /**
@@ -50,5 +50,40 @@ final class BlockNode extends StatementNode
 		}
 
 		return $last?->interruptsFlow() ?? false;
+	}
+
+
+	/**
+	 * Moves the statements of the block into the list the block stands in, in its place, and removes the braces the
+	 * way `remove()` removes a node: a comment on the opening brace goes before the first statement, one on the closing
+	 * brace after the last one, before what follows the block, both on lines of their own where the brace stood on one.
+	 * The statements keep their trivia, the indentation included, which `Indentation::shift()` moves a level up.
+	 * @throws \LogicException  for a block whose braces stand next to a close tag or inline HTML, where the whitespace
+	 *   is output of the script, before anything moves
+	 */
+	public function unwrap(): void
+	{
+		$list = $this->parent;
+		if (!$list instanceof PlainNodeList) {
+			throw new \LogicException('Only a block standing among statements can be unwrapped; a body is written by its setter.');
+		}
+
+		foreach ([$this->openBrace, $this->closeBrace] as $brace) {
+			$previous = $brace->getPrevious();
+			if (($previous && Surgery::opensOutput($previous)) || $brace->getNext()?->is(Token::CloseTag)) {
+				throw new \LogicException('The block stands next to a close tag or inline HTML, where the whitespace its braces leave would be output of the script.');
+			}
+		}
+
+		$after = $this->closeBrace->getNext();
+		Surgery::moveCommentsToNext($this->closeBrace);
+		$index = $list->indexOf($this);
+		foreach ($this->statements->getItems() as $i => $statement) {
+			$this->statements->removeItem($statement);
+			$list->insert($index + 1 + $i, $statement);
+		}
+
+		$this->remove();
+		Surgery::splitSeam($after?->getPrevious(), $after); // the comments of the closing brace now follow the last statement
 	}
 }

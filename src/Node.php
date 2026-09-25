@@ -7,7 +7,7 @@
 
 namespace PhpSyntax;
 
-use PhpSyntax\Nodes\FileNode;
+use PhpSyntax\Nodes\{FileNode, NodeList};
 use function count;
 
 
@@ -435,6 +435,31 @@ abstract class Node implements \Stringable
 		if (!is_a($class, self::class, allow_string: true) && !interface_exists($class)) {
 			throw new \InvalidArgumentException('The class must be a node class or an interface, ' . Helpers::formatCode($class) . ' given.');
 		}
+	}
+
+
+	/** The next item of the list the node is an item of; null for the last one. */
+	public function getNextSibling(): ?self
+	{
+		$list = $this->getList();
+		return $list->getItems()[$list->indexOf($this) + 1] ?? null;
+	}
+
+
+	/** The previous item of the list the node is an item of; null for the first one. */
+	public function getPreviousSibling(): ?self
+	{
+		$list = $this->getList();
+		return $list->getItems()[$list->indexOf($this) - 1] ?? null;
+	}
+
+
+	/** @return NodeList<covariant self> */
+	private function getList(): NodeList
+	{
+		return $this->parent instanceof NodeList
+			? $this->parent
+			: throw new \LogicException('Only an item of a list has siblings; a slot holds no other node.');
 	}
 
 

@@ -122,6 +122,89 @@ test('a statement inserted into a file stands where its neighbor stands', functi
 });
 
 
+test('an item is inserted next to another one, and its siblings are its neighbors in the list', function () {
+	$parser = new Parser;
+	$builder = new Builder;
+	$file = $parser->parse("<?php\n\$a;\n\$c;\nf(1, 3);\n");
+	[$a, $c] = $file->statements->getItems();
+	$file->statements->insertAfter($a, $builder->statement('$b;'));
+	$file->statements->insertBefore($c, $builder->statement('$z;'));
+	Assert::same("<?php\n\$a;\n\$b;\n\$z;\n\$c;\nf(1, 3);\n", (string) $file);
+
+	$arguments = ($file->findFirst(FunctionCallNode::class) ?? throw new LogicException)->arguments->items;
+	$arguments->insertAfter($arguments[0], $builder->fragment(PhpSyntax\Nodes\ArgumentNode::class, '2'));
+	$arguments->insertBefore($arguments[0], $builder->fragment(PhpSyntax\Nodes\ArgumentNode::class, '0'), new Token(ord(','), ',')->setTrailingTrivia([new Trivia(Trivia::Whitespace, '  ')]));
+	Assert::same("<?php\n\$a;\n\$b;\n\$z;\n\$c;\nf(0,  1, 2, 3);\n", (string) $file);
+
+	Assert::same('$b;', $a->getNextSibling()?->text);
+	Assert::same('$z;', $c->getPreviousSibling()?->text);
+	Assert::null($file->statements[0]->getPreviousSibling());
+	Assert::null($arguments[3]->getNextSibling());
+	Assert::same('2', $arguments[3]->getPreviousSibling()?->text);
+	Assert::exception(
+		($arguments[0]->getFirstToken()->parent ?? throw new LogicException)->getNextSibling(...),
+		LogicException::class,
+		'Only an item of a list has siblings; a slot holds no other node.',
+	);
+});
+
+
+test('a block standing among statements is unwrapped into them', function () {
+	$parser = new Parser;
+	$builder = new Builder;
+	$file = $parser->parse("<?php\n\$a;\n{ // start\n\t\$b;\n\t\$c;\n}\n\$d;\n");
+	$block = $file->findFirst(BlockNode::class) ?? throw new LogicException;
+	$block->unwrap();
+	Assert::same("<?php\n\$a;\n// start\n\t\$b;\n\t\$c;\n\$d;\n", (string) $file);
+	Assert::same(['$a;', '$b;', '$c;', '$d;'], array_map(fn(Node $statement) => $statement->text, $file->statements->getItems()));
+
+	$file = $parser->parse("<?php\n{}\n\$a;\n");
+	($file->findFirst(BlockNode::class) ?? throw new LogicException)->unwrap();
+	Assert::same("<?php\n\$a;\n", (string) $file);
+
+	// a comment on the closing brace goes after the last statement, on a line of its own as remove() puts it
+	$file = $parser->parse("<?php\n\$a;\n{\n\t\$b;\n\t\$c;\n\t// tail\n} // end\n\$d;\n");
+	($file->findFirst(BlockNode::class) ?? throw new LogicException)->unwrap();
+	Assert::same("<?php\n\$a;\n\t\$b;\n\t\$c;\n\t// tail\n// end\n\$d;\n", (string) $file);
+	Assert::same([3, 4, 7], array_map(fn(StatementNode $statement) => $statement->getFirstToken()->getCurrentLine(), array_slice($file->statements->getItems(), 1)));
+
+	$file = $parser->parse("<?php\n{\n\t\$b;\n} /* end */ \$d;\n");
+	($file->findFirst(BlockNode::class) ?? throw new LogicException)->unwrap();
+	Assert::same("<?php\n\t\$b;\n/* end */ \$d;\n", (string) $file);
+
+	$file = $parser->parse("<?php\n{\n\t\$a;\n} // c");
+	($file->findFirst(BlockNode::class) ?? throw new LogicException)->unwrap();
+	Assert::same("<?php\n\t\$a;\n// c", (string) $file);
+
+	// one before the opening brace stays before the first statement, on its line or on a line of its own
+	$file = $parser->parse("<?php\n/* lead */ {\n\t\$b;\n}\n");
+	($file->findFirst(BlockNode::class) ?? throw new LogicException)->unwrap();
+	Assert::same("<?php\n/* lead */\n\t\$b;\n", (string) $file);
+
+	$file = $parser->parse('<?php { /* lead */ $b; }');
+	($file->findFirst(BlockNode::class) ?? throw new LogicException)->unwrap();
+	Assert::same('<?php /* lead */ $b; ', (string) $file);
+
+	// next to a close tag or inline HTML the whitespace is output, so the block is refused before anything moves
+	foreach (["<?php {\n\techo 2 ?>\nhtml2\n<?php }", "<?php {\n\t\$b;\n} ?>\nx", "x<?php {\n\t\$b;\n}"] as $code) {
+		$file = $parser->parse($code);
+		Assert::exception(
+			($file->findFirst(BlockNode::class) ?? throw new LogicException)->unwrap(...),
+			LogicException::class,
+			'The block stands next to a close tag or inline HTML, where the whitespace its braces leave would be output of the script.',
+		);
+		Assert::same($code, (string) $file);
+	}
+
+	$file = $parser->parse("<?php\nif (\$a) {\n\t\$b;\n}\n");
+	Assert::exception(
+		($file->findFirst(BlockNode::class) ?? throw new LogicException)->unwrap(...),
+		LogicException::class,
+		'Only a block standing among statements can be unwrapped; a body is written by its setter.',
+	);
+});
+
+
 test('the trailing separator stands where the last item ended', function () {
 	$parser = new Parser;
 	$builder = new Builder;
