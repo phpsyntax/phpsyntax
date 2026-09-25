@@ -117,6 +117,20 @@ final class SeparatedNodeList extends NodeList
 	}
 
 
+	/** Inserts the new item right after the item, as `insert()` does. */
+	public function insertAfter(Node $item, Node $new, ?Token $separator = null): void
+	{
+		$this->insert($this->indexOf($item) + 1, $new, $separator);
+	}
+
+
+	/** Inserts the new item right before the item, as `insert()` does. */
+	public function insertBefore(Node $item, Node $new, ?Token $separator = null): void
+	{
+		$this->insert($this->indexOf($item), $new, $separator);
+	}
+
+
 	/** The separator after the last item; null where there is none. */
 	public function getTrailingSeparator(): ?Token
 	{
