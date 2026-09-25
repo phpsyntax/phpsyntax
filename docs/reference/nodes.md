@@ -34,6 +34,8 @@ Node of the concrete syntax tree; every token of the source is reachable through
 | `findAncestor(string $class): ?Node` | The innermost node of the class above this one, its parent first. |
 | `findFirst(string $class, ?callable $predicate = null): ?Node` | The first descendant of the class the predicate accepts, in pre-order; null when there is none. |
 | `find(string $class, ?callable $predicate = null): array` | Descendant nodes of the class the predicate accepts, in pre-order, as a snapshot safe to iterate while mutating the tree. |
+| `getNextSibling(): ?Node` | The next item of the list the node is an item of; null for the last one. |
+| `getPreviousSibling(): ?Node` | The previous item of the list the node is an item of; null for the first one. |
 | `matches(Node $other): bool` | Whether the tokens of both nodes carry the same texts, whatever the whitespace between them. |
 | `hasInnerComment(): bool` | Whether a comment sits anywhere between the first and the last token of the node; the trivia on its outer edges do not count. |
 | `getInnerComments(): array` | The comments inside the node, in source order; those on its outer edges are not among them, the same way `hasInnerComment()` does not count them. |
@@ -144,6 +146,8 @@ Extends `Node`.
 | `isEmpty(): bool` |  |
 | `append(Node $item): void` |  |
 | `insert(int $index, Node $item): void` | Inserts an item at the index. |
+| `insertAfter(Node $item, Node $new): void` | Inserts the new item right after the item, as `insert()` does. |
+| `insertBefore(Node $item, Node $new): void` | Inserts the new item right before the item, as `insert()` does. |
 | `removeItem(Node $item): void` | Takes the item out with its trivia and tidies nothing; `Node::remove()` takes the lines with it. |
 | `indexOf(Node $item): int` |  |
 | `count(): int` |  |
@@ -422,6 +426,8 @@ Extends `NodeList`. Handwritten class.
 |---|---|
 | `append(Node $item): void` | Appends an item, which takes the place in the lines of the list its neighbor has. |
 | `insert(int $index, Node $item): void` | Inserts an item at the index. In a list standing in a file, an item that carries no trivia of its own takes the indentation of its neighbor and ends its line the same way. |
+| `insertAfter(Node $item, Node $new): void` | Inserts the new item right after the item, as `insert()` does. |
+| `insertBefore(Node $item, Node $new): void` | Inserts the new item right before the item, as `insert()` does. |
 | `removeItem(Node $item): void` |  |
 | `getChildren(): array` |  |
 | `findSlotOf(Node\|Token $child): ?string` |  |
@@ -444,6 +450,8 @@ Extends `NodeList`. Handwritten class.
 | `hasTrailingSeparator(): bool` | Whether a separator follows the last item. |
 | `append(Node $item, ?Token $separator = null): void` | Appends an item; the separator before it is derived from the existing ones unless given. |
 | `insert(int $index, Node $item, ?Token $separator = null): void` | Inserts an item at the index. A missing separator is modeled on the existing ones, or on `, ` in a one-line list, and then the item also takes the indentation and the line ending of its neighbor in a multi-line list; a separator given is inserted as it is. The separator is the one that goes with the item: the one after it, and for the last item the one before it, so what the separators already there carry stays with the items they follow. |
+| `insertAfter(Node $item, Node $new, ?Token $separator = null): void` | Inserts the new item right after the item, as `insert()` does. |
+| `insertBefore(Node $item, Node $new, ?Token $separator = null): void` | Inserts the new item right before the item, as `insert()` does. |
 | `getTrailingSeparator(): ?Token` | The separator after the last item; null where there is none. |
 | `setTrailingSeparator(?Token $separator): static` | Writes the separator after the last item, or removes it with null. The separator stands where the item ended: one without trivia of its own takes over the trailing trivia of the last item, or the trivia of the separator it replaces, and one removed leaves its comments and the end of its line to the last item; a separator with trivia keeps them, followed by the comments and the line ending of the one it replaces, and one in a list standing nowhere, as the parser builds it, is written as it is. |
 | `removeItem(Node $item): void` | Takes the item out with its trivia, together with the separator that goes with it, the one after it and for the last item the one before it, and tidies nothing; `Node::remove()` takes the lines with it. |
@@ -1682,6 +1690,7 @@ Extends `StatementNode`.
 | Member | Description |
 |---|---|
 | `interruptsFlow(): bool` | Whether the code does not go on after the last statement of the block, the empty statement a close tag leaves behind it aside; false for an empty block. |
+| `unwrap(): void` | Moves the statements of the block into the list the block stands in, in its place, and removes the braces the way `remove()` removes a node: a comment on the opening brace goes before the first statement, one on the closing brace after the last one, before what follows the block, both on lines of their own where the brace stood on one. The statements keep their trivia, the indentation included, which `Indentation::shift()` moves a level up. Throws LogicException for a block whose braces stand next to a close tag or inline HTML, where the whitespace. is output of the script, before anything moves |
 
 ### Statement\IfNode
 

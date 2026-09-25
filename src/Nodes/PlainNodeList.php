@@ -77,6 +77,20 @@ final class PlainNodeList extends NodeList
 	}
 
 
+	/** Inserts the new item right after the item, as `insert()` does. */
+	public function insertAfter(Node $item, Node $new): void
+	{
+		$this->insert($this->indexOf($item) + 1, $new);
+	}
+
+
+	/** Inserts the new item right before the item, as `insert()` does. */
+	public function insertBefore(Node $item, Node $new): void
+	{
+		$this->insert($this->indexOf($item), $new);
+	}
+
+
 	/**
 	 * Ends the item the way its neighbor ends, with a line ending or with a space; a comment of the neighbor
 	 * stays with it, and an item ending its line inside its own text needs nothing.
