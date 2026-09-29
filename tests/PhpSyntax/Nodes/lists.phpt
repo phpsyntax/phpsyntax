@@ -4,7 +4,7 @@ use PhpSyntax\{Builder, Node, Parser, Token, Trivia};
 use PhpSyntax\Nodes\Expression\{ArrayNode, FunctionCallNode};
 use PhpSyntax\Nodes\{FileNode, MemberNode, ModifiersNode, NodeList, PlainNodeList, SeparatedNodeList, StatementNode};
 use PhpSyntax\Nodes\Member\MethodNode;
-use PhpSyntax\Nodes\Statement\{BlockNode, ClassNode, NamespaceNode};
+use PhpSyntax\Nodes\Statement\{BlockNode, ClassNode, FunctionNode, NamespaceNode};
 use Tester\Assert;
 
 require __DIR__ . '/../../bootstrap.php';
@@ -227,6 +227,22 @@ test('the trailing separator stands where the last item ended', function () {
 	$arguments = ($file->findFirst(FunctionCallNode::class) ?? throw new LogicException)->arguments->items;
 	$arguments->setTrailingSeparator(new Token(ord(','), ',')->setTrailingTrivia([new Trivia(Trivia::Whitespace, ' ')]));
 	Assert::same("<?php\n\$a = [\n\t1,\n\t2, // two\n];\nf(1, 2, );\n", (string) $file);
+
+	// a doc comment right after the last item documents a parameter there, so it stays before the separator
+	$file = $parser->parse("<?php\nfunction f(\n\tint \$a /** the a */ // note\n) {}\n");
+	$parameters = ($file->findFirst(FunctionNode::class) ?? throw new LogicException)->parameters;
+	$parameters->setTrailingSeparator(Token::fromText(','));
+	Assert::same("<?php\nfunction f(\n\tint \$a /** the a */, // note\n) {}\n", (string) $file);
+	$parameters->setTrailingSeparator(null);
+	Assert::same("<?php\nfunction f(\n\tint \$a /** the a */ // note\n) {}\n", (string) $file);
+
+	// and so does one on the line before the closing parenthesis
+	$file = $parser->parse("<?php\nfunction f(\n\t\$a\n\t/** d */ // note\n\t// other\n) {}\n");
+	$parameters = ($file->findFirst(FunctionNode::class) ?? throw new LogicException)->parameters;
+	$parameters->setTrailingSeparator(Token::fromText(','));
+	Assert::same("<?php\nfunction f(\n\t\$a\n\t/** d */, // note\n\t// other\n) {}\n", (string) $file);
+	Assert::same([' ', '// note', "\n"], array_map(fn(Trivia $trivia) => $trivia->text, $parameters->getTrailingSeparator()->trailingTrivia ?? []));
+	Assert::same('/** d */', $parameters[0]->getDocComment()?->text);
 });
 
 

@@ -7,9 +7,10 @@
 
 namespace PhpSyntax\Nodes;
 
-use PhpSyntax\{Node, Surgery, Token};
+use PhpSyntax\{Node, Surgery, Token, Trivia};
 use PhpSyntax\Nodes\Expression\VariableNode;
 use PhpSyntax\Nodes\Member\PropertyHookNode;
+use function count;
 
 
 /**
@@ -82,5 +83,24 @@ final class ParameterNode extends Node implements AttributeAwareNode
 	{
 		Surgery::writeType($this, $type);
 		return $this;
+	}
+
+
+	/**
+	 * Doc comment of the parameter: the one after it, before the separator or before the token after it where the last
+	 * parameter has none, which PHP reads first, and else the one before it as for any node.
+	 */
+	public function getDocComment(): ?Trivia
+	{
+		$last = $this->getLastToken();
+		foreach ([$last->getNext()->leadingTrivia ?? [], $last->trailingTrivia] as $trivias) {
+			for ($i = count($trivias) - 1; $i >= 0; $i--) {
+				if ($trivias[$i]->is(Trivia::DocComment)) {
+					return $trivias[$i];
+				}
+			}
+		}
+
+		return parent::getDocComment();
 	}
 }
