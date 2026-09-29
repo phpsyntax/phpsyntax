@@ -343,6 +343,7 @@ Extends `Node`. Implements `AttributeAwareNode`.
 |---|---|
 | `$promoted: bool` | Whether the parameter declares a property of the class, which its modifiers make it do. |
 | `setType(?TypeNode $type): static` | Writes the type before the variable with one space after it, or removes it with its space, its comments staying; a type standing in a tree comes as a copy without the trivia on its edges. |
+| `getDocComment(): ?Trivia` | Doc comment of the parameter: the one after it, before the separator or before the token after it where the last parameter has none, which PHP reads first, and else the one before it as for any node. |
 | `getFirstToken(): Token` | Narrows the return type of `Node::getFirstToken()`. |
 | `getLastToken(): Token` | Narrows the return type of `Node::getLastToken()`. |
 

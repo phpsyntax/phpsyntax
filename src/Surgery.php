@@ -190,14 +190,37 @@ final class Surgery
 
 	/**
 	 * See `SeparatedNodeList::setTrailingSeparator()`; `$last` is the last token of the last item, and the separator
-	 * taken out and the one put in are already written into the list.
+	 * taken out and the one put in are already written into the list. A doc comment after the last item, on its line
+	 * or before the token after the list, stays before the separator, because PHP reads it as the documentation of
+	 * a parameter only there.
 	 */
 	public static function moveSeparatorTrivia(?Token $last, ?Token $current, ?Token $separator): void
 	{
 		if ($current === null) {
 			if ($separator && $last && !$separator->leadingTrivia && !$separator->trailingTrivia) {
-				$separator->setTrailingTrivia($last->trailingTrivia);
-				$last->setTrailingTrivia([]);
+				$next = self::findNeighbor($separator, 1);
+				$leading = $next === null ? [] : $next->leadingTrivia;
+				$doc = array_find_key(array_reverse($leading, preserve_keys: true), fn(Trivia $trivia) => $trivia->is(Trivia::DocComment));
+				if ($next && $doc !== null) { // the separator goes after it and takes the rest of its line as the lexer would
+					$lineEnding = array_find_key(array_slice($leading, $doc + 1, preserve_keys: true), fn(Trivia $trivia) => $trivia->isLineEnding());
+					$end = $lineEnding === null ? count($leading) : $lineEnding + 1;
+					$separator->setLeadingTrivia(array_slice($leading, 0, $doc + 1))->setTrailingTrivia(array_slice($leading, $doc + 1, $end - $doc - 1));
+					$next->setLeadingTrivia(array_slice($leading, $end));
+					return;
+				}
+
+				$trailing = $last->trailingTrivia;
+				$kept = 0;
+				foreach ($trailing as $i => $trivia) {
+					if ($trivia->is(Trivia::DocComment)) {
+						$kept = $i + 1;
+					} elseif (!$trivia->is(Trivia::Whitespace)) {
+						break;
+					}
+				}
+
+				$separator->setTrailingTrivia(array_slice($trailing, $kept));
+				$last->setTrailingTrivia(array_slice($trailing, 0, $kept));
 			}
 
 			return;

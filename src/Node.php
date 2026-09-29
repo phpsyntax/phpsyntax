@@ -329,9 +329,9 @@ abstract class Node implements \Stringable
 
 
 	/**
-	 * The token carrying the trivia, found by identity: one of the node, or the one before it, where
+	 * The token carrying the trivia, found by identity: one of the node, or the one before or after it, where
 	 * a doc comment of the node may stand. The edges of the node are tried before the whole of it, and the
-	 * token before it last, because a copy shares its trivia with the original that may stand there.
+	 * tokens around it last, because a copy shares its trivia with the original that may stand there.
 	 */
 	private function findTriviaOwner(Trivia $trivia): Token
 	{
@@ -343,7 +343,8 @@ abstract class Node implements \Stringable
 			$carries($first) => $first,
 			$carries($last) => $last,
 			default => array_find($this->getTokens(), $carries)
-				?? ($carries($previous = $first?->getPrevious()) ? $previous : null),
+				?? ($carries($previous = $first?->getPrevious()) ? $previous : null)
+				?? ($carries($next = $last?->getNext()) ? $next : null),
 		};
 		return $owner ?? throw new \LogicException('The trivia does not belong to the node.');
 	}
