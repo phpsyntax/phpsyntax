@@ -26,12 +26,13 @@ function standsInText(Token $token): bool
 }
 
 
-function mutate(FileNode $file, Parser $parser): void
+/** Returns whether the mutation was one the tree refuses. */
+function mutate(FileNode $file, Parser $parser): bool
 {
 	$builder = new Builder($parser);
 	$tokens = $file->getIndex()->getTokens();
 	$token = $tokens[mt_rand(0, count($tokens) - 2)]; // never the end of file
-	$kind = standsInText($token) ? 0 : mt_rand(0, 8);
+	$kind = standsInText($token) ? 0 : mt_rand(0, 9);
 	if ($kind === 0 && $token->parent instanceof IdentifierNode) {
 		$token->parent->text = $token->text . 'é';
 
@@ -80,7 +81,40 @@ function mutate(FileNode $file, Parser $parser): void
 			$list->append($item, new Token(ord(','), ','));
 			$list->setTrailingSeparator(new Token(ord(','), ','));
 		}
+
+	} elseif ($kind === 9) {
+		return refuse($file);
 	}
+
+	return false;
+}
+
+
+/**
+ * A write the tree refuses, which must leave the file as it stood: a node standing elsewhere in it, a cycle, a text
+ * of another kind. Returns whether one was tried.
+ */
+function refuse(FileNode $file): bool
+{
+	$statements = $file->find(ExpressionStatementNode::class);
+	if (count($statements) < 2) {
+		return false;
+	}
+
+	$first = $statements[mt_rand(0, count($statements) - 1)];
+	$second = $statements[mt_rand(0, count($statements) - 1)];
+	$inner = $first->expression->findFirst(PhpSyntax\Nodes\ExpressionNode::class);
+	[$operation, $exception] = match (mt_rand(0, 2)) {
+		0 => [$first === $second ? null : fn() => $first->expression = $second->expression, LogicException::class],
+		1 => [$inner === null ? null : fn() => $inner->replaceWith($first->expression), LogicException::class],
+		2 => [fn() => $first->semicolon->setText('x'), InvalidArgumentException::class],
+	};
+	if ($operation === null) {
+		return false;
+	}
+
+	assertRefused($operation, $exception, null, $file);
+	return true;
 }
 
 
@@ -102,13 +136,14 @@ Assert::true(count($files) > 30);
 $parser = new Parser;
 $builder = new Builder;
 $style = new Style;
+$refusals = 0;
 foreach (array_filter($files, fn($i) => $i % 6 === 0, ARRAY_FILTER_USE_KEY) as $path) {
 	mt_srand(crc32(basename($path)));
 	$file = $parser->parse((string) file_get_contents($path));
 	$index = $file->getIndex();
 	for ($step = 1; $step <= 120; $step++) {
 		for ($writes = mt_rand(1, 4); $writes > 0; $writes--) { // several writes before a query, as a batch of a rule
-			mutate($file, $parser);
+			$refusals += (int) mutate($file, $parser);
 		}
 
 		$tokens = $index->getTokens();
@@ -126,3 +161,5 @@ foreach (array_filter($files, fn($i) => $i % 6 === 0, ARRAY_FILTER_USE_KEY) as $
 		}
 	}
 }
+
+Assert::true($refusals > 50, "only $refusals refused writes were tried"); // the refusals are a category of the fuzz, not a chance

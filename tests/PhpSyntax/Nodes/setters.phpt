@@ -112,7 +112,7 @@ test('every function-like construct but a hook takes a return type', function ()
 	);
 
 	$hook = first($file, PropertyHookNode::class);
-	Assert::exception(fn() => $hook->setReturnType(null), LogicException::class, 'A property hook has no return type.');
+	assertRefused(fn() => $hook->setReturnType(null), LogicException::class, 'A property hook has no return type.', $file);
 });
 
 

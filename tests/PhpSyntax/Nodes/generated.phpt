@@ -51,10 +51,11 @@ test('setters keep parents and count mutations through the file', function () {
 	$ternary->else = $other = variable('$c');
 	Assert::null($else->parent);
 	Assert::same($ternary, $other->parent);
-	Assert::exception(
+	assertRefused(
 		fn() => $ternary->condition = $other,
 		LogicException::class,
 		'The node already belongs to a tree; a copy comes from `withoutEdgeTrivia()`, or from `clone` with the trivia on its edges.',
+		$ternary,
 	);
 
 	$ternary->then = null;
@@ -70,15 +71,17 @@ test('replaceChild checks the slot type', function () {
 	Assert::null($cond->parent);
 	Assert::same($new, $ternary->condition);
 
-	Assert::exception(
+	assertRefused(
 		fn() => $ternary->replaceChild($question, variable('$y')),
 		InvalidArgumentException::class,
 		'`PhpSyntax\\Nodes\\Expression\\VariableNode` cannot be placed in the slot `question` of `PhpSyntax\\Nodes\\Expression\\TernaryNode`.',
+		$ternary,
 	);
-	Assert::exception(
+	assertRefused(
 		fn() => $ternary->replaceChild($cond, variable('$z')),
 		InvalidArgumentException::class,
 		'`PhpSyntax\Nodes\Expression\VariableNode` is not a child of `PhpSyntax\Nodes\Expression\TernaryNode`.',
+		$ternary,
 	);
 });
 
@@ -88,10 +91,11 @@ test('list slots are replaced by lists only', function () {
 	Assert::same($block, $stmts->parent);
 	$block->replaceChild($stmts, $other = new PlainNodeList);
 	Assert::same($other, $block->statements);
-	Assert::exception(
+	assertRefused(
 		fn() => $block->replaceChild($other, token('x')),
 		InvalidArgumentException::class,
 		'%a% cannot be placed in the slot `statements` %a%',
+		$block,
 	);
 });
 
@@ -100,7 +104,7 @@ test('node without slots', function () {
 	$item = new SkippedArrayItemNode;
 	Assert::same([], $item->getChildren());
 	Assert::same('', (string) $item);
-	Assert::exception(fn() => $item->replaceChild(token('x'), token('y')), InvalidArgumentException::class);
+	assertRefused(fn() => $item->replaceChild(token('x'), token('y')), InvalidArgumentException::class, null, $item);
 });
 
 
