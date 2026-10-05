@@ -344,14 +344,12 @@ test('a refused input leaves the tree it would take a node from as it was', func
 		fn() => $b->expression('$x', x: $live, y: expression('$y')),
 	];
 	foreach ($attempts as $attempt) {
-		Assert::exception($attempt, Exception::class);
-		Assert::same($code, (string) $file);
+		assertRefused($attempt, Exception::class, null, $file);
 	}
 
 	$detached = expression('$o /* c */');
 	$detached->setEdgeTrivia([], [new PhpSyntax\Trivia(PhpSyntax\Trivia::Whitespace, ' ')]);
-	Assert::exception(fn() => $b->methodCall($detached, 'b c'), InvalidArgumentException::class);
-	Assert::same('$o ', (string) $detached);
+	assertRefused(fn() => $b->methodCall($detached, 'b c'), InvalidArgumentException::class, null, $detached);
 });
 
 
@@ -426,12 +424,8 @@ test('a placeholder refused by its place in a string leaves the detached part as
 	$sum = expression('$a + $b');
 	$sum->setEdgeTrivia([PhpSyntax\Trivia::fromText('/* lead */')], [PhpSyntax\Trivia::fromText('/* trail */')]);
 	$message = 'Expression `$a + $b` cannot be written inside a string, which takes a variable, an element, a property or a call reached from a variable.';
-	Assert::exception(fn() => $b->expression('"{$x}"', x: $sum), InvalidArgumentException::class, $message);
-	Assert::same('/* lead */$a + $b/* trail */', (string) $sum);
-	Assert::null($sum->parent);
+	assertRefused(fn() => $b->expression('"{$x}"', x: $sum), InvalidArgumentException::class, $message, $sum);
 
 	// the second place refuses what the first one took
-	Assert::exception(fn() => $b->expression('f($x, "{$x}")', x: $sum), InvalidArgumentException::class, $message);
-	Assert::same('/* lead */$a + $b/* trail */', (string) $sum);
-	Assert::null($sum->parent);
+	assertRefused(fn() => $b->expression('f($x, "{$x}")', x: $sum), InvalidArgumentException::class, $message, $sum);
 });

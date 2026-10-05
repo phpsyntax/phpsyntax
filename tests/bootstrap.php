@@ -6,6 +6,7 @@ if (@!include __DIR__ . '/../vendor/autoload.php') { // @ dependencies may not b
 }
 
 require __DIR__ . '/Dumper.php';
+require __DIR__ . '/Snapshot.php';
 
 Tester\Environment::setup();
 Tester\Environment::setupFunctions();

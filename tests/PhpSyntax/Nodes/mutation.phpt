@@ -100,7 +100,7 @@ test('writing what a place already holds changes nothing', function () {
 	Assert::same('$a + $b', (string) $detached);
 
 	// a node not standing there is still refused
-	Assert::exception(fn() => $binary->replaceChild($detached->left, $detached->left), InvalidArgumentException::class);
+	assertRefused(fn() => $binary->replaceChild($detached->left, $detached->left), InvalidArgumentException::class, null, $binary, $detached);
 });
 
 
@@ -114,7 +114,7 @@ test('replaceWith keeps the surrounding trivia and the parent invariant', functi
 	Assert::same($file->statements, $replacement->parent);
 	Assert::true($file->revision > 0);
 	Assert::same(2, $replacement->getStartLine());
-	Assert::exception(fn() => $replacement->replaceWith(stmts($file)[1]), LogicException::class, 'The node already belongs to a tree; a copy comes from `withoutEdgeTrivia()`, or from `clone` with the trivia on its edges.');
+	assertRefused(fn() => $replacement->replaceWith(stmts($file)[1]), LogicException::class, 'The node already belongs to a tree; a copy comes from `withoutEdgeTrivia()`, or from `clone` with the trivia on its edges.', $file);
 });
 
 
@@ -144,13 +144,12 @@ test('replaceWith a node without tokens refuses where no token is left to take t
 	Assert::type(PhpSyntax\Nodes\Type\UnionTypeNode::class, $type);
 	$types = $type->types;
 	$types->setEdgeTrivia([new PhpSyntax\Trivia(PhpSyntax\Trivia::Comment, '/* c */')], []);
-	Assert::exception(
+	assertRefused(
 		fn() => $types->replaceWith(emptyArguments()),
 		LogicException::class,
 		'The trivia around the node have no token to stay with once a node without tokens takes its place.',
+		$type,
 	);
-	Assert::same($type, $types->parent);
-	Assert::same('/* c */A|B', (string) $type);
 });
 
 
@@ -266,11 +265,8 @@ test('replaceWithExpression into a slot that takes no parentheses replaces bare 
 	assert($donor instanceof BinaryOpNode);
 	$call = $donor->left;
 	$message = '`PhpSyntax\Nodes\Expression\FunctionCallNode` cannot be placed in the slot `variable` of `PhpSyntax\Nodes\ParameterNode`.';
-	Assert::exception(fn() => $variable->checkReplaceWithExpression($call), InvalidArgumentException::class, $message);
-	Assert::exception(fn() => $variable->replaceWithExpression($call), InvalidArgumentException::class, $message);
-	Assert::same($donor, $call->parent);
-	Assert::same('f() + $b', (string) $donor);
-	Assert::same('<?php function f($a) {}', (string) $file);
+	assertRefused(fn() => $variable->checkReplaceWithExpression($call), InvalidArgumentException::class, $message, $file, $donor);
+	assertRefused(fn() => $variable->replaceWithExpression($call), InvalidArgumentException::class, $message, $file, $donor);
 
 	$variable->replaceWithExpression($variable);
 	Assert::same('<?php function f($a) {}', (string) $file);
@@ -330,12 +326,12 @@ test('replaceWithExpression takes the expression out of the node it replaces, as
 	$calls = $file->find(FunctionCallNode::class);
 	$argument = $calls[1]->findFirst(BinaryOpNode::class);
 	Assert::type(BinaryOpNode::class, $argument);
-	Assert::exception(
+	assertRefused(
 		fn() => $calls[0]->replaceWithExpression($argument),
 		LogicException::class,
 		'The node already belongs to a tree; %a%',
+		$file,
 	);
-	Assert::same("<?php\n\$s = f() . g(\$a ?? \$b);\n", (string) $file);
 });
 
 
@@ -365,22 +361,23 @@ test('a node is lifted out of the one it replaces, and only out of that one', fu
 	);
 
 	// a node from elsewhere in the tree is still refused: nothing releases it
-	Assert::exception(
+	assertRefused(
 		fn() => $assign->expression = $file->find(AssignmentNode::class)[0]->expression,
 		LogicException::class,
 		'The node already belongs to a tree; a copy comes from `withoutEdgeTrivia()`, or from `clone` with the trivia on its edges.',
+		$file,
 	);
 
 	// and so it is by an empty slot of a node standing nowhere, which is written the way a new node is built
 	$yield = (new Builder)->expression('yield');
 	Assert::type(PhpSyntax\Nodes\Expression\YieldNode::class, $yield);
-	Assert::exception(
+	assertRefused(
 		fn() => $yield->value = $assign->expression,
 		LogicException::class,
 		'The node already belongs to a tree; %a%',
+		$yield,
+		$file,
 	);
-	Assert::null($yield->value);
-	Assert::same($assign, $assign->expression->parent);
 });
 
 
@@ -417,10 +414,11 @@ test('a node is taken out of a subtree without a file, which nothing indexes', f
 
 	// a child of the node doing the write is not taken from anywhere: it would be listed twice
 	$list = new PlainNodeList([$first = $builder->statement('f();'), $builder->statement('g();')]);
-	Assert::exception(
+	assertRefused(
 		fn() => $list->append($first),
 		LogicException::class,
 		'The node already belongs to a tree; a copy comes from `withoutEdgeTrivia()`, or from `clone` with the trivia on its edges.',
+		$list,
 	);
 });
 
@@ -829,12 +827,12 @@ test('a refused write leaves the tree as it stood', function () {
 	$file = parse('<?php /* keep */ $a;');
 	$stmt = stmts($file)[0];
 	Assert::type(ExpressionStatementNode::class, $stmt);
-	Assert::exception(
+	assertRefused(
 		fn() => $stmt->expression->replaceWith((new Builder)->statement('return;')),
 		InvalidArgumentException::class,
 		'`PhpSyntax\\Nodes\\Statement\\ReturnNode` cannot be placed in the slot `expression` of `PhpSyntax\\Nodes\\Statement\\ExpressionStatementNode`.',
+		$file,
 	);
-	Assert::same('<?php /* keep */ $a;', (string) $file);
 
 	// a sibling is refused before the item it would replace is released, with the index built and without
 	foreach ([true, false] as $indexed) {
@@ -847,24 +845,22 @@ test('a refused write leaves the tree as it stood', function () {
 		Assert::type(FunctionCallNode::class, $call);
 		$items = $call->arguments->items;
 		[$first, $second] = $items->getItems();
-		Assert::exception(
+		assertRefused(
 			fn() => $items->replaceChild($first, $second),
 			LogicException::class,
 			'The node already belongs to a tree; a copy comes from `withoutEdgeTrivia()`, or from `clone` with the trivia on its edges.',
+			$file,
 		);
-		Assert::same($items, $first->parent);
-		Assert::same([$first, $second], $items->getItems());
-		Assert::same('<?php f($a, $b);', (string) $file);
 	}
 
 	// an item already in the list is refused before it takes the line ending of its neighbor
 	$file = parse("<?php\n\$a;\n\$b;\n");
-	Assert::exception(
+	assertRefused(
 		fn() => $file->statements->append($file->statements[1]),
 		LogicException::class,
 		'The node already belongs to a tree; a copy comes from `withoutEdgeTrivia()`, or from `clone` with the trivia on its edges.',
+		$file,
 	);
-	Assert::same("<?php\n\$a;\n\$b;\n", (string) $file);
 });
 
 
@@ -879,13 +875,13 @@ test('an insertion of an item and a separator checks both before either moves', 
 	$fragment = $builder->expression('g($c)');
 	Assert::type(FunctionCallNode::class, $fragment);
 	$item = $fragment->arguments->items[0];
-	Assert::exception(
+	assertRefused(
 		fn() => $items->append($item, $items->getSeparators()[0]),
 		LogicException::class,
 		'The token already belongs to a tree; a copy comes from `clone`.',
+		$file,
+		$fragment,
 	);
-	Assert::same($fragment->arguments->items, $item->parent);
-	Assert::same('g($c)', (string) $fragment);
 
 	// a separator taken out of the item itself would stand in two lists at once
 	$fragment = $builder->expression('g([$c, $d])');
@@ -895,57 +891,52 @@ test('an insertion of an item and a separator checks both before either moves', 
 	Assert::type(PhpSyntax\Nodes\Expression\ArrayNode::class, $item->value);
 	$inner = $item->value->items;
 	$separator = $inner->getSeparators()[0];
-	Assert::exception(
+	assertRefused(
 		fn() => $items->append($item, $separator),
 		LogicException::class,
 		'The separator cannot be a part of the item it separates.',
+		$file,
+		$fragment,
 	);
-	Assert::same($fragment->arguments->items, $item->parent);
-	Assert::same($inner, $separator->parent);
-	Assert::same('g([$c, $d])', (string) $fragment);
-
-	Assert::same('<?php f($a, $b);', (string) $file);
-	Assert::same($file->getTokens(), $file->getIndex()->getTokens());
 });
 
 
 test('a node cannot be placed inside itself', function () {
 	$node = (new Builder)->expression('($a)');
 	Assert::type(ParenthesizedNode::class, $node);
-	Assert::exception(
+	assertRefused(
 		fn() => $node->expression = $node,
 		LogicException::class,
 		'A node cannot be placed inside itself or inside what it holds.',
+		$node,
 	);
-	Assert::same('($a)', (string) $node);
-	Assert::null($node->parent);
 
 	// not even into an empty slot of a node standing nowhere, which is written the way a new node is built
 	$yield = (new Builder)->expression('yield');
 	Assert::type(PhpSyntax\Nodes\Expression\YieldNode::class, $yield);
-	Assert::exception(
+	assertRefused(
 		fn() => $yield->value = $yield,
 		LogicException::class,
 		'A node cannot be placed inside itself or inside what it holds.',
+		$yield,
 	);
-	Assert::null($yield->value);
 
 	// nor into a list standing nowhere, which the parser fills the same way
 	$list = new PlainNodeList([]);
-	Assert::exception(
+	assertRefused(
 		fn() => $list->append($list),
 		LogicException::class,
 		'A node cannot be placed inside itself or inside what it holds.',
+		$list,
 	);
-	Assert::count(0, $list);
 
 	$list = new SeparatedNodeList([]);
-	Assert::exception(
+	assertRefused(
 		fn() => $list->append($list),
 		LogicException::class,
 		'A node cannot be placed inside itself or inside what it holds.',
+		$list,
 	);
-	Assert::count(0, $list);
 
 	// nor may what holds it be written below it
 	$file = parse('<?php f($a);');
@@ -953,43 +944,42 @@ test('a node cannot be placed inside itself', function () {
 	Assert::type(FunctionCallNode::class, $call);
 	$argument = $call->arguments->items[0];
 	Assert::type(ArgumentNode::class, $argument);
-	Assert::exception(
+	assertRefused(
 		fn() => $argument->value = $call,
 		LogicException::class,
 		'A node cannot be placed inside itself or inside what it holds.',
+		$file,
 	);
-	Assert::same('<?php f($a);', (string) $file);
 
 	// not even the root of a fragment, which stands nowhere itself
 	$call = (new Builder)->expression('f($a)');
 	Assert::type(FunctionCallNode::class, $call);
 	$argument = $call->arguments->items[0];
 	Assert::type(ArgumentNode::class, $argument);
-	Assert::exception(
+	assertRefused(
 		fn() => $argument->value = $call,
 		LogicException::class,
 		'A node cannot be placed inside itself or inside what it holds.',
+		$call,
 	);
-	Assert::same('f($a)', (string) $call);
-	Assert::null($call->parent);
 });
 
 
 test('a child that does not fit the slot is refused', function () {
 	$node = (new Builder)->expression('($a)');
 	Assert::type(ParenthesizedNode::class, $node);
-	Assert::exception(
+	assertRefused(
 		fn() => $node->replaceChild($node->expression, new PhpSyntax\Token(1, 'x')),
 		InvalidArgumentException::class,
 		'Token `x` cannot be placed in the slot `expression` of `PhpSyntax\\Nodes\\Expression\\ParenthesizedNode`.',
+		$node,
 	);
-	Assert::same('($a)', (string) $node); // a refused write leaves the node as it was
 });
 
 
 test('remove is only for list items', function () {
 	$stmt = stmts(parse('<?php $a;'))[0];
 	Assert::type(ExpressionStatementNode::class, $stmt);
-	Assert::exception($stmt->expression->remove(...), LogicException::class, 'Only an item of a list can be removed; a slot is emptied by its setter.');
-	Assert::exception(fn() => new VariableNode(null, null, new PhpSyntax\Token(1, 'x'), null)->replaceWith($stmt->expression), LogicException::class, 'A node without a parent cannot be replaced.');
+	assertRefused($stmt->expression->remove(...), LogicException::class, 'Only an item of a list can be removed; a slot is emptied by its setter.', $stmt);
+	assertRefused(fn() => new VariableNode(null, null, new PhpSyntax\Token(1, 'x'), null)->replaceWith($stmt->expression), LogicException::class, 'A node without a parent cannot be replaced.', $stmt);
 });

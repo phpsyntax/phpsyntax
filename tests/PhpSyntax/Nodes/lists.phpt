@@ -61,7 +61,7 @@ test('PlainNodeList: items, parents, iteration, mutation', function () {
 	Assert::same($list, $x->parent);
 	Assert::same(1, $list->indexOf($x));
 
-	Assert::exception(fn() => $list->append($x), LogicException::class, 'The node already belongs to a tree; a copy comes from `withoutEdgeTrivia()`, or from `clone` with the trivia on its edges.');
+	assertRefused(fn() => $list->append($x), LogicException::class, 'The node already belongs to a tree; a copy comes from `withoutEdgeTrivia()`, or from `clone` with the trivia on its edges.', $list);
 	Assert::exception(fn() => $list->indexOf($a), InvalidArgumentException::class, '`StubNode` is not a child of `PhpSyntax\Nodes\PlainNodeList`.');
 });
 
@@ -188,19 +188,20 @@ test('a block standing among statements is unwrapped into them', function () {
 	// next to a close tag or inline HTML the whitespace is output, so the block is refused before anything moves
 	foreach (["<?php {\n\techo 2 ?>\nhtml2\n<?php }", "<?php {\n\t\$b;\n} ?>\nx", "x<?php {\n\t\$b;\n}"] as $code) {
 		$file = $parser->parse($code);
-		Assert::exception(
+		assertRefused(
 			($file->findFirst(BlockNode::class) ?? throw new LogicException)->unwrap(...),
 			LogicException::class,
 			'The block stands next to a close tag or inline HTML, where the whitespace its braces leave would be output of the script.',
+			$file,
 		);
-		Assert::same($code, (string) $file);
 	}
 
 	$file = $parser->parse("<?php\nif (\$a) {\n\t\$b;\n}\n");
-	Assert::exception(
+	assertRefused(
 		($file->findFirst(BlockNode::class) ?? throw new LogicException)->unwrap(...),
 		LogicException::class,
 		'Only a block standing among statements can be unwrapped; a body is written by its setter.',
+		$file,
 	);
 });
 
@@ -295,7 +296,7 @@ test('SeparatedNodeList: separators between items and an optional trailing one',
 	$list->append(node('c'));
 	Assert::same('x;b;c', (string) $list);
 	Assert::exception(fn() => (new SeparatedNodeList)->append(node('c'), comma()), LogicException::class);
-	Assert::exception(fn() => $list->replaceChild($semicolon, node('y')), InvalidArgumentException::class);
+	assertRefused(fn() => $list->replaceChild($semicolon, node('y')), InvalidArgumentException::class, null, $list);
 });
 
 

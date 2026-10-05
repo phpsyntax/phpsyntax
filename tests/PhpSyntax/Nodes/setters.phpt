@@ -106,7 +106,7 @@ test('every function-like construct but a hook takes a return type', function ()
 	Assert::same("<?php\nclass A {\n\tpublic function m(): void {}\n\tpublic int \$p { get => 1; }\n}\n\$c = function () use (\$a): int {};\n\$f = fn(\$x): int => \$x;\n", (string) $file);
 
 	$hook = first($file, PropertyHookNode::class);
-	Assert::exception(fn() => $hook->setReturnType(null), LogicException::class, 'A property hook has no return type.');
+	assertRefused(fn() => $hook->setReturnType(null), LogicException::class, 'A property hook has no return type.', $file);
 });
 
 

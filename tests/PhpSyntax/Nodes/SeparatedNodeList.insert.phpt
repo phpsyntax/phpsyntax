@@ -36,7 +36,7 @@ test('one-line list: the separator is modeled on the existing ones', function ()
 	$list->insert(2, item('x'));
 	Assert::same('<?php [0, 1, x, 2, 3]', (string) $list->parent);
 	Assert::same(5, count($list));
-	Assert::exception(fn() => $list->insert(9, item('9')), OutOfRangeException::class, 'Index 9 is out of range, the list has %d% items.');
+	assertRefused(fn() => $list->insert(9, item('9')), OutOfRangeException::class, 'Index 9 is out of range, the list has %d% items.', $list);
 });
 
 
@@ -46,7 +46,9 @@ test('empty and single-item lists', function () {
 	Assert::same('<?php [1]', (string) $list->parent);
 	$list->append(item('2'));
 	Assert::same('<?php [1, 2]', (string) $list->parent);
-	Assert::exception(fn() => items('<?php [];')->append(item('1'), new PhpSyntax\Token(ord(','), ',')), LogicException::class, 'The first item has no separator before it.');
+	$empty = items('<?php [];');
+	$item = item('1');
+	assertRefused(fn() => $empty->append($item, new PhpSyntax\Token(ord(','), ',')), LogicException::class, 'The first item has no separator before it.', $empty, $item);
 });
 
 
@@ -99,10 +101,12 @@ test('a trailing separator in a one-line list models no separator between items'
 
 
 test('an empty list takes no trailing separator', function () {
-	Assert::exception(
-		fn() => items('<?php [];')->setTrailingSeparator(new PhpSyntax\Token(ord(','), ',')),
+	$empty = items('<?php [];');
+	assertRefused(
+		fn() => $empty->setTrailingSeparator(new PhpSyntax\Token(ord(','), ',')),
 		LogicException::class,
 		'An empty list has no item a trailing separator could follow.',
+		$empty,
 	);
 });
 

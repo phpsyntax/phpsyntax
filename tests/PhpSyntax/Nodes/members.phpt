@@ -69,9 +69,8 @@ test('an identifier takes an identifier and nothing else', function () {
 	$method = $file->find(MethodNode::class)[0];
 	$method->name->text = 'c';
 	Assert::same('c', $method->name->text);
-	Assert::exception(fn() => $method->name->text = 'c d', InvalidArgumentException::class, '`c d` is not an identifier.');
-	Assert::exception(fn() => $method->name->text = '', InvalidArgumentException::class, "`''` is not an identifier.");
-	Assert::same('c', $method->name->text);
+	assertRefused(fn() => $method->name->text = 'c d', InvalidArgumentException::class, '`c d` is not an identifier.', $file);
+	assertRefused(fn() => $method->name->text = '', InvalidArgumentException::class, "`''` is not an identifier.", $file);
 
 	Assert::same('d', IdentifierNode::fromText('d')->text);
 	Assert::exception(fn() => IdentifierNode::fromText('d e'), InvalidArgumentException::class, '`d e` is not an identifier.');

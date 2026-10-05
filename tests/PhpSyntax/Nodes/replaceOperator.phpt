@@ -94,9 +94,8 @@ test('what is no operator of the node is refused, the tree staying as it was', f
 	$assignment = $file->findFirst(CombinedAssignmentNode::class) ?? throw new LogicException;
 	$unary = $file->findFirst(UnaryOpNode::class) ?? throw new LogicException;
 	$cast = $file->findFirst(CastNode::class) ?? throw new LogicException;
-	Assert::exception(fn() => $binary->replaceOperator('+='), InvalidArgumentException::class, '`+=` is not a binary operator.');
-	Assert::exception(fn() => $assignment->replaceOperator('='), InvalidArgumentException::class, '`=` is not a combined assignment operator.');
-	Assert::exception(fn() => $unary->replaceOperator('++'), InvalidArgumentException::class, '`++` is not a unary operator.');
-	Assert::exception(fn() => $cast->replaceOperator('(foo)'), InvalidArgumentException::class, '`(foo)` is not a cast.');
-	Assert::same('<?php $a + $b; $c += 1; -$d; (int) $e;', (string) $file);
+	assertRefused(fn() => $binary->replaceOperator('+='), InvalidArgumentException::class, '`+=` is not a binary operator.', $file);
+	assertRefused(fn() => $assignment->replaceOperator('='), InvalidArgumentException::class, '`=` is not a combined assignment operator.', $file);
+	assertRefused(fn() => $unary->replaceOperator('++'), InvalidArgumentException::class, '`++` is not a unary operator.', $file);
+	assertRefused(fn() => $cast->replaceOperator('(foo)'), InvalidArgumentException::class, '`(foo)` is not a cast.', $file);
 });
