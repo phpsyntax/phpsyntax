@@ -61,8 +61,7 @@ test('replaceWith puts a token of another kind in place, the trivia around stayi
 	// a separator of a list, and a refusal that moves nothing
 	$file = parse('<?php f($a, $b);');
 	$comma = array_find(tokens($file), fn(Token $token) => $token->is(',')) ?? throw new LogicException;
-	Assert::exception(fn() => $comma->replaceWith($comma->getNext() ?? throw new LogicException), LogicException::class);
-	Assert::same('<?php f($a, $b);', (string) $file);
+	assertRefused(fn() => $comma->replaceWith($comma->getNext() ?? throw new LogicException), LogicException::class, null, $file);
 	Assert::exception(
 		fn() => new Token(ord(';'), ';')->replaceWith(new Token(ord(','), ',')),
 		LogicException::class,
@@ -85,10 +84,11 @@ test('startsLine and indentation', function () {
 	Assert::same("<?php\n\t\$a; \$b;\n\n  // c\n\t\t\$c;", (string) $file);
 	$a->setIndentation('');
 	Assert::same("<?php\n\$a; \$b;\n\n  // c\n\t\t\$c;", (string) $file);
-	Assert::exception(
+	assertRefused(
 		fn() => $b->setIndentation("\t"),
 		LogicException::class,
 		"Token `\$b` does not start a line, so its indentation cannot be set.",
+		$file,
 	);
 
 	// the space after an inline comment is not indentation and survives reindenting
@@ -166,9 +166,11 @@ test('removeTrivia tidies the line around a comment', function () {
 	$e->removeTrivia($e->leadingTrivia[2]); // inline at the start of a line, the indentation stays
 	Assert::same("<?php\n\t\$e;\n", (string) $file);
 
-	Assert::exception(
+	assertRefused(
 		fn() => $d->removeTrivia(new Trivia(Trivia::Comment, '// x')),
 		LogicException::class,
+		null,
+		$file,
 	);
 });
 
@@ -195,15 +197,17 @@ test('whitespace inside string interpolation is refused', function () {
 	$file = parse('<?php "{$a }";');
 	$a = tokens($file)[2];
 	Assert::same('$a', $a->text);
-	Assert::exception(
+	assertRefused(
 		$a->removeTrailingWhitespace(...),
 		LogicException::class,
 		"Token `\$a` is inside string interpolation; its whitespace cannot be changed.",
+		$file,
 	);
-	Assert::exception(
+	assertRefused(
 		fn() => $a->setTrailingSpace(''),
 		LogicException::class,
 		"Token `\$a` is inside string interpolation; its whitespace cannot be changed.",
+		$file,
 	);
 	$a->setTrailingTrivia([]);
 	Assert::same('<?php "{$a}";', (string) $file);
@@ -214,41 +218,47 @@ test('the whitespace helpers refuse what is no whitespace, line ending or count 
 	$code = "<?php\nfoo(); bar();\n";
 	$file = parse($code);
 	[$foo, , , $semicolon, $bar] = tokens($file);
-	Assert::exception(
+	assertRefused(
 		fn() => $foo->setTrailingSpace('evil'),
 		InvalidArgumentException::class,
 		'`evil` is not whitespace within a line, which is made of spaces and tabs.',
+		$file,
 	);
-	Assert::exception(
+	assertRefused(
 		fn() => $semicolon->setTrailingSpace("\n"),
 		InvalidArgumentException::class,
 		'`\n` is not whitespace within a line, which is made of spaces and tabs.',
+		$file,
 	);
-	Assert::exception(
+	assertRefused(
 		fn() => $foo->setIndentation('//'),
 		InvalidArgumentException::class,
 		'`//` is not whitespace within a line, which is made of spaces and tabs.',
+		$file,
 	);
-	Assert::exception(
+	assertRefused(
 		fn() => $bar->ensureStartsLine('<br>'),
 		InvalidArgumentException::class,
 		'`<br>` is not a line ending, which is `\n`, `\r\n` or `\r`.',
+		$file,
 	);
-	Assert::exception(
+	assertRefused(
 		fn() => $foo->setBlankLinesBefore(1, "\n\n"),
 		InvalidArgumentException::class,
 		'`\n\n` is not a line ending, which is `\n`, `\r\n` or `\r`.',
+		$file,
 	);
-	Assert::exception(
+	assertRefused(
 		fn() => $foo->setBlankLinesBefore(-1, "\n"),
 		InvalidArgumentException::class,
 		'Count of blank lines `-1` is negative.',
+		$file,
 	);
-	Assert::exception(
+	assertRefused(
 		fn() => PhpSyntax\Indentation::set($foo, "\t", 'x'),
 		InvalidArgumentException::class,
 		'`x` is not whitespace within a line, which is made of spaces and tabs.',
+		$file,
 	);
-	Assert::same($code, (string) $file);
 	Assert::same(0, $file->revision);
 });

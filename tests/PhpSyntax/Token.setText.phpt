@@ -62,7 +62,7 @@ test('a text of another kind is refused, and the token stays as it was', functio
 	];
 	foreach ($cases as [$code, $old, $new]) {
 		$token = findByText($code, $old);
-		Assert::exception(
+		assertRefused(
 			fn() => $token->setText($new),
 			InvalidArgumentException::class,
 			'Token '
@@ -70,8 +70,8 @@ test('a text of another kind is refused, and the token stays as it was', functio
 			. ' cannot be written as '
 			. PhpSyntax\Helpers::formatCode($new)
 			. ', which is another kind of token; `replaceWith()` puts one in its place.',
+			$token,
 		);
-		Assert::same($old, $token->text);
 	}
 });
 

@@ -94,11 +94,11 @@ test('writing a name replaces the token with the one it is written as', function
 	Assert::false($name->isKeyword());
 
 	// the name must be the whole token: no whitespace and no comment may reach the text of a token
-	Assert::exception(fn() => $name->text = 'a b', InvalidArgumentException::class, '`a b` is not a name.');
-	Assert::exception(fn() => $name->text = ' Foo', InvalidArgumentException::class, '` Foo` is not a name.');
-	Assert::exception(fn() => $name->text = 'Foo ', InvalidArgumentException::class, '`Foo ` is not a name.');
-	Assert::exception(fn() => $name->text = 'Foo /* c */', InvalidArgumentException::class, '`Foo /* c */` is not a name.');
-	Assert::exception(fn() => $name->text = '', InvalidArgumentException::class, "`''` is not a name.");
+	assertRefused(fn() => $name->text = 'a b', InvalidArgumentException::class, '`a b` is not a name.', $name);
+	assertRefused(fn() => $name->text = ' Foo', InvalidArgumentException::class, '` Foo` is not a name.', $name);
+	assertRefused(fn() => $name->text = 'Foo ', InvalidArgumentException::class, '`Foo ` is not a name.', $name);
+	assertRefused(fn() => $name->text = 'Foo /* c */', InvalidArgumentException::class, '`Foo /* c */` is not a name.', $name);
+	assertRefused(fn() => $name->text = '', InvalidArgumentException::class, "`''` is not a name.", $name);
 
 	// nor any other single token: a number, a variable, an operator, a string
 	foreach (['123', '$a', '+', '"text"', "'text'", '1.5'] as $text) {

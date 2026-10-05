@@ -106,12 +106,12 @@ test('an expression that cannot stand in a string is refused before anything mov
 			VariableNode::class,
 			fn(VariableNode $variable) => $variable->plainName === $name,
 		) ?? throw new LogicException;
-		Assert::exception(
+		assertRefused(
 			fn() => $variable->replaceWithExpression(expression('$x + 1')),
 			InvalidArgumentException::class,
 			'Expression `$x + 1` cannot be written inside a string, which takes a variable, an element, a property or a call reached from a variable.',
+			$file,
 		);
-		Assert::same($code, (string) $file);
 	}
 });
 
@@ -150,12 +150,12 @@ test('what begins the braces must begin with the dollar of a variable, elsewhere
 		foreach (['$x + 1', 'f()'] as $replacement) {
 			$file = (new Parser)->parse($code);
 			$variable = $file->findFirst(VariableNode::class) ?? throw new LogicException;
-			Assert::exception(
+			assertRefused(
 				fn() => $variable->replaceWithExpression(expression($replacement)),
 				InvalidArgumentException::class,
 				"Expression `$replacement` cannot be written inside a string, which takes a variable, an element, a property or a call reached from a variable.",
+				$file,
 			);
-			Assert::same($code, (string) $file);
 		}
 	}
 });
@@ -180,12 +180,12 @@ test('the name of ${name} is refused, an expression in ${expr} goes as anywhere'
 	foreach (['<?php "${a}";', '<?php "${a[0]}";'] as $code) {
 		$file = (new Parser)->parse($code);
 		$variable = $file->findFirst(VariableNode::class) ?? throw new LogicException;
-		Assert::exception(
+		assertRefused(
 			fn() => $variable->replaceWithExpression(expression('$x')),
 			InvalidArgumentException::class,
 			'The name `a` of `${...}` cannot be replaced by an expression, which would name a variable variable there.',
+			$file,
 		);
-		Assert::same($code, (string) $file);
 	}
 });
 
@@ -200,12 +200,12 @@ test('braces after a dollar of the text are refused, an escaped one takes them',
 			VariableNode::class,
 			fn(VariableNode $variable) => $variable->plainName === $name,
 		) ?? throw new LogicException;
-		Assert::exception(
+		assertRefused(
 			fn() => $variable->replaceWithExpression(expression($replacement)),
 			InvalidArgumentException::class,
 			'Braces cannot be written right after the dollar of the text `$`, which would read as `${`.',
+			$file,
 		);
-		Assert::same($code, (string) $file);
 	}
 });
 
@@ -232,9 +232,14 @@ test('checkReplaceWithExpression() refuses what the write refuses, and lets thro
 			fn(VariableNode $variable) => $variable->plainName === $name,
 		) ?? throw new LogicException;
 		$expression = expression($replacement);
-		Assert::exception(fn() => $variable->checkReplaceWithExpression($expression), InvalidArgumentException::class, $message);
-		Assert::exception(fn() => $variable->replaceWithExpression($expression), InvalidArgumentException::class, $message);
-		Assert::same($code, (string) $file);
+		assertRefused(
+			fn() => $variable->checkReplaceWithExpression($expression),
+			InvalidArgumentException::class,
+			$message,
+			$file,
+			$expression,
+		);
+		assertRefused(fn() => $variable->replaceWithExpression($expression), InvalidArgumentException::class, $message, $file, $expression);
 	}
 
 	$file = (new Parser)->parse('<?php "$a[$i] {$o->$m}";');
