@@ -673,6 +673,20 @@ test('isRepeatableRead()', function () {
 });
 
 
+test('hasEffect() tells an expression that may do more than give its value', function () {
+	foreach (['$a->b[C::D] + 1', '"a$b"', '$a ?? [1, 2]', 'fn($x) => $x', '!$a instanceof B'] as $code) {
+		Assert::false(parseStatement("$code;\n")->expression->hasEffect(), $code);
+	}
+
+	foreach ([
+		'f()', '$a->b()', 'A::b()', 'new A', 'clone $a', '$a = 1', '$a =& $b', '$a += 1', '++$a', '$a--', 'include $f', 'eval($c)',
+		'print 1', 'exit', 'throw $e', 'yield 1', 'yield from $g', '`ls`', '"{$a->b()}"', '$a[f()]', 'fn() => f()',
+	] as $code) {
+		Assert::true(parseStatement("$code;\n")->expression->hasEffect(), $code);
+	}
+});
+
+
 test('evaluatesToBoolean() tells an expression that yields a boolean whatever its operands', function () {
 	foreach ([
 		'$a === $b', '$a < 1', '$a && $b', '$a or $b', '!$a', '(bool) $a', '($a == 1)', '$a instanceof B', 'isset($a)',
