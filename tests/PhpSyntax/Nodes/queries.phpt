@@ -727,6 +727,14 @@ test('interruptsFlow() tells a statement after which the code does not go on, a 
 });
 
 
+test('findDirective() finds a directive of a declare by its name in any case', function () {
+	$declare = (new Parser)->parse("<?php declare(ticks=1, STRICT_TYPES=1);\n")->find(PhpSyntax\Nodes\Statement\DeclareNode::class)[0];
+	Assert::same('STRICT_TYPES=1', $declare->findDirective('strict_types')?->text);
+	Assert::same('ticks=1', $declare->findDirective('Ticks')?->text);
+	Assert::null($declare->findDirective('encoding'));
+});
+
+
 test('isPreamble() is a BOM, a hashbang line, or both, and nothing more', function () {
 	$first = function (string $code): InlineHtmlNode {
 		$stmt = (new Parser)->parse($code)->statements[0];

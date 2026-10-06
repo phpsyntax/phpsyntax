@@ -59,4 +59,11 @@ final class DeclareNode extends StatementNode
 		$endKeyword === null || $this->endKeyword = $endKeyword;
 		$semicolon === null || $this->semicolon = $semicolon;
 	}
+
+
+	/** The directive of the name given, such as `strict_types`, in any case as PHP reads it; null where none is. */
+	public function findDirective(string $name): ?DeclareItemNode
+	{
+		return array_find($this->items->getItems(), fn(DeclareItemNode $item) => $item->name->equals($name));
+	}
 }
