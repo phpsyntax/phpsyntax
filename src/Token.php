@@ -558,6 +558,20 @@ final class Token extends \PhpToken implements \Stringable
 
 
 	/**
+	 * The doc comments among the trivia of the token, the leading ones first; one inside string interpolation is left
+	 * out, documenting nothing there.
+	 * @return list<Trivia>
+	 */
+	public function getDocComments(): array
+	{
+		return array_values(array_filter(
+			[...$this->leadingTrivia, ...$this->trailingTrivia],
+			fn(Trivia $trivia) => $trivia->id === Trivia::DocComment && !$trivia->inInterpolation,
+		));
+	}
+
+
+	/**
 	 * Whether a comment sits anywhere between the text of this token and the text of the given one:
 	 * in the trailing trivia here, the leading trivia there, or around any token between them. The tokens stand
 	 * in one file, this one first; the same token twice is an empty interval.

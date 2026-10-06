@@ -184,6 +184,15 @@ test('hasComment() sees a comment on either side of the token and nothing else',
 });
 
 
+test('getDocComments() gives the doc comments on either side of the token, none inside interpolation', function () {
+	$texts = fn(array $comments) => array_map(fn(Trivia $trivia) => $trivia->text, $comments);
+	$tokens = (new Parser)->parse("<?php\n/** a */\n// b\n/** c */ f(); /** d */\n\"{\$x /** e */}\";\n")->getIndex()->getTokens();
+	Assert::same(['/** a */', '/** c */'], $texts($tokens[0]->getDocComments()));
+	Assert::same(['/** d */'], $texts($tokens[3]->getDocComments()));
+	Assert::same([], array_merge(...array_map(fn(PhpSyntax\Token $token) => $token->getDocComments(), array_slice($tokens, 4))));
+});
+
+
 test('hasCommentUpTo() looks between two tokens of one file in their order and refuses any other interval', function () {
 	$file = (new Parser)->parse('<?php a(); /* x */ b(); c();');
 	[$a, , , , $b, , , , $c] = $file->getTokens();
