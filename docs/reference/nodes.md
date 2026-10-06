@@ -226,6 +226,7 @@ Extends `Node`.
 | `$shortName: string` | The last segment, which is what an import of the name brings in. |
 | `$symbolKind: SymbolKind` | Which table of names the name belongs to: functions when called, constants when fetched, what a use item imports, otherwise classes, a namespace among them. It follows the place in the tree, so moving the node changes it, and it says nothing about whether the name refers to a symbol or declares one, which is `isReference()`: whoever resolves names asks that first. |
 | `static fromText(string $text): NameNode` | A name written as the text, in the token the name is written as (`Foo`, `A\B`, `\A\B`, `namespace\B`); a keyword passes as well, the grammar taking one as a name in some places, whether or not it can name a symbol here. |
+| `static tryFromText(string $text): ?NameNode` | A name written as the text as `fromText()` makes it; null where the text is no name. |
 | `isKeyword(): bool` | Whether the name is a keyword the grammar accepts in place of a name (`static`, `array`, `readonly`, `exit`...). |
 | `isSpecialClass(): bool` | Whether the name is `self`, `static` or `parent`, which stand for a class only where they are written. |
 | `isDeclaration(): bool` | Whether the name declares or imports a symbol instead of referring to one: a namespace statement or a use. |

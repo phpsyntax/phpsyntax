@@ -116,6 +116,9 @@ test('a name built from text is written the way the text says', function () {
 	Assert::same('\Foo\Bar', (string) NameNode::fromText('\Foo\Bar'));
 	Assert::true(NameNode::fromText('static')->isKeyword());
 	Assert::exception(fn() => NameNode::fromText('a b'), InvalidArgumentException::class, '`a b` is not a name.');
+	Assert::same(NameForm::Qualified, NameNode::tryFromText('Foo\Bar')?->form);
+	Assert::null(NameNode::tryFromText('a b'));
+	Assert::null(NameNode::tryFromText('$a'));
 });
 
 

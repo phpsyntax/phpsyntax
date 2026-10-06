@@ -112,6 +112,17 @@ final class NameNode extends Node
 	}
 
 
+	/** A name written as the text as `fromText()` makes it; null where the text is no name. */
+	public static function tryFromText(string $text): ?self
+	{
+		try {
+			return self::fromText($text);
+		} catch (\InvalidArgumentException) {
+			return null;
+		}
+	}
+
+
 	/** Whether the name is a keyword the grammar accepts in place of a name (`static`, `array`, `readonly`, `exit`...). */
 	public function isKeyword(): bool
 	{
