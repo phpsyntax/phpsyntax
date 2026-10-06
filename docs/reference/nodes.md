@@ -1919,6 +1919,10 @@ Extends `StatementNode`.
 | `endKeyword` | `?Token` | Closer |
 | `semicolon` | `?Token` | Anchor |
 
+| Member | Description |
+|---|---|
+| `findDirective(string $name): ?DeclareItemNode` | The directive of the name given, such as `strict_types`, in any case as PHP reads it; null where none is. |
+
 ### Statement\TryNode
 
 `try` statement with catches and an optional `finally`.
