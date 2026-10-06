@@ -9,9 +9,10 @@ namespace PhpSyntax\Nodes;
 
 use PhpSyntax\{DereferenceKind, Helpers, Node, Token, Trivia};
 use PhpSyntax\Nodes\Expression\{
-	ArrayAccessNode, ArrayNode, AssignmentByReferenceNode, AssignmentNode, BinaryOpNode, CastNode, ClassConstantFetchNode,
-	CombinedAssignmentNode, ConstantFetchNode, EmptyNode, FunctionCallNode, InstanceofNode, IssetNode, MethodCallNode, ParenthesizedNode,
-	PostfixOpNode, PrefixOpNode, PropertyFetchNode, ShellExecNode, StaticMethodCallNode, StaticPropertyFetchNode, UnaryOpNode, VariableNode,
+	ArrayAccessNode, ArrayNode, AssignmentByReferenceNode, AssignmentNode, BinaryOpNode, CastNode, ClassConstantFetchNode, CloneNode,
+	CombinedAssignmentNode, ConstantFetchNode, EmptyNode, EvalNode, ExitNode, FunctionCallNode, IncludeNode, InstanceofNode,
+	IssetNode, MethodCallNode, NewNode, ParenthesizedNode, PostfixOpNode, PrefixOpNode, PrintNode, PropertyFetchNode, ShellExecNode,
+	StaticMethodCallNode, StaticPropertyFetchNode, ThrowNode, UnaryOpNode, VariableNode, YieldFromNode, YieldNode,
 };
 use PhpSyntax\Nodes\Scalar\{BooleanNode, NullNode};
 use PhpSyntax\Nodes\Statement\{ForeachNode, GlobalNode, UnsetNode};
@@ -275,6 +276,36 @@ abstract class ExpressionNode extends Node
 		}
 
 		return true;
+	}
+
+
+	/**
+	 * Whether evaluating the expression may do more than give its value: call code, create or clone an object, write,
+	 * print, leave or run a command; a closure or an arrow function written in it counts by the expressions of its
+	 * body, though making one runs nothing. The answer is syntactic as that of `isRepeatableRead()`, so a read an
+	 * object answers through a magic method or a hook does not count, and neither does what may fail, an error a
+	 * division by zero throws or a warning a read of a missing key gives.
+	 */
+	public function hasEffect(): bool
+	{
+		return array_any([$this, ...$this->find(self::class)], fn(self $node) => $node instanceof FunctionCallNode
+			|| $node instanceof MethodCallNode
+			|| $node instanceof StaticMethodCallNode
+			|| $node instanceof NewNode
+			|| $node instanceof CloneNode
+			|| $node instanceof AssignmentNode
+			|| $node instanceof AssignmentByReferenceNode
+			|| $node instanceof CombinedAssignmentNode
+			|| $node instanceof PrefixOpNode
+			|| $node instanceof PostfixOpNode
+			|| $node instanceof IncludeNode
+			|| $node instanceof EvalNode
+			|| $node instanceof PrintNode
+			|| $node instanceof ExitNode
+			|| $node instanceof ThrowNode
+			|| $node instanceof YieldNode
+			|| $node instanceof YieldFromNode
+			|| $node instanceof ShellExecNode);
 	}
 
 
