@@ -32,6 +32,7 @@ Node of the concrete syntax tree; every token of the source is reachable through
 | `replaceDocComment(Trivia $docComment): void` | Replaces the doc comment of the node (see `getDocComment()`) with the trivia given. |
 | `removeDocComment(): void` | Removes the doc comment of the node (see `getDocComment()`) together with the line it stands on. |
 | `findAncestor(string $class): ?Node` | The innermost node of the class above this one, its parent first. |
+| `findClassScope(): (ClassLikeNode&Node)\|null` | The class whose scope the node stands in, the one `self`, `static` and `__CLASS__` name; null outside a class and in a function declared inside a method, which has no class scope. The arguments of `new class(...)` stand in the scope around it. |
 | `findFirst(string $class, ?callable $predicate = null): ?Node` | The first descendant of the class the predicate accepts, in pre-order; null when there is none. |
 | `find(string $class, ?callable $predicate = null): array` | Descendant nodes of the class the predicate accepts, in pre-order, as a snapshot safe to iterate while mutating the tree. |
 | `getNextSibling(): ?Node` | The next item of the list the node is an item of; null for the last one. |

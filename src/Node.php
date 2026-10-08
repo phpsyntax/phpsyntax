@@ -7,7 +7,8 @@
 
 namespace PhpSyntax;
 
-use PhpSyntax\Nodes\{FileNode, NodeList};
+use PhpSyntax\Nodes\{AnonymousClassNode, ClassLikeNode, FileNode, NodeList};
+use PhpSyntax\Nodes\Statement\FunctionNode;
 use function count;
 
 
@@ -361,6 +362,25 @@ abstract class Node implements \Stringable
 		for ($node = $this->parent; $node; $node = $node->parent) {
 			if ($node instanceof $class) {
 				return $node;
+			}
+		}
+
+		return null;
+	}
+
+
+	/**
+	 * The class whose scope the node stands in, the one `self`, `static` and `__CLASS__` name; null outside a class and
+	 * in a function declared inside a method, which has no class scope. The arguments of `new class(...)` stand in the
+	 * scope around it.
+	 */
+	public function findClassScope(): (ClassLikeNode&Node)|null
+	{
+		for ($node = $this, $ancestor = $this->parent; $ancestor; $node = $ancestor, $ancestor = $ancestor->parent) {
+			if ($ancestor instanceof FunctionNode) {
+				return null;
+			} elseif ($ancestor instanceof ClassLikeNode && !($ancestor instanceof AnonymousClassNode && $node === $ancestor->arguments)) {
+				return $ancestor;
 			}
 		}
 
