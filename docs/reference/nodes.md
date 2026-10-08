@@ -2147,6 +2147,7 @@ Extends `MemberNode`. Implements `AttributeAwareNode`.
 
 | Member | Description |
 |---|---|
+| `isOverridable(): bool` | Whether a descendant may declare the constant again: it is neither private nor final, and its class may be extended. |
 | `getFirstToken(): Token` | Narrows the return type of `Node::getFirstToken()`. |
 | `getLastToken(): Token` | Narrows the return type of `Node::getLastToken()`. |
 
@@ -2175,6 +2176,7 @@ Extends `MemberNode`. Implements `FunctionLikeNode`, `AttributeAwareNode`.
 |---|---|
 | `setReturnType(?TypeNode $type): static` | Writes the return type with its colon, or removes both, as `FunctionLikeNode::setReturnType()` says. |
 | `isConstructor(): bool` | Whether the method is the constructor, whose name PHP compares without regard to letter case. |
+| `isOverridable(): bool` | Whether a descendant may declare the method again: it is neither private nor final, and its class may be extended. |
 | `getFirstToken(): Token` | Narrows the return type of `Node::getFirstToken()`. |
 | `getLastToken(): Token` | Narrows the return type of `Node::getLastToken()`. |
 

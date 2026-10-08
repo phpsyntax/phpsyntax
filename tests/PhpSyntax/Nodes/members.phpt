@@ -164,6 +164,26 @@ test('the constructor by its name, whatever its letter case', function () {
 });
 
 
+test('a method or a constant a descendant may declare again is neither private nor final, nor in a class nothing extends', function () {
+	$file = parseFile(<<<'X'
+		class A { function a() {} private function b() {} final function c() {} const A = 1; private const B = 1; final const C = 1; }
+		final class B { function a() {} const A = 1; }
+		enum C { const A = 1; function a() {} }
+		interface D { const A = 1; function a(); }
+		trait E { function a() {} }
+		new class { function a() {} const A = 1; };
+		X);
+	Assert::same(
+		[true, false, false, false, false, true, true, false],
+		array_map(fn(MethodNode $m) => $m->isOverridable(), $file->find(MethodNode::class)),
+	);
+	Assert::same(
+		[true, false, false, false, false, true, false],
+		array_map(fn(PhpSyntax\Nodes\Member\ClassConstNode $c) => $c->isOverridable(), $file->find(PhpSyntax\Nodes\Member\ClassConstNode::class)),
+	);
+});
+
+
 test('the type of a cast in the name PHP knows it by', function () {
 	$file = parseFile('(int) $a; (integer) $b; (boolean) $c; ( double ) $d; (real) $e; (binary) $f; (object) $g;');
 	Assert::same(

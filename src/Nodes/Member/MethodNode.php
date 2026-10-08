@@ -9,7 +9,7 @@ namespace PhpSyntax\Nodes\Member;
 
 use PhpSyntax\Nodes\{AttributeGroupNode, FunctionLikeNode, IdentifierNode, MemberNode, ModifiersNode, ParameterNode, PlainNodeList, SeparatedNodeList, TypeNode};
 use PhpSyntax\Nodes\Statement\BlockNode;
-use PhpSyntax\{Surgery, Token};
+use PhpSyntax\{Surgery, Token, Visibility};
 
 
 /**
@@ -87,5 +87,12 @@ final class MethodNode extends MemberNode implements FunctionLikeNode
 	public function isConstructor(): bool
 	{
 		return strcasecmp($this->name->text, '__construct') === 0;
+	}
+
+
+	/** Whether a descendant may declare the method again: it is neither private nor final, and its class may be extended. */
+	public function isOverridable(): bool
+	{
+		return $this->modifiers->visibility !== Visibility::Private && !$this->modifiers->final && $this->isInExtendableClass();
 	}
 }

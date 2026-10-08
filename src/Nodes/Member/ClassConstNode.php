@@ -8,7 +8,7 @@
 namespace PhpSyntax\Nodes\Member;
 
 use PhpSyntax\Nodes\{AttributeAwareNode, AttributeGroupNode, ConstItemNode, MemberNode, ModifiersNode, PlainNodeList, SeparatedNodeList, TypeNode};
-use PhpSyntax\Token;
+use PhpSyntax\{Token, Visibility};
 
 
 /**
@@ -50,5 +50,12 @@ final class ClassConstNode extends MemberNode implements AttributeAwareNode
 		$type === null || $this->type = $type;
 		$this->items = $items;
 		$this->semicolon = $semicolon;
+	}
+
+
+	/** Whether a descendant may declare the constant again: it is neither private nor final, and its class may be extended. */
+	public function isOverridable(): bool
+	{
+		return $this->modifiers->visibility !== Visibility::Private && !$this->modifiers->final && $this->isInExtendableClass();
 	}
 }
