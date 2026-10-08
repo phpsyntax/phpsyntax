@@ -293,6 +293,59 @@ abstract class ExpressionNode extends Node
 	}
 
 
+	/** Whether the expression reads a constant, global or of a class named outright, the same whenever it is read. */
+	public function isConstantRead(): bool
+	{
+		return $this instanceof ConstantFetchNode
+			|| ($this instanceof ClassConstantFetchNode && $this->class instanceof NameNode && $this->name instanceof IdentifierNode);
+	}
+
+
+	/** Whether the expression may stand where PHP asks for a constant expression, which a late static binding may not. */
+	public function isConstantExpression(): bool
+	{
+		return match (true) {
+			$this instanceof ClassConstantFetchNode => $this->isConstantRead()
+				&& $this->class instanceof NameNode
+				&& !$this->class->equals('static'),
+			$this instanceof ArrayNode => array_all(
+				$this->items->getItems(),
+				fn($item) => $item instanceof ArrayItemNode
+					&& $item->ellipsis === null
+					&& $item->value instanceof self
+					&& $item->value->isConstantExpression()
+					&& ($item->key === null || $item->key->isConstantExpression()),
+			),
+			default => $this->hasValue() || $this->isConstantRead(),
+		};
+	}
+
+
+	/**
+	 * Whether PHP reads a part of the expression, the target of an assignment, before it evaluates the value: an offset
+	 * or a name that is neither a plain variable, a literal nor a constant, or a class given by an expression,
+	 * `$a[$o->i] = $o->next()` reading `$o->i` before the call.
+	 */
+	public function hasEarlyReads(): bool
+	{
+		[$base, $operand] = match (true) {
+			$this instanceof VariableNode => [null, $this->name],
+			$this instanceof ArrayAccessNode => [$this->expression, $this->index],
+			$this instanceof PropertyFetchNode => [$this->object, $this->name],
+			$this instanceof StaticPropertyFetchNode => [null, $this->name],
+			default => [null, $this],
+		};
+		return ($this instanceof StaticPropertyFetchNode && $this->class instanceof self)
+			|| (
+				$operand instanceof self
+				&& !($operand instanceof VariableNode && $operand->name instanceof Token)
+				&& !$operand->hasValue()
+				&& !$operand->isConstantRead()
+			)
+			|| ($base instanceof self && $base->hasEarlyReads());
+	}
+
+
 	/**
 	 * Whether the expression yields a boolean whatever its operands: a comparison, a logical operation, a negation,
 	 * `instanceof`, `isset()`, `empty()`, a bool cast or a boolean literal.
