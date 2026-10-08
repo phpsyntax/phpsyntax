@@ -7,7 +7,7 @@
 
 namespace PhpSyntax\Nodes;
 
-use PhpSyntax\{DereferenceKind, Helpers, Node, Token, Trivia};
+use PhpSyntax\{ConstantExpressionFeature, DereferenceKind, Helpers, Node, Token, Trivia};
 use PhpSyntax\Nodes\Expression\{
 	ArrayAccessNode, ArrayNode, AssignmentByReferenceNode, AssignmentNode, BinaryOpNode, CastNode, ClassConstantFetchNode, CloneNode,
 	CombinedAssignmentNode, ConstantFetchNode, EmptyNode, EvalNode, ExitNode, FunctionCallNode, IncludeNode, InstanceofNode,
@@ -306,6 +306,100 @@ abstract class ExpressionNode extends Node
 			|| $node instanceof YieldNode
 			|| $node instanceof YieldFromNode
 			|| $node instanceof ShellExecNode);
+	}
+
+
+	/** Whether the expression reads a constant, global or of a class named outright, the same whenever it is read. */
+	public function isConstantRead(): bool
+	{
+		return $this instanceof ConstantFetchNode
+			|| ($this instanceof ClassConstantFetchNode && $this->class instanceof NameNode && $this->name instanceof IdentifierNode);
+	}
+
+
+	/**
+	 * Whether the expression may stand where PHP asks for a constant expression, holding nothing beyond what every
+	 * place and every version takes but the features allowed: literals, constants, `X::C` and `X::class` other than of
+	 * `static`, the operators but the pipe, the ternary, arrays and offsets into them. What PHP takes in some versions
+	 * and no feature names, a property of an enum case or a class constant named by an expression, counts as none.
+	 */
+	public function isConstantExpression(ConstantExpressionFeature ...$allowed): bool
+	{
+		$holds = fn(?self $node): bool => $node === null || $node->isConstantExpression(...$allowed);
+		$allows = fn(ConstantExpressionFeature $feature): bool => in_array($feature, $allowed, true);
+		return match (true) {
+			$this->hasValue(), $this instanceof Scalar\MagicConstantNode, $this instanceof ConstantFetchNode => true,
+			$this instanceof ClassConstantFetchNode => $this->class instanceof NameNode
+				&& !$this->class->equals('static')
+				&& $this->isConstantRead(),
+			$this instanceof ArrayNode => array_all(
+				$this->items->getItems(),
+				fn($item) => $item instanceof ArrayItemNode
+					&& $item->ampersand === null
+					&& $item->value instanceof self
+					&& $holds($item->value)
+					&& $holds($item->key),
+			),
+			$this instanceof ParenthesizedNode => $holds($this->expression),
+			$this instanceof UnaryOpNode => !$this->operator->is('@') && $holds($this->expression),
+			$this instanceof BinaryOpNode => !$this->operator->is('|>') && $holds($this->left) && $holds($this->right),
+			$this instanceof Expression\TernaryNode => $holds($this->condition) && $holds($this->then) && $holds($this->else),
+			$this instanceof ArrayAccessNode => $this->index !== null && $holds($this->expression) && $holds($this->index),
+			$this instanceof NewNode => $allows(ConstantExpressionFeature::New)
+				&& ($this->class instanceof NameNode
+					? !$this->class->equals('static')
+					: $this->class instanceof self && $holds($this->class))
+				&& array_all(
+					$this->arguments?->items->getItems() ?? [],
+					fn($argument) => $argument instanceof ArgumentNode && $argument->ellipsis === null && $holds($argument->value),
+				),
+			$this instanceof CastNode => $allows(ConstantExpressionFeature::Cast)
+				&& !$this->operator->is(Token::UnsetCast)
+				&& $holds($this->expression),
+			$this instanceof Expression\ClosureNode => $allows(ConstantExpressionFeature::Closure)
+				&& $this->staticKeyword !== null
+				&& $this->uses === null,
+			$this instanceof FunctionCallNode => $allows(ConstantExpressionFeature::Closure)
+				&& $this->name instanceof NameNode
+				&& self::isCallableCreation($this->arguments),
+			$this instanceof StaticMethodCallNode => $allows(ConstantExpressionFeature::Closure)
+				&& $this->class instanceof NameNode && !$this->class->equals('static')
+				&& $this->name instanceof IdentifierNode
+				&& self::isCallableCreation($this->arguments),
+			default => false,
+		};
+	}
+
+
+	/** Whether the arguments are `(...)`, which makes a first-class callable of a call. */
+	private static function isCallableCreation(ArgumentListNode $arguments): bool
+	{
+		return $arguments->items->count() === 1 && $arguments->items->getItems()[0] instanceof VariadicPlaceholderNode;
+	}
+
+
+	/**
+	 * Whether PHP reads a part of the expression, the target of an assignment, before it evaluates the value: an offset
+	 * or a name that is neither a plain variable, a literal nor a constant, or a class given by an expression,
+	 * `$a[$o->i] = $o->next()` reading `$o->i` before the call.
+	 */
+	public function hasEarlyReads(): bool
+	{
+		[$base, $operand] = match (true) {
+			$this instanceof VariableNode => [null, $this->name],
+			$this instanceof ArrayAccessNode => [$this->expression, $this->index],
+			$this instanceof PropertyFetchNode => [$this->object, $this->name],
+			$this instanceof StaticPropertyFetchNode => [null, $this->name],
+			default => [null, $this],
+		};
+		return ($this instanceof StaticPropertyFetchNode && $this->class instanceof self)
+			|| (
+				$operand instanceof self
+				&& !($operand instanceof VariableNode && $operand->name instanceof Token)
+				&& !$operand->hasValue()
+				&& !$operand->isConstantRead()
+			)
+			|| ($base instanceof self && $base->hasEarlyReads());
 	}
 
 

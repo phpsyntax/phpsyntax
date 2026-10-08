@@ -695,6 +695,67 @@ test('hasEffect() tells an expression that may do more than give its value', fun
 });
 
 
+test('isConstantRead() and isConstantExpression() tell a constant and what may stand where PHP asks for one', function () {
+	$expression = fn(string $code) => parseStatement("$code;\n")->expression;
+	foreach (['A', '\A\B', 'A::B', 'static::B'] as $code) {
+		Assert::true($expression($code)->isConstantRead(), $code);
+	}
+
+	foreach (['$a', 'A::$b', '$a::B', 'A::{B}', '1'] as $code) {
+		Assert::false($expression($code)->isConstantRead(), $code);
+	}
+
+	$plain = [
+		'1', "'a'", 'null', 'A', 'A::B', 'self::B', 'parent::B', 'A::class', '__LINE__', '[1, A::B, "k" => [C]]', '[...[1]]',
+		'1 + 2', '!true', '-1 ** 2 <=> 3', 'true and false', '(1)', 'A ? B : C', 'A ?: B', 'A ?? 1', '[1][0]',
+	];
+	foreach ($plain as $code) {
+		Assert::true($expression($code)->isConstantExpression(), $code);
+	}
+
+	foreach ([
+		'static::B', 'static::class', '$a', 'f()', '[...$a]', '[$a]', '[f() => 1]', '@A', '1 |> f(...)', 'A::B->value', '"a{$b}"',
+		'1 instanceof A',
+	] as $code) {
+		Assert::false($expression($code)->isConstantExpression(), $code);
+	}
+
+	// a feature only where it is allowed
+	$all = PhpSyntax\ConstantExpressionFeature::cases();
+	$featured = ['new A(new B, x: [1])', 'new (A::class)', '(int) "1"', 'static function () {}', 'strlen(...)', 'A::b(...)'];
+	foreach ($featured as $code) {
+		Assert::false($expression($code)->isConstantExpression(), $code);
+		Assert::true($expression($code)->isConstantExpression(...$all), $code);
+	}
+
+	Assert::true($expression('new A(1)')->isConstantExpression(PhpSyntax\ConstantExpressionFeature::New));
+	Assert::false($expression('new A((int) 1)')->isConstantExpression(PhpSyntax\ConstantExpressionFeature::New));
+	foreach ([
+		'new static', 'new A(...[1])', 'new class {}', 'function () {}', 'static function () use ($x) {}', 'static fn() => 1', '$o->m(...)',
+		'static::m(...)', '(unset) 1',
+	] as $code) {
+		Assert::false($expression($code)->isConstantExpression(...$all), $code);
+	}
+});
+
+
+test('hasEarlyReads() tells a target of which PHP reads a part before the value', function () {
+	$target = function (string $code): PhpSyntax\Nodes\ExpressionNode {
+		$assign = parseStatement("$code = 1;\n")->expression;
+		assert($assign instanceof PhpSyntax\Nodes\Expression\AssignmentNode);
+		assert($assign->target instanceof PhpSyntax\Nodes\ExpressionNode);
+		return $assign->target;
+	};
+	foreach (['$a[$o->i]', '$a->{$b . "c"}', '${f()}', '$a[f()][1]', '$c::$d', '$a->b[$i->j]->c'] as $code) {
+		Assert::true($target($code)->hasEarlyReads(), $code);
+	}
+
+	foreach (['$a', '$a[1]', '$a[A]', '$a[$i]', '$a->b', 'A::$b', '$a->b->c[1]'] as $code) {
+		Assert::false($target($code)->hasEarlyReads(), $code);
+	}
+});
+
+
 test('evaluatesToBoolean() tells an expression that yields a boolean whatever its operands', function () {
 	foreach ([
 		'$a === $b', '$a < 1', '$a && $b', '$a or $b', '!$a', '(bool) $a', '($a == 1)', '$a instanceof B', 'isset($a)',
