@@ -44,4 +44,24 @@ final class ClassConstantFetchNode extends ExpressionNode
 		$this->name = $name;
 		$closeBrace === null || $this->closeBrace = $closeBrace;
 	}
+
+
+	/**
+	 * Writes the name of the constant, an identifier: a plain name changes its text, and a name given by an expression
+	 * is replaced by the identifier, its braces gone and the trivia on its edges kept, so that `$plainName` reads
+	 * the new name.
+	 */
+	public function rename(string $name): static
+	{
+		if ($this->name instanceof IdentifierNode) {
+			$this->name->text = $name;
+			return $this;
+		}
+
+		$identifier = IdentifierNode::fromText($name);
+		self::takeEdgeTrivia($this->openBrace ?? $this->name, $this->closeBrace ?? $this->name, $identifier);
+		$this->openBrace = $this->closeBrace = null;
+		$this->name = $identifier;
+		return $this;
+	}
 }
