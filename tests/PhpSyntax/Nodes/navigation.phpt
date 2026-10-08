@@ -103,6 +103,29 @@ test('the enclosing function and class are ancestors of an interface', function 
 });
 
 
+test('findClassScope() is the class self names, none in a function, the arguments of new class in the scope around', function () {
+	$code = <<<'XX'
+		<?php
+		$v0;
+		class A {
+			public function m() { $v1; fn() => $v2; function f() { $v3; } }
+			public function n() { new class($v4) { function o() { $v5; } }; }
+		}
+		XX;
+	$vars = [];
+	foreach ((new Parser)->parse($code)->find(VariableNode::class) as $variable) {
+		$vars[(string) $variable->plainName] = $variable;
+	}
+
+	Assert::null($vars['v0']->findClassScope());
+	Assert::same('A', $vars['v1']->findClassScope()?->name?->text);
+	Assert::same('A', $vars['v2']->findClassScope()?->name?->text);
+	Assert::null($vars['v3']->findClassScope());
+	Assert::same('A', $vars['v4']->findClassScope()?->name?->text);
+	Assert::type(PhpSyntax\Nodes\AnonymousClassNode::class, $vars['v5']->findClassScope());
+});
+
+
 test('every function-like declaration tells whether it returns a reference', function () {
 	$code = <<<'XX'
 		<?php
