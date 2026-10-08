@@ -193,6 +193,7 @@ Extends `Node`.
 |---|---|
 | `remove(CommentPolicy $comments = CommentPolicy::MoveToNextToken, bool $mergeBlankLines = false): void` | Removes the statement as `Node::remove()` does. A statement ended by a close tag leaves the tag behind as an empty statement, so that the text after it stays text. A statement that opens its code too, as `<?=` does, goes whole, and so does the empty statement of a close tag, whose removal is for the caller to decide. |
 | `interruptsFlow(): bool` | Whether the code does not go on after the statement: `return`, `break`, `continue`, `goto`, `throw` or `exit`. It reads the statement itself, so an `if` whose every branch returns is no such statement; that is control flow. |
+| `alwaysLeaves(): bool` | Whether the code never goes on past the statement: it interrupts the flow itself, or so does the last statement of a block, every branch of an `if` with an `else`, or every way through a `try`. |
 | `getFirstToken(): Token` | Narrows the return type of `Node::getFirstToken()`. |
 | `getLastToken(): Token` | Narrows the return type of `Node::getLastToken()`. |
 
@@ -1695,6 +1696,7 @@ Extends `StatementNode`.
 | Member | Description |
 |---|---|
 | `interruptsFlow(): bool` | Whether the code does not go on after the last statement of the block, the empty statement a close tag leaves behind it aside; false for an empty block. |
+| `alwaysLeaves(): bool` | Whether the code never goes on past the last statement of the block; false for an empty block. |
 | `unwrap(): void` | Moves the statements of the block into the list the block stands in, in its place, and removes the braces the way `remove()` removes a node: a comment on the opening brace goes before the first statement, one on the closing brace after the last one, before what follows the block, both on lines of their own where the brace stood on one. The statements keep their trivia, the indentation included, which `Indentation::shift()` moves a level up. Throws LogicException for a block whose braces stand next to a close tag or inline HTML, where the whitespace. is output of the script, before anything moves |
 
 ### Statement\IfNode
@@ -1716,6 +1718,10 @@ Extends `StatementNode`.
 | `else` | `?ElseNode` | Anchor |
 | `endKeyword` | `?Token` | Closer |
 | `semicolon` | `?Token` | Anchor |
+
+| Member | Description |
+|---|---|
+| `alwaysLeaves(): bool` | Whether the code never goes on past the `if`: it has an `else` and every branch leaves. |
 
 ### Statement\WhileNode
 
@@ -1936,6 +1942,10 @@ Extends `StatementNode`.
 | `body` | `Statement\BlockNode` | Body |
 | `catches` | `PlainNodeList<CatchNode>` | Anchor |
 | `finally` | `?FinallyNode` | Anchor |
+
+| Member | Description |
+|---|---|
+| `alwaysLeaves(): bool` | Whether the code never goes on past the `try`: its `finally` leaves, or its body and every `catch` do. |
 
 ### Statement\GotoNode
 

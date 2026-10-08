@@ -37,4 +37,12 @@ final class TryNode extends StatementNode
 		$this->catches = $catches;
 		$finally === null || $this->finally = $finally;
 	}
+
+
+	/** Whether the code never goes on past the `try`: its `finally` leaves, or its body and every `catch` do. */
+	public function alwaysLeaves(): bool
+	{
+		return ($this->finally !== null && $this->finally->body->alwaysLeaves())
+			|| ($this->body->alwaysLeaves() && array_all($this->catches->getItems(), fn(CatchNode $catch) => $catch->body->alwaysLeaves()));
+	}
 }

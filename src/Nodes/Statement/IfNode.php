@@ -65,4 +65,15 @@ final class IfNode extends StatementNode
 		$endKeyword === null || $this->endKeyword = $endKeyword;
 		$semicolon === null || $this->semicolon = $semicolon;
 	}
+
+
+	/** Whether the code never goes on past the `if`: it has an `else` and every branch leaves. */
+	public function alwaysLeaves(): bool
+	{
+		return $this->else !== null && array_all(
+			[$this, ...$this->elseifs->getItems(), $this->else],
+			fn(self|ElseifNode|ElseNode $branch) => $branch->body?->alwaysLeaves()
+				?? ($branch->statements !== null && (self::findLastStatement($branch->statements)?->alwaysLeaves() ?? false)),
+		);
+	}
 }

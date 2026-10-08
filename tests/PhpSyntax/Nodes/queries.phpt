@@ -727,6 +727,33 @@ test('interruptsFlow() tells a statement after which the code does not go on, a 
 });
 
 
+test('alwaysLeaves() tells a statement past which the code never goes on, through blocks, branches and try', function () {
+	$statement = fn(string $code) => (new Parser)->parse("<?php function f() { $code }")->find(PhpSyntax\Nodes\Statement\BlockNode::class)[0]->statements->getItems()[0]
+		?? throw new LogicException('A statement is expected.');
+	foreach ([
+		'return;',
+		'{ f(); { throw new E; } }',
+		'if ($a) { return 1; } elseif ($b) throw new E; else { exit; }',
+		'if ($a): return 1; else: return 2; endif;',
+		'try { return 1; } catch (E $e) { throw $e; }',
+		'try { f(); } finally { return; }',
+	] as $code) {
+		Assert::true($statement($code)->alwaysLeaves(), $code);
+	}
+
+	foreach ([
+		'f();',
+		'if ($a) { return 1; }',
+		'if ($a) { return 1; } elseif ($b) { f(); } else { return 2; }',
+		'try { return 1; } catch (E $e) { f(); }',
+		'try { f(); } finally { g(); }',
+		'while ($a) { return; }',
+	] as $code) {
+		Assert::false($statement($code)->alwaysLeaves(), $code);
+	}
+});
+
+
 test('findDirective() finds a directive of a declare by its name in any case', function () {
 	$declare = (new Parser)->parse("<?php declare(ticks=1, STRICT_TYPES=1);\n")->find(PhpSyntax\Nodes\Statement\DeclareNode::class)[0];
 	Assert::same('STRICT_TYPES=1', $declare->findDirective('strict_types')?->text);

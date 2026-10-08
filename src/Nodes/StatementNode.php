@@ -59,4 +59,30 @@ abstract class StatementNode extends Node
 			default => false,
 		};
 	}
+
+
+	/**
+	 * Whether the code never goes on past the statement: it interrupts the flow itself, or so does the last statement
+	 * of a block, every branch of an `if` with an `else`, or every way through a `try`.
+	 */
+	public function alwaysLeaves(): bool
+	{
+		return $this->interruptsFlow();
+	}
+
+
+	/**
+	 * The last statement of the list, the empty statement a close tag leaves behind it aside.
+	 * @param PlainNodeList<StatementNode> $stmts
+	 */
+	protected static function findLastStatement(PlainNodeList $stmts): ?self
+	{
+		$items = $stmts->getItems();
+		$last = array_pop($items);
+		if ($last instanceof EmptyStatementNode && $last->semicolon->is(Token::CloseTag)) {
+			$last = array_pop($items);
+		}
+
+		return $last;
+	}
 }
