@@ -293,6 +293,20 @@ abstract class ExpressionNode extends Node
 	}
 
 
+	/**
+	 * Gives the new name the trivia on the edges of what it takes the place of, from the first of the replaced parts
+	 * to the last; for the set hooks of `$plainName`, which put a plain name where an expression gave one.
+	 */
+	protected static function takeEdgeTrivia(Node|Token $first, Node|Token $last, IdentifierNode|Token $name): void
+	{
+		$leading = ($first instanceof Token ? $first : $first->getFirstToken())->leadingTrivia ?? [];
+		$trailing = ($last instanceof Token ? $last : $last->getLastToken())->trailingTrivia ?? [];
+		$name instanceof Token
+			? $name->setLeadingTrivia($leading)->setTrailingTrivia($trailing)
+			: $name->setEdgeTrivia($leading, $trailing);
+	}
+
+
 	/** Whether the expression reads a constant, global or of a class named outright, the same whenever it is read. */
 	public function isConstantRead(): bool
 	{

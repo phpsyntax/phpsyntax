@@ -284,6 +284,70 @@ test('$plainName of a method call and a class constant fetch', function () {
 });
 
 
+test('rename() writes the name, one an expression gives replaced with its braces and its dollar', function () {
+	$rename = function (string $code): string {
+		$file = (new Parser)->parse("<?php $code;\n");
+		$node = $file->statements->getItems()[0];
+		assert($node instanceof PhpSyntax\Nodes\Statement\ExpressionStatementNode);
+		$expression = $node->expression;
+		assert($expression instanceof PhpSyntax\Nodes\Expression\ClassConstantFetchNode
+			|| $expression instanceof PhpSyntax\Nodes\Expression\MethodCallNode
+			|| $expression instanceof PhpSyntax\Nodes\Expression\StaticMethodCallNode
+			|| $expression instanceof PhpSyntax\Nodes\Expression\PropertyFetchNode
+			|| $expression instanceof PhpSyntax\Nodes\Expression\StaticPropertyFetchNode
+			|| $expression instanceof PhpSyntax\Nodes\Expression\VariableNode);
+		$expression->rename('c');
+		Assert::same('c', $expression->plainName);
+		return PhpSyntax\Printer::print($file);
+	};
+	Assert::same("<?php A::c;\n", $rename('A::B'));
+	Assert::same("<?php \$a?->c();\n", $rename('$a?->b()'));
+	Assert::same("<?php A::c();\n", $rename('A::b()'));
+	Assert::same("<?php \$a->c;\n", $rename('$a->b'));
+	Assert::same("<?php A::\$c;\n", $rename('A::$b'));
+	Assert::same("<?php \$c;\n", $rename('$b'));
+
+	// a name an expression gives is replaced, the trivia on its edges kept
+	Assert::same("<?php \$a->c();\n", $rename('$a->$b()'));
+	Assert::same("<?php \$a->c /* x */ ();\n", $rename('$a->{ $b . "x" } /* x */ ()'));
+	Assert::same("<?php A::c;\n", $rename('A::{$b}'));
+	Assert::same("<?php A::c();\n", $rename('A::{f()}()'));
+	Assert::same("<?php A::\$c;\n", $rename('A::$$b'));
+	Assert::same("<?php A::\$c;\n", $rename('A::${f()}'));
+	Assert::same("<?php \$c;\n", $rename('$$b'));
+	Assert::same("<?php \$c;\n", $rename('${f()}'));
+});
+
+
+test('rename() refuses what is no name, by either way of writing it, and the name stays', function () {
+	foreach ([
+		'A::B' => 'is not an identifier',
+		'A::{$b}' => 'is not an identifier',
+		'$a->b()' => 'is not an identifier',
+		'$a->$b()' => 'is not an identifier',
+		'A::b()' => 'is not an identifier',
+		'A::{f()}()' => 'is not an identifier',
+		'$a->b' => 'is not an identifier',
+		'$a->{$b}' => 'is not an identifier',
+		'A::$b' => 'is not the name of a variable',
+		'A::${f()}' => 'is not the name of a variable',
+		'$b' => 'is not the name of a variable',
+		'${f()}' => 'is not the name of a variable',
+	] as $code => $message) {
+		$expression = parseStatement("$code;\n")->expression;
+		assert($expression instanceof PhpSyntax\Nodes\Expression\ClassConstantFetchNode
+			|| $expression instanceof PhpSyntax\Nodes\Expression\MethodCallNode
+			|| $expression instanceof PhpSyntax\Nodes\Expression\StaticMethodCallNode
+			|| $expression instanceof PhpSyntax\Nodes\Expression\PropertyFetchNode
+			|| $expression instanceof PhpSyntax\Nodes\Expression\StaticPropertyFetchNode
+			|| $expression instanceof PhpSyntax\Nodes\Expression\VariableNode);
+		$before = $expression->text;
+		Assert::exception(fn() => $expression->rename('a b'), InvalidArgumentException::class, "`a b` $message.");
+		Assert::same($before, $expression->text, $code);
+	}
+});
+
+
 test('isThis() and isOfThis() tell $this and its properties', function () {
 	$isThis = function (string $code): bool {
 		$variable = parseStatement("$code;\n")->expression;

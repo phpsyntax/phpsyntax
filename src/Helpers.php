@@ -108,6 +108,15 @@ final class Helpers
 	}
 
 
+	/** Refuses a text that is no name of a variable, written without its dollar sign. */
+	public static function checkVariableName(string $name): void
+	{
+		if (preg_match('~^[a-zA-Z_\x80-\xFF][a-zA-Z0-9_\x80-\xFF]*$~D', $name) !== 1) {
+			throw new \InvalidArgumentException(self::formatCode($name) . ' is not the name of a variable.');
+		}
+	}
+
+
 	public static function checkLineEnding(string $lineEnding): void
 	{
 		if ($lineEnding !== "\n" && $lineEnding !== "\r\n" && $lineEnding !== "\r") {
