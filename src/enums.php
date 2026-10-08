@@ -156,3 +156,20 @@ enum Visibility
 	case Protected;
 	case Private;
 }
+
+
+/**
+ * What a constant expression may hold beyond what every place and every version of PHP takes, the features
+ * `ExpressionNode::isConstantExpression()` is allowed; whether the place and the version take one, the caller knows.
+ */
+enum ConstantExpressionFeature
+{
+	/** `new Foo(...)`, PHP 8.1, in a default of a parameter, an attribute, a static variable and a global constant */
+	case New;
+
+	/** `(int) $x`, PHP 8.5 */
+	case Cast;
+
+	/** a static closure using no variables and a first-class callable of a function or a static method, PHP 8.5 */
+	case Closure;
+}
