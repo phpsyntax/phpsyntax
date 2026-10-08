@@ -46,6 +46,31 @@ final class ArgumentListNode extends Node
 
 
 	/**
+	 * The values of the arguments, in order; null where one is named, passed by reference, unpacked or a placeholder,
+	 * which makes no plain list of values.
+	 * @return ?list<ExpressionNode>
+	 */
+	public function getPlainValues(): ?array
+	{
+		$values = [];
+		foreach ($this->items as $argument) {
+			if (
+				!$argument instanceof ArgumentNode
+				|| $argument->name !== null
+				|| $argument->ampersand !== null
+				|| $argument->ellipsis !== null
+			) {
+				return null;
+			}
+
+			$values[] = $argument->value;
+		}
+
+		return $values;
+	}
+
+
+	/**
 	 * The argument the parameter of the name and the position gets: the one written with the name, else the
 	 * one standing at the position, so that `get_class(object: $o)` reads as the call `get_class($o)` is. Null
 	 * where the parameter gets none, and where the call does not say which it gets: a `?` placeholder holds a

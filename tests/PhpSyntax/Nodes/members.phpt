@@ -133,6 +133,18 @@ test('the argument a parameter gets, and the partial application', function () {
 });
 
 
+test('getPlainValues() gives the values of arguments written plainly, in order', function () {
+	$file = parseFile('f($a, 1 + 2); g(); h(b: 1); i(&$a); j(...$a); k(?); l(...);');
+	Assert::same(
+		[['$a', '1 + 2'], [], null, null, null, null, null],
+		array_map(
+			fn(ArgumentListNode $list) => ($values = $list->getPlainValues()) === null ? null : array_map(fn($value) => $value->text, $values),
+			$file->find(ArgumentListNode::class),
+		),
+	);
+});
+
+
 test('a nullsafe call and fetch', function () {
 	$file = parseFile('$a?->b(); $c->d(); $e?->f; $g->h;');
 	[$nullsafeCall, $call] = $file->find(MethodCallNode::class);
