@@ -158,9 +158,10 @@ test('a builtin type and a type that accepts null', function () {
 });
 
 
-test('the constructor by its name, whatever its letter case', function () {
-	$file = parseFile('class A { function __CONSTRUCT() {} function b() {} }');
-	Assert::same([true, false], array_map(fn(MethodNode $m) => $m->isConstructor(), $file->find(MethodNode::class)));
+test('the constructor and the destructor by their names, whatever their letter case', function () {
+	$file = parseFile('class A { function __CONSTRUCT() {} function b() {} function __Destruct() {} }');
+	Assert::same([true, false, false], array_map(fn(MethodNode $m) => $m->isConstructor(), $file->find(MethodNode::class)));
+	Assert::same([false, false, true], array_map(fn(MethodNode $m) => $m->isDestructor(), $file->find(MethodNode::class)));
 });
 
 
