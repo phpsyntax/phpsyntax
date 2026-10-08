@@ -43,13 +43,14 @@ final class BlockNode extends StatementNode
 	 */
 	public function interruptsFlow(): bool
 	{
-		$stmts = $this->statements->getItems();
-		$last = array_pop($stmts);
-		if ($last instanceof EmptyStatementNode && $last->semicolon->is(Token::CloseTag)) {
-			$last = array_pop($stmts);
-		}
+		return self::findLastStatement($this->statements)?->interruptsFlow() ?? false;
+	}
 
-		return $last?->interruptsFlow() ?? false;
+
+	/** Whether the code never goes on past the last statement of the block; false for an empty block. */
+	public function alwaysLeaves(): bool
+	{
+		return self::findLastStatement($this->statements)?->alwaysLeaves() ?? false;
 	}
 
 
