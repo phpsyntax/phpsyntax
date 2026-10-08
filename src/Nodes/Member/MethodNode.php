@@ -90,6 +90,13 @@ final class MethodNode extends MemberNode implements FunctionLikeNode
 	}
 
 
+	/** Whether the method is the destructor, whose name PHP compares without regard to letter case. */
+	public function isDestructor(): bool
+	{
+		return strcasecmp($this->name->text, '__destruct') === 0;
+	}
+
+
 	/** Whether a descendant may declare the method again: it is neither private nor final, and its class may be extended. */
 	public function isOverridable(): bool
 	{
