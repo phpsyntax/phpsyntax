@@ -776,6 +776,7 @@ Extends `ExpressionNode`.
 |---|---|
 | `$plainName: ?string` | The name without the dollar sign; null where the name is an expression (`$$a`, `${expr}`). |
 | `isThis(): bool` | Whether the variable is `$this`, the object a method runs on. |
+| `rename(string $name): static` | Writes the name of the variable, without the dollar sign: a plain name changes its text, and a name given by an expression is replaced by a variable token, the dollar and the braces around the expression gone and the trivia on its edges kept, so that `$plainName` reads the new name. |
 
 ### Expression\ArrayAccessNode
 
@@ -809,6 +810,7 @@ Extends `ExpressionNode`.
 | `$plainName: ?string` | The name of the property; null where the name is a variable or an expression (`$a->$b`, `$a->{expr}`). |
 | `$nullsafe: bool` | Whether the fetch is written with `?->`, which skips it when the object is null. |
 | `isOfThis(): bool` | Whether the property is one of `$this`, with either operator. |
+| `rename(string $name): static` | Writes the name of the property, an identifier: a plain name changes its text, and a name given by an expression is replaced by the identifier, its braces gone and the trivia on its edges kept, so that `$plainName` reads the new name. |
 
 ### Expression\StaticPropertyFetchNode
 
@@ -828,6 +830,7 @@ Extends `ExpressionNode`.
 | Member | Description |
 |---|---|
 | `$plainName: ?string` | The name of the property without the dollar sign; null where the name is an expression (`$$b`, `${expr}`). |
+| `rename(string $name): static` | Writes the name of the property, without the dollar sign: a plain name changes its text, and a name given by an expression is replaced by a variable token, the dollar and the braces around the expression gone and the trivia on its edges kept, so that `$plainName` reads the new name. |
 
 ### Expression\ClassConstantFetchNode
 
@@ -846,6 +849,7 @@ Extends `ExpressionNode`.
 | Member | Description |
 |---|---|
 | `$plainName: ?string` | The name of the constant; null where the name is an expression (`A::{expr}`). |
+| `rename(string $name): static` | Writes the name of the constant, an identifier: a plain name changes its text, and a name given by an expression is replaced by the identifier, its braces gone and the trivia on its edges kept, so that `$plainName` reads the new name. |
 
 ### Expression\ConstantFetchNode
 
@@ -888,6 +892,7 @@ Extends `ExpressionNode`.
 | `$plainName: ?string` | The name of the method; null where the name is a variable or an expression (`$a->$b()`, `$a->{expr}()`). |
 | `$nullsafe: bool` | Whether the call is written with `?->`, which skips it when the object is null. |
 | `isOfThis(): bool` | Whether the method is one of `$this`, with either operator. |
+| `rename(string $name): static` | Writes the name of the method, an identifier: a plain name changes its text, and a name given by an expression is replaced by the identifier, its braces gone and the trivia on its edges kept, so that `$plainName` reads the new name. |
 
 ### Expression\StaticMethodCallNode
 
@@ -907,6 +912,7 @@ Extends `ExpressionNode`.
 | Member | Description |
 |---|---|
 | `$plainName: ?string` | The name of the method; null where the name is an expression (`A::{expr}()`). |
+| `rename(string $name): static` | Writes the name of the method, an identifier: a plain name changes its text, and a name given by an expression is replaced by the identifier, its braces gone and the trivia on its edges kept, so that `$plainName` reads the new name. |
 
 ### Expression\NewNode
 
