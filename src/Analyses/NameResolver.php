@@ -8,7 +8,7 @@
 namespace PhpSyntax\Analyses;
 
 use PhpSyntax\{Helpers, NameForm, Node, SymbolKind, Token, UnqualifiedResolution};
-use PhpSyntax\Nodes\{ClassLikeNode, ConstItemNode, FileNode, NameNode, PlainNodeList, UseItemNode};
+use PhpSyntax\Nodes\{AttributeAwareNode, ClassLikeNode, ConstItemNode, FileNode, NameNode, PlainNodeList, UseItemNode};
 use PhpSyntax\Nodes\Expression\FunctionCallNode;
 use PhpSyntax\Nodes\Scalar\StringNode;
 use PhpSyntax\Nodes\Statement\{ClassNode, ConstNode, EnumNode, FunctionNode, InterfaceNode, NamespaceNode, TraitNode, UseNode};
@@ -126,6 +126,31 @@ final class NameResolver
 	public function resolveConstant(NameNode $name, Node|Token|null $at = null): string
 	{
 		return $this->resolveIn($name, self::Constants, $at);
+	}
+
+
+	/**
+	 * The classes of the attributes the declaration carries, fully qualified the way PHP resolves them, so that
+	 * `#[Override]` of PHP is told from `#[Acme\Override]` and an alias is seen through.
+	 * @return list<string>
+	 */
+	public function findAttributeClasses(AttributeAwareNode $declaration): array
+	{
+		$classes = [];
+		foreach ($declaration->attributes as $group) {
+			foreach ($group->items as $attribute) {
+				$classes[] = $this->resolveClass($attribute->name);
+			}
+		}
+
+		return $classes;
+	}
+
+
+	/** Whether the declaration carries an attribute of the class, compared the way PHP compares class names. */
+	public function hasAttribute(AttributeAwareNode $declaration, string $class): bool
+	{
+		return array_any($this->findAttributeClasses($declaration), fn(string $name) => strcasecmp($name, ltrim($class, '\\')) === 0);
 	}
 
 

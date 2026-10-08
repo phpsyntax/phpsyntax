@@ -383,6 +383,26 @@ test('the name a declaration introduces, and the declaration of a name', functio
 });
 
 
+test('the attributes of a declaration by the classes PHP resolves their names to', function () {
+	$file = (new Parser)->parse(<<<'XX'
+		<?php
+		namespace App;
+		use Acme\Mark as Tag;
+		#[Override, Tag] #[\SensitiveParameter]
+		function f() {}
+		function g() {}
+		XX);
+	$resolver = new NameResolver($file);
+	[$f, $g] = $file->find(FunctionNode::class);
+
+	Assert::same(['App\Override', 'Acme\Mark', 'SensitiveParameter'], $resolver->findAttributeClasses($f));
+	Assert::same([], $resolver->findAttributeClasses($g));
+	Assert::true($resolver->hasAttribute($f, 'acme\mark'));
+	Assert::true($resolver->hasAttribute($f, '\Acme\Mark'));
+	Assert::false($resolver->hasAttribute($f, 'Override'));
+});
+
+
 test('findDeclaration() gives the first of several declarations of one name, a nested one counting too', function () {
 	$file = (new Parser)->parse(<<<'XX'
 		<?php
