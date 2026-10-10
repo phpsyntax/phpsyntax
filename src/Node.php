@@ -276,7 +276,8 @@ abstract class Node implements \Stringable
 
 	/**
 	 * Doc comment before the node: the last one in the leading trivia of the first token, or in the trailing
-	 * trivia of the previous token, where a doc comment stands between two declarations on one line.
+	 * trivia of the previous token, where a doc comment stands between two declarations on one line; one inside
+	 * string interpolation is left out, documenting nothing there.
 	 */
 	public function getDocComment(): ?Trivia
 	{
@@ -288,7 +289,7 @@ abstract class Node implements \Stringable
 		$previous = $token->getPrevious();
 		foreach ([$token->leadingTrivia, $previous->trailingTrivia ?? []] as $trivias) {
 			for ($i = count($trivias) - 1; $i >= 0; $i--) {
-				if ($trivias[$i]->is(Trivia::DocComment)) {
+				if ($trivias[$i]->is(Trivia::DocComment) && !$trivias[$i]->inInterpolation) {
 					return $trivias[$i];
 				}
 			}

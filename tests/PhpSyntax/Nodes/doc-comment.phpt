@@ -52,3 +52,9 @@ test('doc comment of the last parameter before the closing parenthesis, which a 
 	Assert::same("<?php\nfunction f(\n\t\$a\n\t/** d */,\n) {}\n", (string) $file);
 	Assert::same('/** d */', $function->parameters[0]->getDocComment()->text);
 });
+
+
+test('a doc comment inside string interpolation documents nothing', function () {
+	$file = (new Parser)->parse("<?php \"{\$x[/** c */ 1]}\";\n");
+	Assert::null($file->find(PhpSyntax\Nodes\Scalar\IntegerNode::class)[0]->getDocComment());
+});

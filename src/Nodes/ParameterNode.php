@@ -95,7 +95,7 @@ final class ParameterNode extends Node implements AttributeAwareNode
 		$last = $this->getLastToken();
 		foreach ([$last->getNext()->leadingTrivia ?? [], $last->trailingTrivia] as $trivias) {
 			for ($i = count($trivias) - 1; $i >= 0; $i--) {
-				if ($trivias[$i]->is(Trivia::DocComment)) {
+				if ($trivias[$i]->is(Trivia::DocComment) && !$trivias[$i]->inInterpolation) {
 					return $trivias[$i];
 				}
 			}

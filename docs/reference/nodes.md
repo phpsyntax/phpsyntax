@@ -26,7 +26,7 @@ Node of the concrete syntax tree; every token of the source is reachable through
 | `getEndLine(): ?int` | Current line where the last token ends; null as for `getStartLine()`. |
 | `isMultiLine(): bool` | Whether a line ends inside the text of the node, the trivia on its outer edges left out; unlike the lines, it needs no file. |
 | `getOffsetRange(): ?array` | Byte offsets of the node in the current text of the file, the end exclusive; null as for `getStartLine()`. |
-| `getDocComment(): ?Trivia` | Doc comment before the node: the last one in the leading trivia of the first token, or in the trailing trivia of the previous token, where a doc comment stands between two declarations on one line. |
+| `getDocComment(): ?Trivia` | Doc comment before the node: the last one in the leading trivia of the first token, or in the trailing trivia of the previous token, where a doc comment stands between two declarations on one line; one inside string interpolation is left out, documenting nothing there. |
 | `replaceTrivia(Trivia $old, Trivia $new): void` | Replaces one trivia of the node, wherever among its tokens it stands, with another in place. |
 | `removeTrivia(Trivia $trivia): void` | Removes one trivia of the node, wherever among its tokens it stands, tidying the whitespace around it the way `Token::removeTrivia()` does. |
 | `replaceDocComment(Trivia $docComment): void` | Replaces the doc comment of the node (see `getDocComment()`) with the trivia given. |
