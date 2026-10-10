@@ -100,6 +100,14 @@ test('trivia is a token PHP ignores', function () {
 });
 
 
+test('the last comment of the leading trivia is found by its index', function () {
+	$token = Token::fromText('$a');
+	Assert::null($token->findLastLeadingCommentIndex());
+	$token->setLeadingTrivia([Trivia::fromText('// a'), Trivia::fromText("\n"), Trivia::fromText('/* b */'), Trivia::fromText(' ')]);
+	Assert::same(2, $token->findLastLeadingCommentIndex());
+});
+
+
 test('a trivia with another text is a copy standing where the original stood', function () {
 	$trivia = new Trivia(Trivia::Comment, '// a  ', 3, 10);
 	$trivia->inInterpolation = true;
