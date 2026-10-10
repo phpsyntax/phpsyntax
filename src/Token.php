@@ -547,6 +547,19 @@ final class Token extends \PhpToken implements \Stringable
 	}
 
 
+	/** The index of the last comment among the leading trivia of the token, null where there is none. */
+	public function findLastLeadingCommentIndex(): ?int
+	{
+		for ($i = count($this->leadingTrivia) - 1; $i >= 0; $i--) {
+			if ($this->leadingTrivia[$i]->isComment()) {
+				return $i;
+			}
+		}
+
+		return null;
+	}
+
+
 	/**
 	 * The comments among the trailing trivia of the token.
 	 * @return list<Trivia>
