@@ -20,19 +20,16 @@ use function count;
  */
 final class SeparatedNodeList extends NodeList
 {
-	/** @var list<Token>  one before each item but the first, plus an optional trailing one */
-	private array $separators;
-
-
 	/**
 	 * @internal
 	 * @param list<T> $items
-	 * @param list<Token> $separators
 	 */
-	public function __construct(array $items = [], array $separators = [])
-	{
+	public function __construct(
+		array $items = [],
+		/** @var list<Token>  one before each item but the first, plus an optional trailing one */
+		private array $separators = [],
+	) {
 		$this->items = $items;
-		$this->separators = $separators;
 		foreach ([...$items, ...$separators] as $child) {
 			$this->adopt($child);
 		}
