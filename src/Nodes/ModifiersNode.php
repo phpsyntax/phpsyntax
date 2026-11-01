@@ -57,17 +57,14 @@ final class ModifiersNode extends Node implements \Countable, \IteratorAggregate
 		get => $this->has(Token::Readonly);
 	}
 
-	/** @var list<Token> */
-	private array $tokens;
-
 
 	/**
 	 * @internal
-	 * @param list<Token> $tokens
 	 */
-	public function __construct(array $tokens = [])
-	{
-		$this->tokens = $tokens;
+	public function __construct(
+		/** @var list<Token> */
+		private array $tokens = [],
+	) {
 		foreach ($tokens as $token) {
 			if ($token->parent === null) { // being built, nothing to check
 				$token->parent = $this;

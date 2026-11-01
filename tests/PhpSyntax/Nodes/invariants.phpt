@@ -131,8 +131,7 @@ test('a generated sequence of mutations leaves the tree and the index in agreeme
 
 				case 3:
 					pickAlive($file->find(FunctionCallNode::class))?->arguments->items->append($builder->fragment(
-						ArgumentNode::class,
-						'$extra',
+						ArgumentNode::class, '$extra',
 					));
 					break;
 
