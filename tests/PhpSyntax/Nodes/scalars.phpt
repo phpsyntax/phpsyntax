@@ -114,15 +114,8 @@ test('a literal is made of a value, escaped the way the delimiter needs', functi
 });
 
 
-test('an offset written without quotes is a node of its own and stands for itself', function () {
+test('an offset written without quotes in a string stands for itself, an integer only where PHP reads one', function () {
 	Assert::same('key', offset('"$a[key]"', UnquotedStringNode::class)->toValue());
-	// what has quotes has them all the way: the only kinds a string is written in are ' and "
-	Assert::same("'", literal("'a'", StringNode::class)->quote);
-	Assert::same('"', literal('"a"', StringNode::class)->quote);
-});
-
-
-test('a numeric offset is an integer only where PHP reads one', function () {
 	Assert::same(0, offset('"$a[0]"', IntegerNode::class)->toValue());
 	Assert::same('01', offset('"$a[01]"', UnquotedStringNode::class)->toValue());
 });

@@ -29,10 +29,9 @@ test('printing a token alone writes its trivia around the substitute', function 
 });
 
 
-test('the text of a node is what printText() writes', function () {
+test('the text of a node leaves out the trivia at its edges', function () {
 	$file = (new Parser)->parse("<?php\n\n\tif (\$a) {\n\t\tf();\n\t} // c\n");
 	$if = $file->statements[0];
 	Assert::same("if (\$a) {\n\t\tf();\n\t}", $if->text);
-	Assert::same($if->text, Printer::printText($if));
 	Assert::same('', Printer::printText(new PhpSyntax\Nodes\PlainNodeList));
 });

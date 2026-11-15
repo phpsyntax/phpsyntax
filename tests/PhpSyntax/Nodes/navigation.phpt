@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-use PhpSyntax\{Builder, Node, Parser, Trivia};
+use PhpSyntax\{Builder, Node, Parser};
 use PhpSyntax\Nodes\{AnonymousFunctionNode, ClassLikeNode, ExpressionNode, FunctionLikeNode};
 use PhpSyntax\Nodes\Expression\{BinaryOpNode, ClosureNode, VariableNode};
 use PhpSyntax\Nodes\Member\{MethodNode, PropertyHookNode, PropertyNode};
@@ -144,19 +144,6 @@ test('every function-like declaration tells whether it returns a reference', fun
 });
 
 
-test('doc comment in leading trivia or in the trailing trivia of the previous token', function () {
-	$file = (new Parser)->parse("<?php\n/** a */\n// x\n\$a; /** b */ \$b; \$c;");
-	[$a, $b, $c] = $file->statements->getItems();
-	$doc = $a->getDocComment();
-	Assert::type(PhpSyntax\Trivia::class, $doc);
-	Assert::same('/** a */', $doc->text);
-	Assert::same(Trivia::DocComment, $doc->id);
-	Assert::same('/** b */', $b->getDocComment()?->text);
-	Assert::null($c->getDocComment());
-	Assert::null((new PhpSyntax\Nodes\PlainNodeList)->getDocComment());
-});
-
-
 test('deep clone has no parent and fresh children', function () {
 	$file = (new Parser)->parse('<?php f($a, $b);');
 	$stmt = $file->statements[0];
@@ -203,8 +190,6 @@ test('positions asked of the file, a node and a token', function () {
 	$b = $sum->getFirstToken();
 	$one = $sum->getLastToken();
 
-	Assert::same($file->getIndex()->getTokens(), $file->getTokens());
-	Assert::same(array_map(fn($token) => $token->text, $file->getTokens()), $file->getTokenTexts());
 	Assert::same([11, 17], $sum->getOffsetRange());
 	Assert::same($sum, $file->findNode(11, 17, ExpressionNode::class));
 	Assert::null($file->findNode(11, 16));

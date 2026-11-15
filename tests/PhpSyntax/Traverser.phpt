@@ -98,6 +98,7 @@ test('a callback keeps the walk out of a subtree or ends it', function () {
 	});
 	Assert::contains('FunctionCallNode', $visited);
 	Assert::notContains("'\$a'", $visited);
+	Assert::contains("'\$b'", $visited); // the walk goes on past the skipped subtree
 
 	$visited = [];
 	Traverser::traverse($file, function (Node|Token $node) use (&$visited) {

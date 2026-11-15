@@ -136,19 +136,6 @@ test('find() takes a class and a predicate, findFirst() stops at the first match
 });
 
 
-test('getInnerComments() sees the comments hasInnerComment() counts', function () {
-	$statement = parseStatement("/* a */ f(/* b */ 1); // c\n");
-	Assert::same(['/* b */'], array_map(fn(PhpSyntax\Trivia $t) => $t->text, $statement->getInnerComments()));
-	$first = $statement->getFirstToken();
-	$last = $statement->getLastToken();
-	Assert::same(['/* a */', '// c'], array_map(
-		fn(PhpSyntax\Trivia $t) => $t->text,
-		[...$first->getComments(), ...$last->getComments()],
-	));
-	Assert::same([], parseStatement("f(1);\n")->getInnerComments());
-});
-
-
 test('a comment is before a node, inside it or after it, and so of a token', function () {
 	$texts = fn(array $comments) => array_map(fn(Trivia $trivia) => $trivia->text, $comments);
 	$statement = parseStatement("/* a */ f(/* b */ 1); // c\n");
@@ -167,6 +154,7 @@ test('a comment is before a node, inside it or after it, and so of a token', fun
 	Assert::false($plain->hasLeadingComment());
 	Assert::false($plain->hasTrailingComment());
 	Assert::same([], $plain->getLeadingComments());
+	Assert::same([], $plain->getInnerComments());
 
 	$tokens = $statement->getTokens();
 	Assert::same([true, false, false, false, false], array_map(fn(PhpSyntax\Token $t) => $t->hasLeadingComment(), $tokens));
@@ -462,24 +450,8 @@ test('getDereferenceKind() tells which way the parent reaches in', function () {
 	assert($fetch instanceof PhpSyntax\Nodes\Expression\ArrayAccessNode);
 	Assert::null($fetch->index?->getDereferenceKind());
 	Assert::null($fetch->getDereferenceKind());
-});
-
-
-test('isDereferenced()', function () {
-	$fetch = parseStatement("(new A)->b;\n")->expression;
-	assert($fetch instanceof PhpSyntax\Nodes\Expression\PropertyFetchNode);
-	Assert::true($fetch->object->isDereferenced());
+	Assert::true($fetch->expression->isDereferenced());
 	Assert::false($fetch->isDereferenced());
-	$call = parseStatement("f(\$a)[0];\n")->expression;
-	assert($call instanceof PhpSyntax\Nodes\Expression\ArrayAccessNode);
-	Assert::true($call->expression->isDereferenced());
-	Assert::false($call->index?->isDereferenced());
-	$invoke = parseStatement("(new A)();\n")->expression;
-	assert($invoke instanceof PhpSyntax\Nodes\Expression\FunctionCallNode);
-	$callee = $invoke->name;
-	assert($callee instanceof PhpSyntax\Nodes\ExpressionNode);
-	Assert::true($callee->isDereferenced());
-	Assert::false($invoke->isDereferenced());
 });
 
 

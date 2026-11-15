@@ -7,7 +7,7 @@
 use PhpSyntax\Nodes\Expression\{TernaryNode, VariableNode};
 use PhpSyntax\Nodes\{PlainNodeList, SkippedArrayItemNode};
 use PhpSyntax\Nodes\Scalar\IntegerNode;
-use PhpSyntax\Nodes\Statement\{BlockNode, ClassNode, ExpressionStatementNode};
+use PhpSyntax\Nodes\Statement\BlockNode;
 use PhpSyntax\Token;
 use Tester\Assert;
 
@@ -26,7 +26,7 @@ function variable(string $name): VariableNode
 }
 
 
-test('constructor, attach, iteration and printing', function () {
+test('constructor, attach, children and printing', function () {
 	Assert::null(variable('$a')->parent);
 	$ternary = new TernaryNode(
 		$cond = variable('$a'),
@@ -42,7 +42,7 @@ test('constructor, attach, iteration and printing', function () {
 });
 
 
-test('setters keep parents and count mutations through the file', function () {
+test('setters move parents', function () {
 	$ternary = new TernaryNode(variable('$a'), token('?'), null, token(':'), $else = variable('$b'));
 	$ternary->then = $if = new IntegerNode(token('1', Token::Integer));
 	Assert::same($ternary, $if->parent);
@@ -109,27 +109,23 @@ test('node without slots', function () {
 
 
 test('union slots accept every listed type', function () {
-	$statement = new ExpressionStatementNode(variable('$a'), token(';'));
-	Assert::same('$a;', (string) $statement);
-	$class = new ClassNode(
-		new PlainNodeList,
-		new PhpSyntax\Nodes\ModifiersNode,
-		token('class'),
-		new PhpSyntax\Nodes\IdentifierNode(token('A')),
-		null,
-		null,
-		null,
-		null,
-		token('{'),
-		new PlainNodeList,
-		token('}'),
+	$variable = new VariableNode(token('$'), null, $name = token('a'), null);
+	$variable->replaceChild($name, $expression = variable('$b'));
+	Assert::same('$$b', (string) $variable);
+	$variable->replaceChild($expression, $name = token('c'));
+	Assert::same('$c', (string) $variable);
+	assertRefused(
+		fn() => $variable->replaceChild($name, new PlainNodeList),
+		InvalidArgumentException::class,
+		'%a% cannot be placed in the slot `name` %a%',
+		$variable,
 	);
-	Assert::same('classA{}', (string) $class);
 });
 
 
 test('a node is attributed exactly when it has the slot of attributes', function () {
 	$mismatched = [];
+	$checked = 0;
 	$root = dirname(__DIR__, 3) . '/src/Nodes';
 	foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)) as $file) {
 		$class = 'PhpSyntax\Nodes\\' . strtr(substr($file->getPathname(), strlen($root) + 1, -4), '/', '\\');
@@ -137,11 +133,13 @@ test('a node is attributed exactly when it has the slot of attributes', function
 			continue;
 		}
 
+		$checked++;
 		$slotted = in_array('attributes', $class::Slots ?? [], true);
 		if ($slotted !== is_subclass_of($class, PhpSyntax\Nodes\AttributeAwareNode::class)) {
 			$mismatched[] = $class;
 		}
 	}
 
+	Assert::true($checked > 100);
 	Assert::same([], $mismatched);
 });

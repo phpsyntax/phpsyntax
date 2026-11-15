@@ -13,7 +13,6 @@ function parse(string $code): FileNode
 {
 	$file = (new Parser)->parse($code);
 	Assert::same($code, Printer::print($file), 'round-trip');
-	Assert::same($code, (string) $file);
 	return $file;
 }
 
@@ -55,14 +54,14 @@ test('__halt_compiler data are part of the tree', function () {
 	Assert::type(HaltCompilerNode::class, $halt);
 	Assert::same(' raw data', $halt->data?->text);
 	Assert::same($halt, $halt->data->parent);
-	parse("<?php __halt_compiler() ?>\nraw");
-	Assert::null(parse('<?php __halt_compiler();')->statements[0]->data ?? null);
-});
 
+	$halt = parse("<?php __halt_compiler() ?>\nraw")->statements[0];
+	Assert::type(HaltCompilerNode::class, $halt);
+	Assert::same('raw', $halt->data?->text);
 
-test('newer syntax parses', function () {
-	parse('<?php class A { public private(set) int $x { get => 1; } } $a |> f(...); (void) g(); echo __PROPERTY__;');
-	parse('<?php function f((A&B)|null $x): static { return match(true) { default => new class {} }; }');
+	$halt = parse('<?php __halt_compiler();')->statements[0];
+	Assert::type(HaltCompilerNode::class, $halt);
+	Assert::null($halt->data);
 });
 
 

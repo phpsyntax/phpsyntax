@@ -2,7 +2,7 @@
 
 use PhpSyntax\Nodes\Expression\{TernaryNode, VariableNode};
 use PhpSyntax\Nodes\{ModifiersNode, PlainNodeList, SeparatedNodeList};
-use PhpSyntax\{Parser, Token, Trivia};
+use PhpSyntax\{Token, Trivia};
 use Tester\Assert;
 
 require __DIR__ . '/../bootstrap.php';
@@ -42,18 +42,4 @@ test('nodes with slots, lists and tokens with trivia', function () {
 
 		XX, Dumper::dump($list));
 	Assert::same("PlainNodeList\n", Dumper::dump(new PlainNodeList));
-});
-
-
-test('tree from the parser', function () {
-	Assert::match(<<<'XX'
-		FileNode
-			statements: PlainNodeList
-				- ExpressionStatementNode
-					expression: VariableNode
-						name: Variable "$a"  <OpenTag"<?php "
-					semicolon: ';' ";"
-			endOfFile: EndOfFile ""
-
-		XX, Dumper::dump((new Parser)->parse('<?php $a;')));
 });

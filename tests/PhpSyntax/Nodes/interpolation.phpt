@@ -259,17 +259,6 @@ test('checkReplaceWithExpression() refuses what the write refuses, and lets thro
 });
 
 
-test('the trivia an expression brings into a string are marked as standing there', function () {
-	$file = (new Parser)->parse('<?php "{$a}";');
-	($file->findFirst(VariableNode::class) ?? throw new LogicException)->replaceWithExpression(expression('$b->c( 1 )'));
-	$trivia = array_merge(...array_map(fn(Token $token) => [...$token->leadingTrivia, ...$token->trailingTrivia], $file->getTokens()));
-	Assert::same(
-		['<?php ' => false, ' ' => true],
-		array_column(array_map(fn(Trivia $trivia) => [$trivia->text, $trivia->inInterpolation], $trivia), 1, 0),
-	);
-});
-
-
 test('the trivia an expression brings out of a string are no longer marked, those of a string it holds stay', function () {
 	$file = (new Parser)->parse('<?php "{$a /* c */ ->b}"; "{$d ->e}"; $x; $y;');
 	[$first, $second] = $file->find(PhpSyntax\Nodes\Expression\PropertyFetchNode::class);

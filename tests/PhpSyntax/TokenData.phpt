@@ -37,6 +37,6 @@ test('kinds are unique and leave the ordinals of single characters free', functi
 
 
 test('a token the running PHP does not tokenize yet has a negative kind of its own', function () {
-	Assert::same(PHP_VERSION_ID >= 80500 ? T_PIPE : -2, Token::Pipe);
-	Assert::same(PHP_VERSION_ID >= 80500 ? T_VOID_CAST : -1, Token::VoidCast);
+	Assert::true(defined('T_PIPE') ? Token::Pipe === T_PIPE : Token::Pipe < 0);
+	Assert::true(defined('T_VOID_CAST') ? Token::VoidCast === T_VOID_CAST : Token::VoidCast < 0);
 });

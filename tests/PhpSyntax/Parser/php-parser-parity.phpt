@@ -132,6 +132,7 @@ if ($external !== false) {
 	test('external corpus', function () use ($external) {
 		Assert::true(is_dir($external), "PHPSYNTAX_CORPUS '$external' is not a directory");
 		$files = findFiles($external);
+		Assert::true($files !== [], "PHPSYNTAX_CORPUS '$external' holds no PHP file");
 		echo count($files), " files\n";
 		Assert::same([], compareExpressions($files));
 	});

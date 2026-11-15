@@ -133,11 +133,10 @@ test('the lexer takes a token of an emulator by its kind', function () {
 });
 
 
-test('host emulators follow the PHP version', function () {
-	$classes = array_map(get_class(...), Lexer::createHostEmulators());
-	$expected = [];
-	if (PHP_VERSION_ID < 80500) {
-		$expected = [...$expected, PipeOperator::class, VoidCast::class];
-	}
-	Assert::same($expected, $classes);
+test('host emulators are those of the tokens the running PHP does not have', function () {
+	$expected = array_keys(array_filter([
+		PipeOperator::class => !defined('T_PIPE'),
+		VoidCast::class => !defined('T_VOID_CAST'),
+	]));
+	Assert::same($expected, array_map(get_class(...), Lexer::createHostEmulators()));
 });

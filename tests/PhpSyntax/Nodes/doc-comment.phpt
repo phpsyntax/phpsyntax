@@ -14,6 +14,7 @@ test('doc comment above the node, or after the previous token', function () {
 	Assert::same('/** @var int */', $a->getDocComment()?->text);
 	Assert::same('/** @var string */', $b->getDocComment()?->text);
 	Assert::null($c->getDocComment());
+	Assert::same(Trivia::DocComment, $a->getDocComment()->id);
 
 	$a->replaceDocComment(new Trivia(Trivia::DocComment, '/** @var float */'));
 	$b->removeDocComment();
@@ -45,19 +46,14 @@ test('doc comment of a parameter after it, before the separator, as PHP reads it
 });
 
 
-test('doc comment of the last parameter before the closing parenthesis, which a trailing separator put in keeps', function () {
-	$file = (new Parser)->parse("<?php\nfunction f(\n\t\$a\n\t/** d */\n) {}\n");
-	$function = $file->statements[0];
-	assert($function instanceof PhpSyntax\Nodes\Statement\FunctionNode);
-	Assert::same('/** d */', $function->parameters[0]->getDocComment()?->text);
-
-	$function->parameters->setTrailingSeparator(PhpSyntax\Token::fromText(','));
-	Assert::same("<?php\nfunction f(\n\t\$a\n\t/** d */,\n) {}\n", (string) $file);
-	Assert::same('/** d */', $function->parameters[0]->getDocComment()->text);
-});
-
-
 test('a doc comment inside string interpolation documents nothing', function () {
 	$file = (new Parser)->parse("<?php \"{\$x[/** c */ 1]}\";\n");
 	Assert::null($file->find(PhpSyntax\Nodes\Scalar\IntegerNode::class)[0]->getDocComment());
+});
+
+
+test('a plain comment between the doc comment and the node does not hide it, a list without tokens has none', function () {
+	$file = (new Parser)->parse("<?php\n/** a */\n// x\n\$a;");
+	Assert::same('/** a */', $file->statements[0]->getDocComment()?->text);
+	Assert::null((new PhpSyntax\Nodes\PlainNodeList)->getDocComment());
 });

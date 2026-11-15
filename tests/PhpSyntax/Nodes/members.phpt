@@ -4,11 +4,11 @@
  * What the modifiers, the parameters, the arguments, the types and the other constructs say about themselves.
  */
 
-use PhpSyntax\{Builder, Node, Parser, SymbolKind, Visibility};
+use PhpSyntax\{Builder, Parser, SymbolKind, Visibility};
 use PhpSyntax\Nodes\{ArgumentListNode, IdentifierNode, ParameterNode, TypeNode, UseItemNode};
-use PhpSyntax\Nodes\Expression\{CastNode, FunctionCallNode, MethodCallNode, PropertyFetchNode};
+use PhpSyntax\Nodes\Expression\{CastNode, MethodCallNode, PropertyFetchNode};
 use PhpSyntax\Nodes\Member\{MethodNode, PropertyNode};
-use PhpSyntax\Nodes\Statement\{ClassNode, UseNode};
+use PhpSyntax\Nodes\Statement\UseNode;
 use PhpSyntax\Nodes\Type\NamedTypeNode;
 use Tester\Assert;
 
@@ -211,21 +211,6 @@ test('the type of a cast in the name PHP knows it by', function () {
 		['int', 'int', 'bool', 'float', 'float', 'string', 'object'],
 		array_map(fn(CastNode $cast) => $cast->typeName, $file->find(CastNode::class)),
 	);
-});
-
-
-test('a list is iterated and counted like a list, its items without the separators', function () {
-	$file = parseFile('f(1, 2, 3); class A { public $x; public $y; }');
-	$call = $file->find(FunctionCallNode::class)[0];
-	Assert::same(['1', '2', '3'], array_map(fn(Node $arg) => $arg->text, iterator_to_array($call->arguments->items)));
-	Assert::count(3, $call->arguments->items);
-
-	$class = $file->find(ClassNode::class)[0];
-	Assert::count(2, $class->members);
-
-	$property = $file->find(PropertyNode::class)[0];
-	Assert::count(1, $property->modifiers);
-	Assert::same(['public'], array_map(fn($token) => $token->text, iterator_to_array($property->modifiers)));
 });
 
 

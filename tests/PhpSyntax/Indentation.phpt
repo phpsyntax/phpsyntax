@@ -72,7 +72,7 @@ test('findTrivia() is the whitespace standing for the indentation, or the first 
 });
 
 
-test('has() asks about the line of the token and about the comments above it', function () {
+test('matches() asks about the line of the token and about the comments above it', function () {
 	$token = tokenOf(parse("<?php\nclass A\n{\n\t// note\n\tpublic \$x;\n}\n"), 'public');
 	Assert::true(Indentation::matches($token, "\t", "\t"));
 	Assert::false(Indentation::matches($token, "\t", '')); // the comment does not stand where it is asked to
@@ -109,7 +109,7 @@ test('set() refuses before it writes anything', function () {
 });
 
 
-test('what set() writes, has() answers yes to', function () {
+test('what set() writes, matches() answers yes to', function () {
 	$shapes = [
 		"<?php\nif (\$a) {\n\techo 1;\n}\n",
 		"<?php\nif (\$a) {\n\techo 1;\n\t// c\n}\n",
@@ -171,7 +171,7 @@ test('reindentComment() reshapes a comment whose lines start with a star and mov
 });
 
 
-test('width() and advance() count a tab to the next stop of the style', function () {
+test('measure() and advance() count a tab to the next stop of the style', function () {
 	$style = new Style;
 	Assert::same(8, Indentation::measure("\t\t", $style));
 	Assert::same(4, Indentation::measure('    ', $style));

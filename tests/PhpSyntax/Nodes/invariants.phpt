@@ -14,17 +14,6 @@ use Tester\Assert;
 require __DIR__ . '/../../bootstrap.php';
 
 
-function assertParents(Node $node): void
-{
-	foreach ($node->getChildren() as $child) {
-		Assert::same($node, $child->parent);
-		if ($child instanceof Node) {
-			assertParents($child);
-		}
-	}
-}
-
-
 function assertIndexed(FileNode $file): void
 {
 	$printed = (string) $file;
@@ -52,7 +41,7 @@ function assertIntegrity(FileNode $file): void
 		}
 	}
 
-	Assert::same($file->getTokens(), $file->getIndex()->getTokens());
+	Assert::same([...$file->statements->getTokens(), $file->endOfFile], $file->getIndex()->getTokens());
 	assertIndexed($file);
 }
 
@@ -60,7 +49,6 @@ function assertIntegrity(FileNode $file): void
 test('mutations over a real file', function () {
 	$code = (string) file_get_contents(__DIR__ . '/../../corpus/wild/nette-utils.Arrays.php');
 	$file = (new Parser)->parse($code);
-	$parser = new Parser;
 	$builder = new Builder;
 	$mutations = 0;
 
@@ -80,13 +68,12 @@ test('mutations over a real file', function () {
 
 	Assert::true($mutations > 20);
 	Assert::true($file->revision >= $mutations); // a compound mutation moves trivia in several steps
-	assertParents($file);
-	assertIndexed($file);
+	assertIntegrity($file);
 	Assert::true(str_contains((string) $file, 'replaced();'));
 	Assert::false(str_contains((string) $file, "\n\n\n\n"));
 
 	$copy = clone $file;
-	assertParents($copy);
+	assertIntegrity($copy);
 	Assert::same((string) $file, (string) $copy);
 });
 
@@ -176,11 +163,10 @@ test('a generated sequence of mutations leaves the tree and the index in agreeme
 					break;
 			}
 
-			$file->getIndex()->getTokens(); // the index is asked after every step, so a wrong one is found at once
+			assertIntegrity($file); // after every step, so a wrong index is found at once
 		}
 
 		Assert::true($refused > 0);
-		assertIntegrity($file);
 		Assert::same((string) $file, (string) $parser->parse((string) $file)); // and it is still code that parses
 	}
 });

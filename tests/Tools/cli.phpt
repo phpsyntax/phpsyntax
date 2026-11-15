@@ -41,10 +41,11 @@ test('check passes over a file, a directory and standard input', function () {
 
 	$directory = runTool(['check', '--quiet', 'src/Analyses']);
 	Assert::same(0, $directory['code']);
-	Assert::contains('4 read, 0 failed', $directory['err']);
+	Assert::contains(count(glob(__DIR__ . '/../../src/Analyses/*.php') ?: []) . ' read, 0 failed', $directory['err']);
 
 	$stdin = runTool(['check', '-'], '<?php echo 1;');
 	Assert::same(0, $stdin['code']);
+	Assert::contains('ok <stdin>', $stdin['err']);
 
 	$nothing = runTool(['check', '--ext=nope', 'src/Analyses']);
 	Assert::same(2, $nothing['code']);

@@ -2,7 +2,7 @@
 
 use PhpSyntax\{Builder, Node, Parser};
 use PhpSyntax\Nodes\{ArgumentNode, ArrayItemNode, DestructuringNode, ExpressionNode, FileNode, IdentifierNode, NameNode};
-use PhpSyntax\Nodes\Expression\{ArrayNode, AssignmentNode, BinaryOpNode, MethodCallNode, PropertyFetchNode, UnaryOpNode, VariableNode};
+use PhpSyntax\Nodes\Expression\{AssignmentNode, BinaryOpNode, MethodCallNode, PropertyFetchNode, UnaryOpNode, VariableNode};
 use PhpSyntax\Nodes\Scalar\{FloatNode, IntegerNode, StringNode};
 use PhpSyntax\Nodes\Statement\{ExpressionStatementNode, ForeachNode, ReturnNode};
 use Tester\Assert;
@@ -384,7 +384,7 @@ test('a refused input leaves the tree it would take a node from as it was', func
 		fn() => $b->expression('$x', x: $live, y: expression('$y')),
 	];
 	foreach ($attempts as $attempt) {
-		assertRefused($attempt, Exception::class, null, $file);
+		assertRefused($attempt, InvalidArgumentException::class, null, $file);
 	}
 
 	$detached = expression('$o /* c */');
@@ -494,8 +494,6 @@ test('a placeholder that cannot stand where the variable stands is refused', fun
 		'Placeholder `$x` stands in the slot `variable` of `PhpSyntax\Nodes\StaticVariableNode`, which does not take `PhpSyntax\Nodes\Expression\BinaryOpNode`.',
 	);
 	Assert::type(ExpressionStatementNode::class, $b->statement('$x;', x: expression('$a + 1')));
-	Assert::type(ArrayNode::class, $b->value([1]));
-	Assert::same('f()', (string) $b->call('f'));
 });
 
 

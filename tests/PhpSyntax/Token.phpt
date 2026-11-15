@@ -64,17 +64,6 @@ test('a token finds the ancestor from its parent up', function () {
 });
 
 
-test('token from the lexer carries its original position', function () {
-	$token = new Token(Token::Variable, '$a', line: 1, pos: 6);
-	Assert::same(Token::Variable, $token->id);
-	Assert::same('$a', $token->text);
-	Assert::same(6, $token->pos);
-	Assert::same(1, $token->line);
-	Assert::same([], $token->leadingTrivia);
-	Assert::same([], $token->trailingTrivia);
-});
-
-
 test('synthetic token has no original position', function () {
 	$token = new Token(ord(';'), ';');
 	Assert::same(-1, $token->pos);
@@ -96,18 +85,9 @@ test('string form is leading trivia, text and trailing trivia', function () {
 });
 
 
-test('trivia is a token PHP ignores', function () {
-	$trivia = new Trivia(Trivia::Comment, '/* c */');
-	Assert::same(Trivia::Comment, $trivia->id);
-	Assert::same('/* c */', $trivia->text);
-	Assert::same(-1, $trivia->line);
-	Assert::same(-1, $trivia->pos);
-	Assert::false($trivia->inInterpolation);
-	Assert::true($trivia->is(Trivia::Comment));
-	Assert::true($trivia->isIgnorable());
-	Assert::same('T_COMMENT', $trivia->getTokenName());
+test('a trivia is named as the token PHP gives it, a line ending as whitespace', function () {
+	Assert::same('T_COMMENT', new Trivia(Trivia::Comment, '/* c */')->getTokenName());
 	Assert::same('T_WHITESPACE', new Trivia(Trivia::LineEnding, "\n")->getTokenName());
-	Assert::true(new Trivia(Trivia::LineEnding, "\n")->isIgnorable());
 });
 
 

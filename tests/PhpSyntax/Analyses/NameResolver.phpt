@@ -3,7 +3,7 @@
 use PhpSyntax\Analyses\NameResolver;
 use PhpSyntax\{Builder, Node, Parser, SymbolKind, UnqualifiedResolution};
 use PhpSyntax\Nodes\{AnonymousClassNode, ConstItemNode, FileNode, NameNode};
-use PhpSyntax\Nodes\Expression\{ClassConstantFetchNode, ConstantFetchNode, FunctionCallNode, NewNode, VariableNode};
+use PhpSyntax\Nodes\Expression\{ConstantFetchNode, FunctionCallNode, NewNode, VariableNode};
 use PhpSyntax\Nodes\Statement\{ClassNode, FunctionNode, NamespaceNode};
 use Tester\Assert;
 
@@ -100,15 +100,12 @@ test('functions: imports, fallback to global, declared in the namespace', functi
 });
 
 
-test('constants: case-sensitive imports and fallback', function () use ($file, $resolver) {
+test('constants: imports and fallback', function () use ($file, $resolver) {
 	$constants = array_map(
 		fn(ConstantFetchNode $fetch) => $resolver->resolveConstant($fetch->name),
 		$file->find(ConstantFetchNode::class),
 	);
 	Assert::same(['Foo\LIMIT', 'Lib\C1', 'PHP_EOL', 'LOCAL', 'E_ALL', 'Foo\Bar\X'], $constants);
-	$fetch = $file->find(ClassConstantFetchNode::class)[0];
-	Assert::type(NameNode::class, $fetch->class);
-	Assert::same('Foo\Baz', $resolver->resolveClass($fetch->class));
 });
 
 

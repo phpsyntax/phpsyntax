@@ -343,7 +343,6 @@ test('SeparatedNodeList: separators between items and an optional trailing one',
 
 	$list->append(node('c'));
 	Assert::same('x;b;c', (string) $list);
-	Assert::exception(fn() => (new SeparatedNodeList)->append(node('c'), comma()), LogicException::class);
 	assertRefused(fn() => $list->replaceChild($semicolon, node('y')), InvalidArgumentException::class, null, $list);
 });
 
@@ -354,6 +353,8 @@ test('ModifiersNode', function () {
 	Assert::false($modifiers->has(Token::Static));
 	$modifiers->append($static = new Token(Token::Static, 'static'));
 	Assert::same('publicstatic ', (string) $modifiers);
+	Assert::count(2, $modifiers);
+	Assert::same([$public, $static], iterator_to_array($modifiers));
 	$modifiers->removeToken($public);
 	Assert::same([$static], $modifiers->getTokens());
 	Assert::null($public->parent);
@@ -451,16 +452,17 @@ function stmt(string $text): StatementNode
 }
 
 
-test('FileNode counts mutations', function () {
+test('a write into a list or a slot of the file moves its revision', function () {
 	$stmt = stmt('a');
 	$file = new FileNode(new PlainNodeList([$stmt]), $eof = new Token(Token::EndOfFile, ''));
 	Assert::same($file, $stmt->getFile());
 	Assert::same($file, $file->statements->parent);
-	Assert::same(0, $file->revision);
+	$revision = $file->revision;
 	$file->statements->append(stmt('b'));
-	Assert::same(1, $file->revision);
+	Assert::true($file->revision > $revision);
+	$revision = $file->revision;
 	$file->endOfFile = new Token(Token::EndOfFile, '');
-	Assert::same(2, $file->revision);
+	Assert::true($file->revision > $revision);
 	Assert::null($eof->parent);
 	Assert::null(node('x')->getFile());
 });

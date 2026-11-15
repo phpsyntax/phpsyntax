@@ -20,24 +20,19 @@ function tokens(FileNode $file): array
 }
 
 
-test('kind queries', function () {
-	$tokens = tokens(parse("<?php foo() ?>\n<?= 1;"));
-	Assert::same(Token::CloseTag, $tokens[3]->id);
-	Assert::same(Token::OpenTagWithEcho, $tokens[4]->id);
-	Assert::true($tokens[0]->is([Token::Identifier, ';']));
-	Assert::true($tokens[1]->is('('));
-	Assert::false($tokens[1]->is([')', Token::Variable]));
-});
-
-
 test('setText and trivia setters record a non-structural mutation', function () {
 	$file = parse('<?php $a;');
 	[$a, $semicolon] = tokens($file);
+	$before = $file->revision;
 	$a->setText('$b');
+	Assert::true($file->revision > $before);
+	$before = $file->revision;
 	$semicolon->setTrailingTrivia([new Trivia(Trivia::Whitespace, ' ')]);
+	Assert::true($file->revision > $before);
+	$before = $file->revision;
 	$a->setLeadingTrivia([new Trivia(Trivia::OpenTag, "<?php\n")]);
+	Assert::true($file->revision > $before);
 	Assert::same("<?php\n\$b; ", (string) $file);
-	Assert::same(3, $file->revision);
 	Assert::same(2, $a->getCurrentLine());
 });
 

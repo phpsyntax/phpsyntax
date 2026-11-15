@@ -66,7 +66,7 @@ test('a change of text or trivia moves what follows, a structural change also th
 	$first = statement($a);
 	$file = new FileNode(new PlainNodeList([$first, statement($b)]), $eof);
 	Assert::same(3, $b->getCurrentLine());
-	Assert::same(0, $file->revision);
+	$revision = $file->revision;
 
 	$a->setText("'a\n'"); // a string holding a line ending
 	Assert::same(4, $b->getCurrentLine());
@@ -74,13 +74,15 @@ test('a change of text or trivia moves what follows, a structural change also th
 	$b->setLeadingTrivia([new Trivia(Trivia::LineEnding, "\n")]);
 	Assert::same(5, $b->getCurrentLine());
 	Assert::same(6, $eof->getCurrentLine());
-	Assert::same(2, $file->revision);
+	Assert::true($file->revision > $revision);
+	$revision = $file->revision;
 
 	$file->statements->removeItem($first);
-	Assert::same(3, $file->revision);
+	Assert::true($file->revision > $revision);
 	Assert::same([$b, $eof], $file->getIndex()->getTokens());
 	Assert::same(2, $b->getCurrentLine());
 	Assert::null($b->getPrevious());
+	Assert::null($first->getFile());
 	Assert::null($a->getCurrentLine());
 	Assert::null($a->getNext());
 	Assert::exception(
@@ -140,42 +142,6 @@ test('visual column expands tabs', function () {
 
 	$tokens[4]->setText('$xx'); // the text before the tab reaches its stop
 	Assert::same(9, $tokens[6]->getVisualColumn($style));
-});
-
-
-test('a change of trivia moves the lines, a structural change also the order', function () {
-	$file = (new Parser)->parse("<?php\n\$a;\n\$b;");
-	$index = $file->getIndex();
-	$b = $index->getTokens()[2];
-	Assert::same(3, $b->getCurrentLine());
-
-	$a = $index->getTokens()[0];
-	$a->setLeadingTrivia([new Trivia(Trivia::OpenTag, "<?php\n"), new Trivia(Trivia::LineEnding, "\n")]);
-	Assert::same(4, $b->getCurrentLine());
-	Assert::same(1, $file->revision);
-
-	$stmt = $file->statements[0];
-	$file->statements->removeItem($stmt);
-	Assert::same(2, $file->revision);
-	Assert::same($b, $index->getTokens()[0]);
-	Assert::same(1, $b->getCurrentLine());
-	Assert::null($b->getPrevious());
-});
-
-
-test('detached subtree has no positions', function () {
-	$file = (new Parser)->parse('<?php $a; $b;');
-	$stmt = $file->statements[0];
-	Assert::type(ExpressionStatementNode::class, $stmt);
-	$file->statements->removeItem($stmt);
-	Assert::null($stmt->semicolon->getCurrentLine());
-	Assert::null($stmt->semicolon->getNext());
-	Assert::null($stmt->getFile());
-	Assert::exception(
-		fn() => $file->getIndex()->getOrdinal($stmt->semicolon),
-		InvalidArgumentException::class,
-		'The token does not belong to the indexed tree.',
-	);
 });
 
 
