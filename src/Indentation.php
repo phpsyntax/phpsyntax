@@ -8,7 +8,7 @@
 namespace PhpSyntax;
 
 use PhpSyntax\Nodes\Expression\BinaryOpNode;
-use PhpSyntax\Nodes\{NodeList, PlainNodeList, StatementNode};
+use PhpSyntax\Nodes\{MatchArmNode, NodeList, PlainNodeList, StatementNode};
 use PhpSyntax\Nodes\Scalar\{HeredocNode, InterpolatedStringPartNode};
 use PhpSyntax\Nodes\Statement\{BlockNode, NamespaceNode};
 use function count, strlen;
@@ -73,8 +73,24 @@ final class Indentation
 	 */
 	public static function opensStatement(Token $token): bool
 	{
+		return self::opensInnermost($token, StatementNode::class);
+	}
+
+
+	/**
+	 * Whether the token begins the arm of `match` it stands in, so that the line it opens is the line of that arm.
+	 */
+	public static function opensMatchArm(Token $token): bool
+	{
+		return self::opensInnermost($token, MatchArmNode::class);
+	}
+
+
+	/** @param  class-string<Node>  $class */
+	private static function opensInnermost(Token $token, string $class): bool
+	{
 		for ($node = $token->parent; $node !== null; $node = $node->parent) {
-			if ($node instanceof StatementNode) {
+			if ($node instanceof $class) {
 				return $node->getFirstToken() === $token;
 			}
 		}
@@ -176,8 +192,8 @@ final class Indentation
 			LayoutRole::Anchor, LayoutRole::Closer => 0,
 			LayoutRole::Body => $owner->child instanceof BlockNode ? 0 : 1,
 			// an operator lines up with the line its expression begins on, unless that line is shared with
-			// what holds it or is the line of the statement, where lining up would say nothing
-			LayoutRole::Operator => $first->startsLine() && !self::opensStatement($first) ? 0 : 1,
+			// what holds it or begins a statement or an arm of `match`, where lining up would read as the next one
+			LayoutRole::Operator => $first->startsLine() && !self::opensStatement($first) && !self::opensMatchArm($first) ? 0 : 1,
 			default => 1,
 		};
 		return self::normalize($first->getLineIndentation(), $style) . $style->getIndentation($level);

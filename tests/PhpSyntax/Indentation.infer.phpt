@@ -173,8 +173,11 @@ test('infer() lines an operator up with the line its expression begins on', func
 	// here it has a line of its own to line up with, so the same indentation comes of level zero
 	Assert::same("\t", Indentation::infer(tokenOf(parse("<?php\nfoo(\n\t1\n\t+ 2,\n);\n"), '+'), $style));
 
-	// the line of the expression is the line of the statement, so lining up with it would say nothing
+	// the line of the expression is the line of the statement, so lining up with it would read as the next one
 	Assert::same("\t", Indentation::infer(tokenOf(parse("<?php\n\$a\n\t&& b();\n"), '&&'), $style));
+
+	// and so is the line of an arm of match
+	Assert::same("\t\t", Indentation::infer(tokenOf(parse("<?php\n\$r = match (true) {\n\t\$a\n\t\t|| \$b => 1,\n};\n"), '||'), $style));
 });
 
 

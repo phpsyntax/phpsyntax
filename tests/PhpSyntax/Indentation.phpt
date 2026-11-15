@@ -65,6 +65,20 @@ test('opensStatement() asks whether the token begins the innermost statement aro
 	Assert::false(Indentation::opensStatement(tokenOf($file, '+')));
 	Assert::false(Indentation::opensStatement($file->endOfFile)); // in no statement
 	Assert::false(Indentation::opensStatement(Token::fromText('$a')));
+
+	// a member is no statement, so an expression in it is inside the statement of its class
+	$file = parse("<?php\nclass A {\n\tpublic \$p =\n\t\t\$a\n\t\t|| \$b;\n}\n");
+	Assert::false(Indentation::opensStatement(tokenOf($file, '$a')));
+});
+
+
+test('opensMatchArm() asks whether the token begins the arm of match around it', function () {
+	$file = parse("<?php\n\$r = match (true) {\n\t\$a\n\t\t|| \$b => \$c\n\t\t\t+ 1,\n\tdefault => 0,\n};\n");
+	Assert::true(Indentation::opensMatchArm(tokenOf($file, '$a')));
+	Assert::false(Indentation::opensMatchArm(tokenOf($file, '$b')));
+	Assert::false(Indentation::opensMatchArm(tokenOf($file, '$c'))); // the body of the arm
+	Assert::true(Indentation::opensMatchArm(tokenOf($file, 'default')));
+	Assert::false(Indentation::opensMatchArm(tokenOf($file, '$r')));
 });
 
 
