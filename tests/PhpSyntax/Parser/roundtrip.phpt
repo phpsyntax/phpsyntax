@@ -2,10 +2,11 @@
 
 /**
  * Parser round-trip over the committed corpus and, when PHPSYNTAX_CORPUS points to a directory, over that tree.
- * A file the parser rejects is a failure unless php -l rejects it too.
+ * A file the parser rejects is a failure unless php -l rejects it too. A file whose tree has a child not pointing
+ * to its parent fails as well.
  */
 
-use PhpSyntax\{ParseException, Parser, Printer};
+use PhpSyntax\{Node, ParseException, Parser, Printer, Token};
 use Tester\Assert;
 
 require __DIR__ . '/../../bootstrap.php';
@@ -60,9 +61,32 @@ function roundTrip(array $files): array
 		if (Printer::print($node) !== $code) {
 			$failures[] = "$file: output differs from input";
 		}
+
+		if ($stray = findStrayChild($node)) {
+			$failures[] = "$file: " . get_debug_type($stray) . ' does not point to its parent';
+		}
 	}
 
 	return $failures;
+}
+
+
+/** The first child whose parent is not the node holding it; the printed text does not see the parents. */
+function findStrayChild(Node $root): Node|Token|null
+{
+	$stack = [$root];
+	while ($stack) {
+		$node = array_pop($stack);
+		foreach ($node->getChildren() as $child) {
+			if ($child->parent !== $node) {
+				return $child;
+			} elseif ($child instanceof Node) {
+				$stack[] = $child;
+			}
+		}
+	}
+
+	return null;
 }
 
 

@@ -23,6 +23,8 @@ $input = <<<'XX'
 	goto end; end: ;
 	{ ; }
 	?>html<?php ; ?>
+	<?php foo() ?>
+	<?= $a ?>
 	XX;
 
 $file = (new Parser)->parse($input);
@@ -512,5 +514,20 @@ FileNode
 		- EmptyStatementNode
 			semicolon: ';' ";"  <OpenTag"<?php "  >Whitespace" "
 		- EmptyStatementNode
+			semicolon: CloseTag "?>\n"
+		- ExpressionStatementNode
+			expression: FunctionCallNode
+				name: NameNode
+					token: Identifier "foo"  <OpenTag"<?php "
+				arguments: ArgumentListNode
+					openParen: '(' "("
+					items: SeparatedNodeList
+					closeParen: ')' ")"  >Whitespace" "
+			semicolon: CloseTag "?>\n"
+		- EchoNode
+			echoKeyword: OpenTagWithEcho "<?="  >Whitespace" "
+			expressions: SeparatedNodeList
+				- VariableNode
+					name: Variable "$a"  >Whitespace" "
 			semicolon: CloseTag "?>"
 	endOfFile: EndOfFile ""

@@ -57,6 +57,17 @@ test('opensLine() asks whether the line ending above the token is trivia', funct
 });
 
 
+test('opensStatement() asks whether the token begins the innermost statement around it', function () {
+	$file = parse("<?php\nif (\$a\n\t&& \$b) {\n\tf(\$c\n\t\t+ 1);\n}\n");
+	Assert::true(Indentation::opensStatement(tokenOf($file, 'if')));
+	Assert::false(Indentation::opensStatement(tokenOf($file, '&&')));
+	Assert::true(Indentation::opensStatement(tokenOf($file, 'f'))); // the statement inside the block
+	Assert::false(Indentation::opensStatement(tokenOf($file, '+')));
+	Assert::false(Indentation::opensStatement($file->endOfFile)); // in no statement
+	Assert::false(Indentation::opensStatement(Token::fromText('$a')));
+});
+
+
 test('findTrivia() is the whitespace standing for the indentation, or the first trivia of a line without one', function () {
 	$trivia = Indentation::findTrivia(tokenOf(parse("<?php\n\t// note\n\t\$a;\n"), '$a'));
 	Assert::type(Trivia::class, $trivia);
